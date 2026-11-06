@@ -1,0 +1,16 @@
+# Dependencies
+node_modules/
+
+# Build and coverage outputs
+dist/
+coverage/
+.vite/
+
+# Local environment
+.env
+.env.*
+!.env.example
+
+# Logs and temp files
+*.log
+*.tmp

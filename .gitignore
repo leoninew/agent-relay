@@ -1,0 +1,36 @@
+# Python virtual environments
+.venv/
+venv/
+
+# Python caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+**/node_modules/
+**/.yarn/install-state.gz
+**/.yarn/cache/
+**/.yarn/unplugged/
+web/coverage/
+
+# Build and coverage outputs
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Local environment
+.openidea/
+.env
+.env.*
+!.env.example
+!.env.dev
+
+# Logs and temp files
+logs/
+*.log
+*.tmp

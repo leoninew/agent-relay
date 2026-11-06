@@ -1,0 +1,21 @@
+server:
+  host: 127.0.0.1
+  port: 9080
+  reload: false
+
+greeting:
+  prefix: Hello
+
+static:
+  directory: ./static
+
+logging:
+  body:
+    limit: 4096
+  request:
+    begin: "Request begin request_id=%s method=%s path=%s"
+    body: "Request body request_id=%s body=%s"
+    end: "Request end request_id=%s method=%s path=%s status=%d duration_ms=%d"
+    failed: "Request failed request_id=%s method=%s path=%s status=%d duration_ms=%d"
+  response:
+    body: "Response body request_id=%s body=%s"
