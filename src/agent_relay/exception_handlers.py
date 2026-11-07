@@ -6,11 +6,27 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from agent_relay.dependencies import application_settings, get_logger
 from agent_relay.errors import error_json_response
 from agent_relay.middleware import log_request_failure
+from agent_relay.room_service import RoomConflictError, RoomInputError, RoomNotFoundError
 
 
 def register_exception_handlers(app: FastAPI) -> None:
     app.exception_handler(StarletteHTTPException)(http_exception_handler)
     app.exception_handler(RequestValidationError)(request_validation_exception_handler)
+    for error_type in (RoomNotFoundError, RoomConflictError, RoomInputError):
+        app.exception_handler(error_type)(room_exception_handler)
+
+
+async def room_exception_handler(
+    request: Request,
+    exc: RoomNotFoundError | RoomConflictError | RoomInputError,
+) -> JSONResponse:
+    if isinstance(exc, RoomNotFoundError):
+        status_code = 404
+    elif isinstance(exc, RoomConflictError):
+        status_code = 409
+    else:
+        status_code = 422
+    return error_json_response(request, status_code, str(exc))
 
 
 async def http_exception_handler(

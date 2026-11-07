@@ -2,6 +2,8 @@
 
 面向智能体协作的消息中继服务，基于 FastAPI 和 Vue。
 
+每个项目可创建一个聊天室，分别管理主题、成员、消息与投递。首页支持项目切换、添加成员、新建主题和引用回复。消息可投递到一个或多个话题，也可 `@` 成员，两者叠加时合并去重，必须能路由到至少一位成员。[协作设计](docs/design/codex-session-chat-collaboration.md)记录路由规则与后续架构。当前内部存储与投递使用内存实现，重启恢复初始数据。
+
 需要 Python 3.12、uv、Node.js 22+、Corepack、GNU Make 和 Bash。Windows 可使用 Git Bash 或 Cygwin。
 
 ## 安装

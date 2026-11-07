@@ -5,20 +5,13 @@
       class="grid gap-4 rounded-lg border border-slate-200 bg-white p-5 shadow-sm sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end sm:p-6"
       @submit.prevent="loadGreeting"
     >
-      <label class="grid gap-2 text-sm font-medium text-slate-800">
-        Name
-        <input
-          v-model="name"
-          name="name"
-          class="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-950 shadow-xs outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-900/15"
-        />
-      </label>
-      <button
-        type="submit"
-        class="h-10 rounded-md bg-slate-900 px-4 text-sm font-medium text-white transition-colors hover:bg-slate-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900"
-      >
+      <div class="grid gap-2 text-sm font-medium text-slate-800">
+        <label for="greeting-name">Name</label>
+        <AppInput id="greeting-name" v-model="name" name="name" clear-label="清空名称" />
+      </div>
+      <AppButton type="submit" :loading="loading" loading-label="Loading greeting…">
         Load greeting
-      </button>
+      </AppButton>
     </form>
 
     <GreetingCard
@@ -33,6 +26,8 @@
 <script setup lang="ts">
   import { onMounted, ref } from "vue";
 
+  import AppButton from "@/components/AppButton.vue";
+  import AppInput from "@/components/AppInput.vue";
   import GreetingCard from "@/components/GreetingCard.vue";
   import { useGreeting } from "@/composables/useGreeting";
 

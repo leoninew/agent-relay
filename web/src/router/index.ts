@@ -1,13 +1,19 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from "vue-router";
 
-import GreetingPage from "@/domains/greeting/GreetingPage.vue";
 import NotificationCenter from "@/domains/notifications/NotificationCenter.vue";
+import RoomPage from "@/domains/room/RoomPage.vue";
 
 const routes: RouteRecordRaw[] = [
   {
     path: "/",
-    name: "greeting",
-    component: GreetingPage,
+    name: "room",
+    component: RoomPage,
+  },
+  {
+    path: "/room/:roomId",
+    name: "room-detail",
+    component: RoomPage,
+    props: true,
   },
   {
     path: "/notifications",

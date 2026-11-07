@@ -35,6 +35,17 @@ export class ApiClientError extends Error {
   }
 }
 
+export function describeApiError(caught: unknown, fallback: string): string {
+  if (caught instanceof ApiClientError) {
+    const message =
+      caught.kind === "http_error" && caught.status && caught.status < 500
+        ? caught.message
+        : fallback;
+    return caught.requestId ? `${message}（请求 ID：${caught.requestId}）` : message;
+  }
+  return fallback;
+}
+
 export const apiClient = axios.create({
   responseType: "json",
   transitional: { silentJSONParsing: false },

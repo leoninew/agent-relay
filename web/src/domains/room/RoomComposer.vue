@@ -1,0 +1,216 @@
+<template>
+  <form class="room-composer" aria-label="发送消息" novalidate @submit.prevent="submit">
+    <div v-if="replyTo" class="composer-reply">
+      <AppIcon name="reply" />
+      <span>
+        回复 <strong>{{ replyTo.senderName }}</strong> · {{ replyTo.content }}
+      </span>
+      <button type="button" class="icon-button" aria-label="取消引用" @click="$emit('cancelReply')">
+        <AppIcon name="close" />
+      </button>
+    </div>
+    <div class="composer-fields">
+      <fieldset class="composer-routing" :disabled="sending">
+        <legend class="sr-only">消息路由</legend>
+        <div class="routing-row">
+          <span class="routing-label"> <AppIcon name="hash" />话题 </span>
+          <AppCheckboxGroup
+            v-model="topicIds"
+            class="routing-options"
+            aria-label="消息话题"
+            clear-label="清空消息话题"
+            :disabled="sending"
+            :invalid="showRecipientError"
+            :described-by="showRecipientError ? 'routing-error' : undefined"
+          >
+            <AppCheckbox
+              v-for="topic in topics"
+              :key="topic.id"
+              class="routing-choice"
+              :data-topic="topic.id"
+              :value="topic.id"
+              :aria-label="`消息话题：${topic.name}`"
+              :aria-invalid="showRecipientError"
+              :aria-describedby="showRecipientError ? 'routing-error' : undefined"
+            >
+              <span># {{ topic.name }}</span>
+            </AppCheckbox>
+          </AppCheckboxGroup>
+        </div>
+        <div class="routing-row">
+          <span class="routing-label"><AppIcon name="at" />成员</span>
+          <AppCheckboxGroup
+            v-model="mentionedMemberIds"
+            class="routing-options"
+            aria-label="@ 成员"
+            clear-label="清空 @ 成员"
+            :disabled="sending"
+            :invalid="showRecipientError"
+            :described-by="showRecipientError ? 'routing-error' : undefined"
+          >
+            <AppCheckbox
+              v-for="member in members"
+              :key="member.id"
+              class="recipient-choice"
+              :title="member.activity"
+              :value="member.id"
+              :aria-label="`@ ${member.name}`"
+              :aria-invalid="showRecipientError"
+              :aria-describedby="showRecipientError ? 'routing-error' : undefined"
+            >
+              <span>{{ member.name }}</span>
+            </AppCheckbox>
+          </AppCheckboxGroup>
+        </div>
+        <p v-if="showRecipientError" id="routing-error" class="field-error" role="alert">
+          {{ routingError }}
+        </p>
+      </fieldset>
+      <label for="message-content" class="sr-only">消息内容</label>
+      <AppInput
+        id="message-content"
+        ref="textarea"
+        v-model="content"
+        name="content"
+        maxlength="6000"
+        rows="3"
+        placeholder="发送消息…"
+        clear-label="清空消息内容"
+        multiline
+        :disabled="sending"
+        :invalid="showContentError"
+        aria-describedby="content-error"
+        @keydown.enter="onEnter"
+      />
+      <p v-if="showContentError" id="content-error" class="field-error" role="alert">
+        请输入消息内容
+      </p>
+      <p v-if="error" class="field-error send-error" role="alert">{{ error }}</p>
+      <div class="composer-footer">
+        <div class="composer-actions">
+          <AppButton
+            type="submit"
+            class="composer-send-button"
+            :aria-label="sending ? '正在发送' : '发送消息'"
+            :loading="sending"
+            loading-label="发送中…"
+          >
+            <template #icon><AppIcon name="enter" /></template>
+            发送
+          </AppButton>
+        </div>
+      </div>
+    </div>
+  </form>
+</template>
+
+<script setup lang="ts">
+  import { computed, nextTick, ref, watch } from "vue";
+
+  import AppButton from "@/components/AppButton.vue";
+  import AppCheckbox from "@/components/AppCheckbox.vue";
+  import AppCheckboxGroup from "@/components/AppCheckboxGroup.vue";
+  import AppIcon from "@/components/AppIcon.vue";
+  import AppInput from "@/components/AppInput.vue";
+  import type { CreateMessage, Member, RoomMessage, Topic } from "@/services/roomApi";
+
+  const props = defineProps<{
+    roomId: string;
+    draft?: CreateMessage;
+    topics: Topic[];
+    members: Member[];
+    defaultTopicId?: string;
+    replyTo?: RoomMessage;
+    sending: boolean;
+    error: string | null;
+  }>();
+  const emit = defineEmits<{
+    send: [message: CreateMessage];
+    cancelReply: [];
+    draft: [roomId: string, draft: CreateMessage];
+  }>();
+
+  const content = ref(props.draft?.content ?? "");
+  const topicIds = ref<string[]>(
+    props.draft?.topicIds ?? (props.defaultTopicId ? [props.defaultTopicId] : []),
+  );
+  const mentionedMemberIds = ref<string[]>(props.draft?.mentionedMemberIds ?? []);
+  const attempted = ref(false);
+  const textarea = ref<InstanceType<typeof AppInput>>();
+  const showContentError = computed(() => attempted.value && !content.value.trim());
+  const recipients = computed(() =>
+    props.members.filter(
+      (member) =>
+        mentionedMemberIds.value.includes(member.id) ||
+        member.topicIds.some((topicId) => topicIds.value.includes(topicId)),
+    ),
+  );
+  const showRecipientError = computed(() => attempted.value && recipients.value.length === 0);
+  const routingError = computed(() =>
+    topicIds.value.length || mentionedMemberIds.value.length
+      ? "所选话题暂无成员，请选择其他话题或 @ 成员"
+      : "请选择至少一个话题或 @ 一位成员",
+  );
+
+  watch(
+    [content, topicIds, mentionedMemberIds],
+    () => {
+      emit("draft", props.roomId, {
+        content: content.value,
+        topicIds: [...topicIds.value],
+        mentionedMemberIds: [...mentionedMemberIds.value],
+      });
+    },
+    { deep: true },
+  );
+
+  watch(
+    () => props.defaultTopicId,
+    (topicId) => {
+      if (!content.value.trim() && mentionedMemberIds.value.length === 0) {
+        topicIds.value = topicId ? [topicId] : [];
+      }
+    },
+  );
+
+  watch(
+    () => props.replyTo,
+    async (message) => {
+      if (message) {
+        topicIds.value = [...message.topicIds];
+        mentionedMemberIds.value = [...message.mentionedMemberIds];
+        await nextTick();
+        textarea.value?.focus();
+      }
+    },
+    { immediate: true },
+  );
+
+  function submit(): void {
+    if (props.sending) return;
+    attempted.value = true;
+    if (showContentError.value || showRecipientError.value) return;
+    emit("send", {
+      content: content.value.trim(),
+      topicIds: [...topicIds.value],
+      mentionedMemberIds: [...mentionedMemberIds.value],
+      ...(props.replyTo ? { replyToMessageId: props.replyTo.id } : {}),
+    });
+  }
+
+  function onEnter(event: KeyboardEvent): void {
+    if ((event.ctrlKey || event.metaKey) && !event.isComposing) {
+      event.preventDefault();
+      submit();
+    }
+  }
+
+  function reset(): void {
+    content.value = "";
+    mentionedMemberIds.value = [];
+    attempted.value = false;
+    textarea.value?.focus();
+  }
+
+  defineExpose({ reset });
+</script>

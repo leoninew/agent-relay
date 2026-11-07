@@ -8,7 +8,7 @@
     </div>
 
     <div class="px-5 py-5 sm:px-6">
-      <p v-if="loading" role="status" class="m-0 text-sm text-slate-600">Loading greeting...</p>
+      <AppLoading v-if="loading" class="justify-start">Loading greeting...</AppLoading>
       <div
         v-else-if="error"
         role="alert"
@@ -30,6 +30,8 @@
 </template>
 
 <script setup lang="ts">
+  import AppLoading from "@/components/AppLoading.vue";
+
   defineProps<{
     message: string | null;
     loading: boolean;

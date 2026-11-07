@@ -4,6 +4,7 @@ from typing import Annotated, cast
 from fastapi import Depends, FastAPI, Request
 
 from agent_relay.config import Settings
+from agent_relay.room_service import RoomService
 from agent_relay.service import GreetingService
 
 
@@ -27,3 +28,10 @@ def get_greeting_service(settings: SettingsDependency) -> GreetingService:
 
 
 GreetingServiceDependency = Annotated[GreetingService, Depends(get_greeting_service)]
+
+
+def get_room_service(request: Request) -> RoomService:
+    return cast(RoomService, request.app.state.room_service)
+
+
+RoomServiceDependency = Annotated[RoomService, Depends(get_room_service)]

@@ -1,0 +1,358 @@
+import logging
+from collections.abc import Iterator
+
+import pytest
+from fastapi.testclient import TestClient
+
+from agent_relay.api import create_app
+
+ROOM_ROUTE = "/api/room/agent-relay"
+
+
+@pytest.fixture
+def client() -> Iterator[TestClient]:
+    with TestClient(create_app(logging.getLogger("tests.agent_relay.room"))) as test_client:
+        yield test_client
+
+
+def test_room_returns_topics_members_messages_and_delivery_summary(client: TestClient) -> None:
+    rooms_response = client.get("/api/room")
+    response = client.get(ROOM_ROUTE)
+
+    assert response.status_code == 200
+    assert rooms_response.status_code == 200
+    assert {room["id"] for room in rooms_response.json()} == {"agent-relay", "housekeeper"}
+    room = response.json()
+    assert room["room"]["name"] == "Agent Relay 开发室"
+    assert room["room"]["projectPath"] == "d:/sourcecodes/mywork/agent-relay"
+    tester = next(member for member in room["members"] if member["id"] == "test-worker")
+    assert {"frontend", "backend"} <= set(tester["topicIds"])
+    assert room["summary"]["totalMessages"] == len(room["messages"])
+    assert room["summary"]["queuedCount"] > 0
+    assert response.headers["X-Request-Id"]
+
+
+def test_topic_filter_keeps_cross_topic_message_once_and_global_counts(client: TestClient) -> None:
+    full_room = client.get(ROOM_ROUTE).json()
+    response = client.get(ROOM_ROUTE, params={"topic_id": "frontend"})
+
+    assert response.status_code == 200
+    room = response.json()
+    assert room["messages"]
+    assert all("frontend" in message["topicIds"] for message in room["messages"])
+    assert len({message["id"] for message in room["messages"]}) == len(room["messages"])
+    assert any("backend" in message["topicIds"] for message in room["messages"])
+    assert room["topics"] == full_room["topics"]
+    assert room["summary"] == full_room["summary"]
+
+
+def test_post_message_deduplicates_topics_recipients_and_deliveries(client: TestClient) -> None:
+    response = client.post(
+        f"{ROOM_ROUTE}/message",
+        json={
+            "content": "  请核对跨主题消息契约  ",
+            "topicIds": ["frontend", "backend", "frontend"],
+            "mentionedMemberIds": ["test-worker", "frontend-worker", "test-worker"],
+            "replyToMessageId": "agent-relay-msg-0004",
+        },
+    )
+
+    assert response.status_code == 201
+    message = response.json()
+    assert message["senderId"] is None
+    assert message["senderName"] == "控制台"
+    assert message["content"] == "请核对跨主题消息契约"
+    assert message["topicIds"] == ["frontend", "backend"]
+    assert message["mentionedMemberIds"] == ["test-worker", "frontend-worker"]
+    assert message["recipientIds"] == [
+        "coordinator",
+        "frontend-worker",
+        "backend-worker",
+        "test-worker",
+    ]
+    assert message["replyToMessageId"] == "agent-relay-msg-0004"
+    assert {
+        delivery["targetMemberId"]: delivery["status"] for delivery in message["deliveries"]
+    } == {
+        "coordinator": "delivered",
+        "test-worker": "delivered",
+        "frontend-worker": "queued",
+        "backend-worker": "delivered",
+    }
+    snapshot = client.get(ROOM_ROUTE).json()
+    assert snapshot["messages"][-1] == message
+    assert message["seq"] == snapshot["messages"][-2]["seq"] + 1
+
+
+def test_topic_message_routes_to_subscribers_without_parsing_body_mentions(
+    client: TestClient,
+) -> None:
+    response = client.post(
+        f"{ROOM_ROUTE}/message",
+        json={"content": "同步前端进展 @后端 Worker #后端", "topicIds": ["frontend"]},
+    )
+
+    assert response.status_code == 201
+    assert response.json()["mentionedMemberIds"] == []
+    assert response.json()["recipientIds"] == ["coordinator", "frontend-worker", "test-worker"]
+    assert {delivery["targetMemberId"] for delivery in response.json()["deliveries"]} == {
+        "coordinator",
+        "frontend-worker",
+        "test-worker",
+    }
+    assert client.get(ROOM_ROUTE, params={"topic_id": "frontend"}).json()["messages"][-1] == (
+        response.json()
+    )
+
+
+@pytest.mark.parametrize("topic_payload", [{}, {"topicIds": []}])
+def test_direct_mention_does_not_require_a_topic(
+    client: TestClient, topic_payload: dict[str, object]
+) -> None:
+    response = client.post(
+        f"{ROOM_ROUTE}/message",
+        json={
+            "content": "请核对界面",
+            "mentionedMemberIds": ["frontend-worker"],
+            **topic_payload,
+        },
+    )
+
+    assert response.status_code == 201
+    message = response.json()
+    assert message["topicIds"] == []
+    assert message["mentionedMemberIds"] == ["frontend-worker"]
+    assert message["recipientIds"] == ["frontend-worker"]
+    assert len(message["deliveries"]) == 1
+    assert message["deliveries"][0]["status"] == "queued"
+    assert client.get(ROOM_ROUTE).json()["messages"][-1] == message
+    assert message["id"] not in {
+        item["id"]
+        for item in client.get(ROOM_ROUTE, params={"topic_id": "frontend"}).json()["messages"]
+    }
+
+
+def test_mentions_combine_with_topic_subscribers_without_subscription_restrictions(
+    client: TestClient,
+) -> None:
+    response = client.post(
+        f"{ROOM_ROUTE}/message",
+        json={
+            "content": "请前后端一起核对",
+            "topicIds": ["backend"],
+            "mentionedMemberIds": ["frontend-worker"],
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["mentionedMemberIds"] == ["frontend-worker"]
+    assert set(response.json()["recipientIds"]) == {
+        "coordinator",
+        "frontend-worker",
+        "backend-worker",
+        "test-worker",
+    }
+    assert len(response.json()["deliveries"]) == 4
+
+
+@pytest.mark.parametrize(
+    "targets",
+    [
+        {"topicIds": ["backend"], "mentionedMemberIds": ["test-worker", "missing"]},
+        {"topicIds": ["backend", "missing"], "mentionedMemberIds": ["test-worker"]},
+    ],
+)
+def test_invalid_target_rejects_entire_message_without_partial_write(
+    client: TestClient,
+    targets: dict[str, object],
+) -> None:
+    before = client.get(ROOM_ROUTE).json()
+    response = client.post(
+        f"{ROOM_ROUTE}/message",
+        headers={"X-Request-Id": "req_routing"},
+        json={
+            "content": "检查后端接口",
+            **targets,
+        },
+    )
+
+    assert response.status_code == 422
+    assert "不存在" in response.json()["error"]
+    assert response.json()["requestId"] == "req_routing"
+    assert client.get(ROOM_ROUTE).json() == before
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"content": "   ", "topicIds": ["frontend"]},
+        {"content": "必须选择投递目标", "topicIds": [], "mentionedMemberIds": []},
+    ],
+)
+def test_message_requires_content_and_targets(
+    client: TestClient, payload: dict[str, object]
+) -> None:
+    response = client.post(f"{ROOM_ROUTE}/message", json=payload)
+
+    assert response.status_code == 422
+    assert response.json()["code"] == "validation_error"
+
+
+def test_empty_topic_requires_an_additional_member_and_does_not_save_an_unroutable_message(
+    client: TestClient,
+) -> None:
+    topic = client.post(f"{ROOM_ROUTE}/topic", json={"name": "新话题"}).json()
+    before = client.get(ROOM_ROUTE).json()
+    response = client.post(
+        f"{ROOM_ROUTE}/message",
+        json={"content": "同步进展", "topicIds": [topic["id"]]},
+    )
+
+    assert response.status_code == 422
+    assert "所选话题暂无成员" in response.json()["error"]
+    assert client.get(ROOM_ROUTE).json() == before
+
+    routed = client.post(
+        f"{ROOM_ROUTE}/message",
+        json={
+            "content": "同步进展",
+            "topicIds": [topic["id"]],
+            "mentionedMemberIds": ["backend-worker"],
+        },
+    )
+    assert routed.status_code == 201
+    assert routed.json()["recipientIds"] == ["backend-worker"]
+
+
+def test_unknown_topic_returns_standard_not_found(client: TestClient) -> None:
+    response = client.get(ROOM_ROUTE, params={"topic_id": "missing"})
+
+    assert response.status_code == 404
+    assert response.json()["code"] == "not_found"
+    assert response.json()["error"] == "主题不存在"
+
+
+def test_room_state_is_owned_by_each_application(client: TestClient) -> None:
+    client.post(f"{ROOM_ROUTE}/message", json={"content": "本进程消息", "topicIds": ["summary"]})
+    with TestClient(create_app(logging.getLogger("tests.agent_relay.other_room"))) as other_client:
+        other_room = other_client.get(ROOM_ROUTE).json()
+
+    assert all(message["content"] != "本进程消息" for message in other_room["messages"])
+
+
+def test_create_room_add_topic_and_invite_member(client: TestClient) -> None:
+    created = client.post("/api/room", json={"name": "Acme", "projectPath": "D:/work/acme"})
+
+    assert created.status_code == 201
+    room = created.json()
+    room_route = f"/api/room/{room['id']}"
+    assert room["name"] == "Acme"
+    assert room["projectPath"] == "d:/work/acme"
+    assert client.get(room_route).json()["messages"] == []
+    assert client.get(room_route).json()["topics"] == []
+    sessions = client.get(f"{room_route}/session").json()
+    assert sessions
+    assert all(session["projectPath"] == room["projectPath"] for session in sessions)
+
+    topic_response = client.post(
+        f"{room_route}/topic", json={"name": "集成", "description": "端到端联调"}
+    )
+    assert topic_response.status_code == 201
+    member_response = client.post(
+        f"{room_route}/member",
+        json={
+            "sessionId": sessions[0]["id"],
+            "name": "集成 Worker",
+            "role": "测试",
+            "topicIds": [topic_response.json()["id"]],
+        },
+    )
+    assert member_response.status_code == 201
+    assert member_response.json()["sessionId"] == sessions[0]["id"]
+    assert sessions[0]["id"] not in {
+        session["id"] for session in client.get(f"{room_route}/session").json()
+    }
+    message_response = client.post(
+        f"{room_route}/message",
+        json={
+            "content": "开始联调",
+            "topicIds": [topic_response.json()["id"]],
+            "mentionedMemberIds": [member_response.json()["id"]],
+        },
+    )
+    assert message_response.status_code == 201
+    assert len(message_response.json()["deliveries"]) == 1
+    assert (
+        message_response.json()["deliveries"][0]["targetMemberId"] == member_response.json()["id"]
+    )
+    assert len(client.get(ROOM_ROUTE).json()["messages"]) == 6
+
+
+def test_member_edit_updates_subscriptions_used_by_message_routing(client: TestClient) -> None:
+    previous = client.post(
+        f"{ROOM_ROUTE}/message",
+        json={"content": "此前的后端约定", "topicIds": ["backend"]},
+    ).json()
+    assert "frontend-worker" not in previous["recipientIds"]
+    updated = client.patch(
+        f"{ROOM_ROUTE}/member/frontend-worker",
+        json={"name": "联调 Worker", "role": "接口联调", "topicIds": ["frontend", "backend"]},
+    )
+
+    assert updated.status_code == 200
+    assert updated.json()["sessionId"] == "agent-relay-frontend"
+    assert updated.json()["role"] == "接口联调"
+    assert updated.json()["topicIds"] == ["frontend", "backend"]
+    sent = client.post(
+        f"{ROOM_ROUTE}/message",
+        json={
+            "content": "请检查后端契约",
+            "topicIds": ["backend"],
+        },
+    )
+    assert sent.status_code == 201
+    assert "frontend-worker" in sent.json()["recipientIds"]
+    stored_previous = next(
+        message
+        for message in client.get(ROOM_ROUTE).json()["messages"]
+        if message["id"] == previous["id"]
+    )
+    assert stored_previous == previous
+    assert client.get("/api/room/housekeeper").json()["members"] == []
+
+
+def test_session_can_only_join_its_project_once(client: TestClient) -> None:
+    foreign_session = client.get("/api/room/housekeeper/session").json()[0]["id"]
+    invalid = client.post(
+        f"{ROOM_ROUTE}/member",
+        json={
+            "sessionId": foreign_session,
+            "name": "外部成员",
+            "role": "开发",
+            "topicIds": ["frontend"],
+        },
+    )
+    duplicate = client.post(
+        f"{ROOM_ROUTE}/member",
+        json={
+            "sessionId": "agent-relay-frontend",
+            "name": "重复成员",
+            "role": "开发",
+            "topicIds": ["frontend"],
+        },
+    )
+
+    assert invalid.status_code == 422
+    assert duplicate.status_code == 409
+    assert len(client.get(ROOM_ROUTE).json()["members"]) == 4
+
+
+def test_project_path_is_unique_across_slashes_and_case(client: TestClient) -> None:
+    response = client.post(
+        "/api/room",
+        json={"name": "Duplicate", "projectPath": "D:\\SOURCECODES\\MYWORK\\AGENT-RELAY\\"},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["code"] == "conflict"
+    assert len(client.get("/api/room").json()) == 2
