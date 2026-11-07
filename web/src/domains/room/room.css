@@ -47,6 +47,90 @@
   display: grid;
   gap: 4px;
 }
+.sidebar-node {
+  position: relative;
+  min-width: 0;
+  border-radius: 7px;
+}
+.topic-list > .sidebar-node {
+  flex-shrink: 0;
+}
+.sidebar-node-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sidebar-node-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0;
+  pointer-events: none;
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-caption);
+}
+.sidebar-node-actions button {
+  padding: 4px 0;
+  color: hsl(var(--muted-foreground));
+}
+.sidebar-node-actions button:hover:not(:disabled) {
+  color: hsl(var(--primary));
+}
+.sidebar-node-actions button:last-child:hover:not(:disabled) {
+  color: hsl(var(--destructive));
+}
+.sidebar-node-actions button:disabled {
+  opacity: 0.45;
+}
+.sidebar-node:hover .sidebar-node-actions,
+.sidebar-node:focus-within .sidebar-node-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+.sidebar-node:hover > button,
+.sidebar-node:focus-within > button {
+  padding-right: 76px;
+  background: hsl(var(--muted));
+}
+.sidebar-node:hover .topic-count,
+.sidebar-node:focus-within .topic-count,
+.sidebar-node:hover .sidebar-member-status,
+.sidebar-node:focus-within .sidebar-member-status {
+  display: none;
+}
+.sidebar-member.is-active {
+  background: hsl(var(--primary) / 0.065);
+  color: hsl(var(--primary));
+}
+.delete-description {
+  color: hsl(var(--muted-foreground));
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+}
+.delete-confirm.primary-button {
+  background: hsl(var(--destructive));
+  color: hsl(var(--destructive-foreground));
+}
+.delete-confirm.primary-button:hover:not(:disabled) {
+  background: hsl(var(--destructive) / 0.9);
+}
+@media (hover: none) {
+  .sidebar-node-actions {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .sidebar-node > button {
+    padding-right: 76px;
+  }
+  .sidebar-node .topic-count,
+  .sidebar-node .sidebar-member-status {
+    display: none;
+  }
+}
 .topic-nav-item {
   display: flex;
   width: 100%;

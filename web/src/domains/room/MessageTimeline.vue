@@ -139,7 +139,12 @@
       (delivery) => delivery.status === "delivered",
     ).length;
     const queued = message.deliveries.filter((delivery) => delivery.status === "queued").length;
-    return [enqueued ? `${enqueued} 已入队` : "", queued ? `${queued} 排队中` : ""]
+    const pending = message.deliveries.filter((delivery) => delivery.status === "pending").length;
+    return [
+      pending ? `${pending} 待提交` : "",
+      enqueued ? `${enqueued} 已入队` : "",
+      queued ? `${queued} 排队中` : "",
+    ]
       .filter(Boolean)
       .join(" · ");
   }

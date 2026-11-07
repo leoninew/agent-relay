@@ -5,23 +5,24 @@ export type Topic = {
   name: string;
   description: string;
   messageCount: number;
+  deletedAt: string | null;
 };
 
 export type Member = {
   id: string;
   sessionId: string;
   name: string;
-  role: string;
   initials: string;
   presence: "available" | "busy" | "offline";
   activity: string;
   topicIds: string[];
+  deletedAt: string | null;
 };
 
 export type Delivery = {
   id: string;
   targetMemberId: string;
-  status: "queued" | "delivered";
+  status: "pending" | "queued" | "delivered";
   updatedAt: string;
 };
 
@@ -43,8 +44,14 @@ export type RoomSnapshot = {
   room: Room;
   topics: Topic[];
   members: Member[];
+  sessions: Session[];
   messages: RoomMessage[];
-  summary: { totalMessages: number; deliveredCount: number; queuedCount: number };
+  summary: {
+    totalMessages: number;
+    deliveredCount: number;
+    queuedCount: number;
+    pendingCount: number;
+  };
 };
 
 export type CreateMessage = {
@@ -62,15 +69,20 @@ export type Room = {
 };
 
 export type CreateRoom = { name: string; projectPath: string };
+export type UpdateMember = { name: string; topicIds: string[] };
+export type CreateMember = UpdateMember & { sessionId: string };
 export type Session = {
   id: string;
   name: string;
   provider: string;
   projectPath: string;
-  presence: "available" | "busy" | "offline";
+  presence: Member["presence"];
+  observedAt: string | null;
 };
-export type CreateMember = { sessionId: string; name: string; role: string; topicIds: string[] };
-export type UpdateMember = Omit<CreateMember, "sessionId">;
+export type SessionCandidate = Session & {
+  archived: boolean;
+  memberId: string | null;
+};
 export type CreateTopic = { name: string; description: string };
 
 export async function fetchRooms(): Promise<Room[]> {
@@ -101,16 +113,19 @@ export async function postRoomMessage(
   return data;
 }
 
-export async function addRoomMember(roomId: string, request: CreateMember): Promise<Member> {
-  const { data } = await apiClient.post<Member>(
+export async function addRoomMember(
+  roomId: string,
+  request: CreateMember,
+): Promise<Member & { session: Session }> {
+  const { data } = await apiClient.post<Member & { session: Session }>(
     `/api/room/${encodeURIComponent(roomId)}/member`,
     request,
   );
   return data;
 }
 
-export async function fetchRoomSessions(roomId: string): Promise<Session[]> {
-  const { data } = await apiClient.get<Session[]>(
+export async function fetchRoomSessions(roomId: string): Promise<SessionCandidate[]> {
+  const { data } = await apiClient.get<SessionCandidate[]>(
     `/api/room/${encodeURIComponent(roomId)}/session`,
   );
   return data;
@@ -132,6 +147,32 @@ export async function addRoomTopic(roomId: string, request: CreateTopic): Promis
   const { data } = await apiClient.post<Topic>(
     `/api/room/${encodeURIComponent(roomId)}/topic`,
     request,
+  );
+  return data;
+}
+
+export async function updateRoomTopic(
+  roomId: string,
+  topicId: string,
+  request: CreateTopic,
+): Promise<Topic> {
+  const { data } = await apiClient.patch<Topic>(
+    `/api/room/${encodeURIComponent(roomId)}/topic/${encodeURIComponent(topicId)}`,
+    request,
+  );
+  return data;
+}
+
+export async function deleteRoomTopic(roomId: string, topicId: string): Promise<Topic> {
+  const { data } = await apiClient.delete<Topic>(
+    `/api/room/${encodeURIComponent(roomId)}/topic/${encodeURIComponent(topicId)}`,
+  );
+  return data;
+}
+
+export async function deleteRoomMember(roomId: string, memberId: string): Promise<Member> {
+  const { data } = await apiClient.delete<Member>(
+    `/api/room/${encodeURIComponent(roomId)}/member/${encodeURIComponent(memberId)}`,
   );
   return data;
 }

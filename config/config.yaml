@@ -9,6 +9,13 @@ greeting:
 static:
   directory: ./static
 
+database:
+  path: ./data/agent-relay.sqlite3
+
+codex:
+  command: [codex, app-server, proxy]
+  rpc_timeout: 30
+
 logging:
   body:
     limit: 4096

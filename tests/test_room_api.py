@@ -1,17 +1,48 @@
 import logging
 from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from room_fixtures import DemoRoomService, create_room_store
+from session_fixtures import FakeSessionDriver
 
 from agent_relay.api import create_app
+from agent_relay.drivers.codex import SessionInfo
+
+pytestmark = pytest.mark.usefixtures("migrated_database")
 
 ROOM_ROUTE = "/api/room/agent-relay"
 
 
 @pytest.fixture
-def client() -> Iterator[TestClient]:
-    with TestClient(create_app(logging.getLogger("tests.agent_relay.room"))) as test_client:
+def client(tmp_path: Path) -> Iterator[TestClient]:
+    service = DemoRoomService(create_room_store(tmp_path / "room.sqlite3"))
+    with TestClient(
+        create_app(
+            logging.getLogger("tests.agent_relay.room"),
+            room_service=service,
+            session_driver=FakeSessionDriver(
+                [
+                    SessionInfo("acme-1", "D:/work/acme", "codex", "Acme", "idle"),
+                    SessionInfo(
+                        "agent-relay-frontend",
+                        "D:/SourceCodes/mywork/agent-relay",
+                        "codex",
+                        "Frontend",
+                        "active",
+                    ),
+                    SessionInfo(
+                        "candidate",
+                        "D:/SourceCodes/mywork/agent-relay",
+                        "codex",
+                        "Candidate",
+                        "notLoaded",
+                    ),
+                ]
+            ),
+        )
+    ) as test_client:
         yield test_client
 
 
@@ -28,7 +59,9 @@ def test_room_returns_topics_members_messages_and_delivery_summary(client: TestC
     tester = next(member for member in room["members"] if member["id"] == "test-worker")
     assert {"frontend", "backend"} <= set(tester["topicIds"])
     assert room["summary"]["totalMessages"] == len(room["messages"])
-    assert room["summary"]["queuedCount"] > 0
+    assert room["summary"]["pendingCount"] > 0
+    assert room["summary"]["queuedCount"] == room["summary"]["deliveredCount"] == 0
+    assert all(message["senderId"] not in message["recipientIds"] for message in room["messages"])
     assert response.headers["X-Request-Id"]
 
 
@@ -50,7 +83,7 @@ def test_post_message_deduplicates_topics_recipients_and_deliveries(client: Test
     response = client.post(
         f"{ROOM_ROUTE}/message",
         json={
-            "content": "  请核对跨主题消息契约  ",
+            "content": "  请核对跨话题消息契约  ",
             "topicIds": ["frontend", "backend", "frontend"],
             "mentionedMemberIds": ["test-worker", "frontend-worker", "test-worker"],
             "replyToMessageId": "agent-relay-msg-0004",
@@ -61,7 +94,7 @@ def test_post_message_deduplicates_topics_recipients_and_deliveries(client: Test
     message = response.json()
     assert message["senderId"] is None
     assert message["senderName"] == "控制台"
-    assert message["content"] == "请核对跨主题消息契约"
+    assert message["content"] == "请核对跨话题消息契约"
     assert message["topicIds"] == ["frontend", "backend"]
     assert message["mentionedMemberIds"] == ["test-worker", "frontend-worker"]
     assert message["recipientIds"] == [
@@ -74,10 +107,10 @@ def test_post_message_deduplicates_topics_recipients_and_deliveries(client: Test
     assert {
         delivery["targetMemberId"]: delivery["status"] for delivery in message["deliveries"]
     } == {
-        "coordinator": "delivered",
-        "test-worker": "delivered",
-        "frontend-worker": "queued",
-        "backend-worker": "delivered",
+        "coordinator": "pending",
+        "test-worker": "pending",
+        "frontend-worker": "pending",
+        "backend-worker": "pending",
     }
     snapshot = client.get(ROOM_ROUTE).json()
     assert snapshot["messages"][-1] == message
@@ -124,7 +157,7 @@ def test_direct_mention_does_not_require_a_topic(
     assert message["mentionedMemberIds"] == ["frontend-worker"]
     assert message["recipientIds"] == ["frontend-worker"]
     assert len(message["deliveries"]) == 1
-    assert message["deliveries"][0]["status"] == "queued"
+    assert message["deliveries"][0]["status"] == "pending"
     assert client.get(ROOM_ROUTE).json()["messages"][-1] == message
     assert message["id"] not in {
         item["id"]
@@ -229,15 +262,14 @@ def test_unknown_topic_returns_standard_not_found(client: TestClient) -> None:
 
     assert response.status_code == 404
     assert response.json()["code"] == "not_found"
-    assert response.json()["error"] == "主题不存在"
+    assert response.json()["error"] == "话题不存在"
 
 
-def test_room_state_is_owned_by_each_application(client: TestClient) -> None:
-    client.post(f"{ROOM_ROUTE}/message", json={"content": "本进程消息", "topicIds": ["summary"]})
+def test_different_database_paths_isolate_room_state(client: TestClient) -> None:
+    client.post(f"{ROOM_ROUTE}/message", json={"content": "本库消息", "topicIds": ["summary"]})
     with TestClient(create_app(logging.getLogger("tests.agent_relay.other_room"))) as other_client:
-        other_room = other_client.get(ROOM_ROUTE).json()
-
-    assert all(message["content"] != "本进程消息" for message in other_room["messages"])
+        assert other_client.get("/api/room").json() == []
+        assert other_client.get(ROOM_ROUTE).status_code == 404
 
 
 def test_create_room_add_topic_and_invite_member(client: TestClient) -> None:
@@ -250,9 +282,7 @@ def test_create_room_add_topic_and_invite_member(client: TestClient) -> None:
     assert room["projectPath"] == "d:/work/acme"
     assert client.get(room_route).json()["messages"] == []
     assert client.get(room_route).json()["topics"] == []
-    sessions = client.get(f"{room_route}/session").json()
-    assert sessions
-    assert all(session["projectPath"] == room["projectPath"] for session in sessions)
+    assert [s["id"] for s in client.get(f"{room_route}/session").json()] == ["acme-1"]
 
     topic_response = client.post(
         f"{room_route}/topic", json={"name": "集成", "description": "端到端联调"}
@@ -261,30 +291,25 @@ def test_create_room_add_topic_and_invite_member(client: TestClient) -> None:
     member_response = client.post(
         f"{room_route}/member",
         json={
-            "sessionId": sessions[0]["id"],
+            "sessionId": "acme-1",
             "name": "集成 Worker",
-            "role": "测试",
             "topicIds": [topic_response.json()["id"]],
         },
     )
     assert member_response.status_code == 201
-    assert member_response.json()["sessionId"] == sessions[0]["id"]
-    assert sessions[0]["id"] not in {
-        session["id"] for session in client.get(f"{room_route}/session").json()
-    }
+    member = member_response.json()
+    assert member["sessionId"] == "acme-1"
     message_response = client.post(
         f"{room_route}/message",
         json={
             "content": "开始联调",
             "topicIds": [topic_response.json()["id"]],
-            "mentionedMemberIds": [member_response.json()["id"]],
+            "mentionedMemberIds": [member["id"]],
         },
     )
     assert message_response.status_code == 201
     assert len(message_response.json()["deliveries"]) == 1
-    assert (
-        message_response.json()["deliveries"][0]["targetMemberId"] == member_response.json()["id"]
-    )
+    assert message_response.json()["deliveries"][0]["targetMemberId"] == member["id"]
     assert len(client.get(ROOM_ROUTE).json()["messages"]) == 6
 
 
@@ -296,12 +321,12 @@ def test_member_edit_updates_subscriptions_used_by_message_routing(client: TestC
     assert "frontend-worker" not in previous["recipientIds"]
     updated = client.patch(
         f"{ROOM_ROUTE}/member/frontend-worker",
-        json={"name": "联调 Worker", "role": "接口联调", "topicIds": ["frontend", "backend"]},
+        json={"name": "联调 Worker", "topicIds": ["frontend", "backend"]},
     )
 
     assert updated.status_code == 200
     assert updated.json()["sessionId"] == "agent-relay-frontend"
-    assert updated.json()["role"] == "接口联调"
+    assert updated.json()["name"] == "联调 Worker"
     assert updated.json()["topicIds"] == ["frontend", "backend"]
     sent = client.post(
         f"{ROOM_ROUTE}/message",
@@ -321,28 +346,33 @@ def test_member_edit_updates_subscriptions_used_by_message_routing(client: TestC
     assert client.get("/api/room/housekeeper").json()["members"] == []
 
 
-def test_session_can_only_join_its_project_once(client: TestClient) -> None:
-    foreign_session = client.get("/api/room/housekeeper/session").json()[0]["id"]
+def test_member_creation_rejects_foreign_topic_and_duplicate_name(client: TestClient) -> None:
+    topic = client.post("/api/room/housekeeper/topic", json={"name": "foreign"}).json()
     invalid = client.post(
         f"{ROOM_ROUTE}/member",
         json={
-            "sessionId": foreign_session,
-            "name": "外部成员",
-            "role": "开发",
-            "topicIds": ["frontend"],
+            "sessionId": "candidate",
+            "name": "Other",
+            "topicIds": [topic["id"]],
         },
     )
     duplicate = client.post(
         f"{ROOM_ROUTE}/member",
         json={
-            "sessionId": "agent-relay-frontend",
-            "name": "重复成员",
-            "role": "开发",
+            "sessionId": "candidate",
+            "name": "前端 Worker",
             "topicIds": ["frontend"],
         },
     )
-
-    assert invalid.status_code == 422
+    old_request = client.post(
+        f"{ROOM_ROUTE}/member",
+        json={
+            "operationId": "old-create",
+            "name": "Old",
+            "topicIds": ["frontend"],
+        },
+    )
+    assert invalid.status_code == old_request.status_code == 422
     assert duplicate.status_code == 409
     assert len(client.get(ROOM_ROUTE).json()["members"]) == 4
 
@@ -356,3 +386,61 @@ def test_project_path_is_unique_across_slashes_and_case(client: TestClient) -> N
     assert response.status_code == 409
     assert response.json()["code"] == "conflict"
     assert len(client.get("/api/room").json()) == 2
+
+
+def test_session_discovery_is_scoped_and_marks_joined_sessions(client: TestClient) -> None:
+    candidates = client.get(f"{ROOM_ROUTE}/session")
+    assert candidates.status_code == 200
+    assert [s["id"] for s in candidates.json()] == ["agent-relay-frontend", "candidate"]
+    assert candidates.json()[0]["memberId"] == "frontend-worker"
+    assert candidates.json()[1]["memberId"] is None
+    duplicate = client.post(
+        f"{ROOM_ROUTE}/member",
+        json={
+            "sessionId": "agent-relay-frontend",
+            "name": "Other",
+            "topicIds": ["frontend"],
+        },
+    )
+    assert duplicate.status_code == 409
+    assert client.get("/api/room/missing/session").status_code == 404
+
+
+def test_edit_and_delete_nodes_preserve_history_and_release_names_and_bindings(
+    client: TestClient,
+) -> None:
+    original = client.get(ROOM_ROUTE).json()
+    edited = client.patch(
+        f"{ROOM_ROUTE}/topic/frontend", json={"name": "界面", "description": "界面交互讨论"}
+    )
+    assert edited.status_code == 200
+    assert edited.json()["name"] == "界面"
+    assert edited.json()["description"] == "界面交互讨论"
+
+    deleted_topic = client.delete(f"{ROOM_ROUTE}/topic/frontend")
+    deleted_member = client.delete(f"{ROOM_ROUTE}/member/frontend-worker")
+    assert deleted_topic.status_code == deleted_member.status_code == 200
+    assert deleted_topic.json()["deletedAt"]
+    assert deleted_member.json()["deletedAt"]
+    snapshot = client.get(ROOM_ROUTE).json()
+    assert snapshot["messages"] == original["messages"]
+    assert all("frontend" not in member["topicIds"] for member in snapshot["members"])
+
+    topic = client.post(f"{ROOM_ROUTE}/topic", json={"name": "界面", "description": "新话题"})
+    assert topic.status_code == 201
+    joined = client.post(
+        f"{ROOM_ROUTE}/member",
+        json={
+            "sessionId": "agent-relay-frontend",
+            "name": "前端 Worker",
+            "topicIds": [topic.json()["id"]],
+        },
+    )
+    assert joined.status_code == 201
+    published = client.post(
+        f"{ROOM_ROUTE}/message",
+        json={"content": "新的界面讨论", "topicIds": [topic.json()["id"]]},
+    )
+    assert published.status_code == 201
+    assert published.json()["recipientIds"] == [joined.json()["id"]]
+    assert client.get(ROOM_ROUTE).json()["messages"][-1] == published.json()

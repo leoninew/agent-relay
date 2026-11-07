@@ -10,6 +10,8 @@ from fastapi.testclient import TestClient
 from agent_relay.api import create_app
 from agent_relay.config import load_settings
 
+pytestmark = pytest.mark.usefixtures("migrated_database")
+
 
 @pytest.mark.parametrize("field", ["SERVER__PORRT", "GREETNG__PREFIX"])
 def test_unknown_configuration_fields_fail_at_startup(

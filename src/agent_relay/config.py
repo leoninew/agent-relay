@@ -4,7 +4,7 @@ from pathlib import Path
 
 from dotenv import dotenv_values
 from dynaconf import Dynaconf
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class RequestLogMessages(BaseModel):
@@ -29,6 +29,24 @@ class GreetingSettings(BaseModel):
 class StaticSettings(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
     directory: Path
+
+
+class DatabaseSettings(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    path: Path
+
+
+class CodexSettings(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    command: list[str] = Field(min_length=1)
+    rpc_timeout: float = Field(gt=0, le=300)
+
+    @field_validator("command")
+    @classmethod
+    def validate_command(cls, value: list[str]) -> list[str]:
+        if any(not item.strip() for item in value):
+            raise ValueError("Codex command arguments cannot be blank")
+        return value
 
 
 class BodyLoggingSettings(BaseModel):
@@ -56,6 +74,8 @@ class Settings(BaseModel):
     server: ServerSettings
     greeting: GreetingSettings
     static: StaticSettings
+    database: DatabaseSettings
+    codex: CodexSettings
     logging: LoggingSettings
 
 
@@ -78,7 +98,7 @@ def load_settings(
         loaders=[],
         load_dotenv=False,
         environments=False,
-        merge_enabled=True,
+        merge_enabled=False,
         encoding="utf-8",
     )
     overrides = {
@@ -87,7 +107,7 @@ def load_settings(
     }
     for name, value in overrides.items():
         if name.startswith("AGENT_RELAY_") and name != "AGENT_RELAY_PROFILE" and value is not None:
-            config.set(name.removeprefix("AGENT_RELAY_"), value, tomlfy=True)
+            config.set(name.removeprefix("AGENT_RELAY_"), value, tomlfy=True, merge=False)
 
     values = {
         name.lower(): value for name, value in config.as_dict().items() if name != "LOAD_DOTENV"

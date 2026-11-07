@@ -2,7 +2,13 @@ import type { AxiosAdapter, InternalAxiosRequestConfig } from "axios";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { apiClient } from "@/services/api";
-import { fetchRoom, fetchRooms, postRoomMessage } from "@/services/roomApi";
+import {
+  addRoomMember,
+  fetchRoom,
+  fetchRoomSessions,
+  fetchRooms,
+  postRoomMessage,
+} from "@/services/roomApi";
 
 import { roomFixture } from "../fixtures/room";
 
@@ -62,5 +68,40 @@ describe("room API", () => {
         data: JSON.stringify(request),
       }),
     );
+  });
+
+  it("loads project sessions and joins the selected session without creation fields", async () => {
+    await fetchRoomSessions("room/one");
+    expect(adapterMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        method: "get",
+        url: "/api/room/room%2Fone/session",
+      }),
+    );
+    const request = {
+      sessionId: "existing-session",
+      name: "Worker",
+      topicIds: ["frontend"],
+    };
+    await addRoomMember("room/one", request);
+    expect(adapterMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        method: "post",
+        url: "/api/room/room%2Fone/member",
+        data: JSON.stringify(request),
+      }),
+    );
+  });
+
+  it("does not automatically retry a failed join request", async () => {
+    adapterMock.mockRejectedValueOnce(new Error("connection lost"));
+    await expect(
+      addRoomMember("room", {
+        sessionId: "existing",
+        name: "Worker",
+        topicIds: ["frontend"],
+      }),
+    ).rejects.toThrow();
+    expect(adapterMock).toHaveBeenCalledTimes(1);
   });
 });

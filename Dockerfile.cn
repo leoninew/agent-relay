@@ -24,15 +24,17 @@ WORKDIR /app
 COPY pyproject.toml uv.lock README.md ./
 COPY src ./src
 COPY config ./config
+COPY alembic.ini ./alembic.ini
+COPY migrations ./migrations
 
 RUN python -m pip install --no-cache-dir --upgrade pip \
     && python -m pip install --no-cache-dir uv==0.12.5 \
     && uv sync --locked --no-dev --no-editable \
     && useradd --create-home --uid 10001 appuser \
-    && install -d -o appuser -g appuser /app/logs
+    && install -d -o appuser -g appuser /app/logs /app/data
 
 COPY --from=web-build /web/dist ./static
 
 USER appuser
 EXPOSE 80
-CMD ["python", "-m", "agent_relay.server"]
+CMD ["sh", "-c", "python -m agent_relay.migrate && exec python -m agent_relay.server"]

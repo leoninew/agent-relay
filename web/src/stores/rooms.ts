@@ -4,7 +4,7 @@ import { ref } from "vue";
 import { addRoomTopic, createRoom, fetchRooms } from "@/services/roomApi";
 import type { CreateRoom, CreateTopic, Room, RoomSnapshot, Topic } from "@/services/roomApi";
 
-type RoomCatalog = { topics: Topic[]; roles: string[] };
+type RoomCatalog = { topics: Topic[] };
 
 export const useRoomsStore = defineStore("rooms", () => {
   const rooms = ref<Room[]>([]);
@@ -34,18 +34,7 @@ export const useRoomsStore = defineStore("rooms", () => {
     const roomId = snapshot.room.id;
     catalogs.value[roomId] = {
       topics: snapshot.topics,
-      roles: [
-        ...new Set([
-          ...(catalogs.value[roomId]?.roles ?? []),
-          ...snapshot.members.map((member) => member.role),
-        ]),
-      ],
     };
-  }
-
-  function rememberRole(roomId: string, role: string): void {
-    const catalog = catalogs.value[roomId];
-    if (catalog && !catalog.roles.includes(role)) catalog.roles.push(role);
   }
 
   async function createTopic(roomId: string, request: CreateTopic): Promise<Topic> {
@@ -62,7 +51,6 @@ export const useRoomsStore = defineStore("rooms", () => {
     load,
     create,
     syncCatalog,
-    rememberRole,
     createTopic,
   };
 });

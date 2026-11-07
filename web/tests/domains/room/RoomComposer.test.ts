@@ -85,6 +85,23 @@ describe("RoomComposer", () => {
     ]);
   });
 
+  it("continues a draft with the remaining topics and members after deletion", async () => {
+    const room = roomFixture();
+    const { emitted, rerender } = renderComposer({
+      content: "继续讨论",
+      topicIds: ["frontend", "backend"],
+      mentionedMemberIds: ["backend-worker", "test-worker"],
+    });
+    await rerender({
+      topics: room.topics.filter((topic) => topic.id === "frontend"),
+      members: room.members.filter((member) => member.id !== "backend-worker"),
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "发送消息" }));
+    expect(emitted().send).toEqual([
+      [{ content: "继续讨论", topicIds: ["frontend"], mentionedMemberIds: ["test-worker"] }],
+    ]);
+  });
+
   it("shows field errors for missing content and targets, clearing only the corrected error", async () => {
     const { emitted } = renderComposer();
     await fireEvent.click(screen.getByRole("button", { name: "发送消息" }));

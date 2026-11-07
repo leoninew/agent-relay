@@ -21,18 +21,30 @@ describe("RoomSetupDialog form", () => {
         mode: undefined,
         topics: room.topics,
         roomId: room.room.id,
-        roles: ["前端开发", "集成测试"],
-        saving: false,
-        error: null,
         sessions: [
           {
-            id: "session-review",
-            name: "审查会话",
-            provider: "Codex",
+            id: "session-1",
+            name: "已有会话",
+            provider: "codex",
             projectPath: room.room.projectPath,
-            presence: "available",
+            presence: "busy",
+            observedAt: "2026-11-07T03:04:05Z",
+            archived: false,
+            memberId: null,
+          },
+          {
+            id: "joined",
+            name: "已加入会话",
+            provider: "codex",
+            projectPath: room.room.projectPath,
+            presence: "offline",
+            observedAt: "2026-11-07T03:04:05Z",
+            archived: true,
+            memberId: "member-1",
           },
         ],
+        saving: false,
+        error: null,
       },
       global: {
         plugins: [createPinia()],
@@ -46,16 +58,23 @@ describe("RoomSetupDialog form", () => {
     });
   }
 
-  it("emits a new member with a custom role and an inline topic", async () => {
-    const topic = { id: "review", name: "代码审查", description: "", messageCount: 0 };
+  it("emits a new member with a selected session and an inline topic", async () => {
+    const topic = {
+      id: "review",
+      name: "代码审查",
+      description: "",
+      messageCount: 0,
+      deletedAt: null,
+    };
     createTopic.mockResolvedValue(topic);
     const { rerender, emitted } = renderForm();
     await rerender({ mode: "member" });
-    await fireEvent.click(screen.getByRole("radio", { name: /审查会话/ }));
+    expect(screen.getAllByRole("radio")).toHaveLength(2);
+    expect(screen.getByRole("radio", { name: /已加入会话/ }).hasAttribute("disabled")).toBe(true);
+    await fireEvent.click(screen.getByRole("radio", { name: /^已有会话/ }));
     await fireEvent.update(screen.getByLabelText(/成员名称/), "审查 Worker");
-    await fireEvent.update(screen.getByLabelText(/^角色/), "代码审查");
-    await fireEvent.update(screen.getByLabelText("新主题名称"), "代码审查");
-    await fireEvent.click(screen.getByRole("button", { name: "添加主题" }));
+    await fireEvent.update(screen.getByLabelText("新话题名称"), "代码审查");
+    await fireEvent.click(screen.getByRole("button", { name: "添加话题" }));
     await waitFor(() =>
       expect(createTopic).toHaveBeenCalledWith("agent-relay", {
         name: "代码审查",
@@ -68,25 +87,84 @@ describe("RoomSetupDialog form", () => {
     expect(emitted().createMember).toEqual([
       [
         {
-          sessionId: "session-review",
+          sessionId: "session-1",
           name: "审查 Worker",
-          role: "代码审查",
           topicIds: ["review"],
         },
       ],
     ]);
   });
 
-  it("emits an edited member using an existing role and multiple subscriptions", async () => {
+  it("requires a selected session and clears only its field error after selection", async () => {
+    const { rerender, emitted } = renderForm();
+    await rerender({ mode: "member" });
+    await fireEvent.click(screen.getByRole("button", { name: "添加成员" }));
+    expect(screen.getByRole("radiogroup").getAttribute("aria-invalid")).toBe("true");
+    expect(screen.getByText("请选择要加入的会话")).toBeTruthy();
+    expect(emitted().createMember).toBeUndefined();
+    await fireEvent.click(screen.getByRole("radio", { name: /^已有会话/ }));
+    expect(screen.queryByText("请选择要加入的会话")).toBeNull();
+    await fireEvent.click(screen.getByRole("checkbox", { name: "# 前端" }));
+    await fireEvent.submit(screen.getByRole("button", { name: "添加成员" }).closest("form")!);
+    expect(emitted().createMember).toEqual([
+      [
+        {
+          sessionId: "session-1",
+          name: "已有会话",
+          topicIds: ["frontend"],
+        },
+      ],
+    ]);
+  });
+
+  it("distinguishes empty sessions from loading and request failure and can refresh", async () => {
+    const { rerender, emitted } = renderForm();
+    await rerender({ mode: "member", sessions: [], sessionsLoading: true });
+    expect(screen.getByRole("status").textContent).toContain("正在加载会话");
+    await rerender({ sessionsLoading: false });
+    expect(screen.getByText("当前项目目录下暂无 Codex 会话")).toBeTruthy();
+    await rerender({ sessionsError: "会话服务不可用" });
+    expect(screen.getByRole("alert").textContent).toBe("会话服务不可用");
+    expect(screen.queryByText("当前项目目录下暂无 Codex 会话")).toBeNull();
+    expect(screen.getByRole("button", { name: "添加成员" }).hasAttribute("disabled")).toBe(true);
+    await fireEvent.click(screen.getByRole("button", { name: "刷新会话" }));
+    expect(emitted().reloadSessions).toEqual([[]]);
+  });
+
+  it("emits an edited member with multiple subscriptions", async () => {
     const member = roomFixture().members[0];
     const { rerender, emitted } = renderForm();
     await rerender({ mode: "member", member });
-    await fireEvent.click(screen.getByRole("button", { name: "集成测试" }));
     await fireEvent.click(screen.getByRole("checkbox", { name: "# 后端" }));
     await fireEvent.click(screen.getByRole("button", { name: "保存成员" }));
 
     expect(emitted().updateMember).toEqual([
-      [member.id, { name: member.name, role: "集成测试", topicIds: ["frontend", "backend"] }],
+      [member.id, { name: member.name, topicIds: ["frontend", "backend"] }],
+    ]);
+  });
+
+  it("shows the linked session name and ID when editing a member", async () => {
+    const member = { ...roomFixture().members[0], sessionId: "joined" };
+    const { rerender } = renderForm();
+    await rerender({ mode: "member", member, linkedSession: { id: "joined", name: "已加入会话" } });
+    expect(screen.getByText("已加入会话")).toBeTruthy();
+    expect(screen.getByText("joined")).toBeTruthy();
+    expect(screen.queryByRole("status")).toBeNull();
+    await rerender({ linkedSession: undefined });
+    expect(screen.getByText("会话名称不可用")).toBeTruthy();
+  });
+
+  it("prefills and saves the topic name and description", async () => {
+    const topic = roomFixture().topics[1];
+    const { rerender, emitted } = renderForm();
+    await rerender({ mode: "topic", topic });
+    expect((screen.getByLabelText(/话题名称/) as HTMLInputElement).value).toBe(topic.name);
+    expect((screen.getByLabelText("话题说明") as HTMLInputElement).value).toBe(topic.description);
+    await fireEvent.update(screen.getByLabelText(/话题名称/), "界面讨论");
+    await fireEvent.update(screen.getByLabelText("话题说明"), "交互和界面实现");
+    await fireEvent.click(screen.getByRole("button", { name: "保存话题" }));
+    expect(emitted().updateTopic).toEqual([
+      [topic.id, { name: "界面讨论", description: "交互和界面实现" }],
     ]);
   });
 });

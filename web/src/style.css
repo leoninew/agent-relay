@@ -153,7 +153,7 @@
   max-width: min(320px, 100%);
   padding: 7px 12px;
   border-radius: 6px;
-  background: hsl(var(--muted) / 0.6);
+  background: transparent;
   font-size: var(--font-size-body);
   line-height: var(--line-height-body);
   font-weight: 400;
@@ -172,12 +172,9 @@
   height: 14px;
   flex-shrink: 0;
 }
-.room-switcher-trigger[data-state="open"] {
-  background: hsl(var(--muted));
-}
 .room-switcher-trigger:focus-visible {
-  outline: none;
-  background: hsl(var(--muted));
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
 }
 .app-shell main > section {
   margin: 32px auto;

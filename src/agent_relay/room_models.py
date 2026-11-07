@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import datetime
 from typing import Literal, Self
 
@@ -21,17 +23,20 @@ class Topic(RoomModel):
     name: str
     description: str
     message_count: int = 0
+    deleted_at: datetime | None = None
 
 
 class Member(RoomModel):
     id: str
     session_id: str
     name: str
-    role: str
     initials: str
     presence: Literal["available", "busy", "offline"]
     activity: str
+    activity_source: str = "unknown"
+    observed_at: datetime | None = None
     topic_ids: list[str]
+    deleted_at: datetime | None = None
 
 
 class Session(RoomModel):
@@ -41,11 +46,22 @@ class Session(RoomModel):
     project_path: str
     presence: Literal["available", "busy", "offline"]
 
+    observed_at: datetime | None = None
+
+
+class SessionCandidate(Session):
+    archived: bool
+    member_id: str | None = None
+
+
+class CreatedMember(Member):
+    session: Session
+
 
 class Delivery(RoomModel):
     id: str
     target_member_id: str
-    status: Literal["queued", "delivered"]
+    status: Literal["pending", "queued", "delivered"]
     updated_at: datetime
 
 
@@ -67,12 +83,14 @@ class RoomSummary(RoomModel):
     total_messages: int
     delivered_count: int
     queued_count: int
+    pending_count: int = 0
 
 
 class RoomSnapshot(RoomModel):
     room: Room
     topics: list[Topic]
     members: list[Member]
+    sessions: list[Session]
     messages: list[Message]
     summary: RoomSummary
 
@@ -114,11 +132,12 @@ class CreateRoom(RoomModel):
 
 
 class UpdateMember(RoomModel):
+    model_config = ConfigDict(extra="forbid")
+
     name: str = Field(min_length=1, max_length=80)
-    role: str = Field(min_length=1, max_length=80)
     topic_ids: list[str] = Field(min_length=1)
 
-    @field_validator("name", "role")
+    @field_validator("name")
     @classmethod
     def strip_required(cls, value: str) -> str:
         value = value.strip()
@@ -128,7 +147,16 @@ class UpdateMember(RoomModel):
 
 
 class CreateMember(UpdateMember):
-    session_id: str = Field(min_length=1)
+    model_config = ConfigDict(extra="forbid")
+    session_id: str = Field(min_length=1, max_length=128)
+
+    @field_validator("session_id")
+    @classmethod
+    def strip_session_id(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Session ID cannot be blank")
+        return value
 
 
 class CreateTopic(RoomModel):

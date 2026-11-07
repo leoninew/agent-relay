@@ -13,7 +13,7 @@ describe("AppCheckboxGroup", () => {
       components: { AppCheckbox, AppCheckboxGroup },
       setup: () => ({ topics: ref(["frontend", "backend"]), members: ref(["tester"]) }),
       template: `
-        <AppCheckboxGroup v-model="topics" clear-label="清空主题" aria-label="主题">
+        <AppCheckboxGroup v-model="topics" clear-label="清空话题" aria-label="话题">
           <AppCheckbox value="frontend">前端</AppCheckbox>
           <AppCheckbox value="backend">后端</AppCheckbox>
         </AppCheckboxGroup>
@@ -23,7 +23,7 @@ describe("AppCheckboxGroup", () => {
       `,
     });
 
-    await fireEvent.click(screen.getByRole("button", { name: "清空主题" }));
+    await fireEvent.click(screen.getByRole("button", { name: "清空话题" }));
 
     const firstChoice = screen.getByRole("checkbox", { name: "前端" });
     expect(firstChoice.getAttribute("aria-checked")).toBe("false");

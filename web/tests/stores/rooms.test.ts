@@ -18,7 +18,7 @@ describe("room catalogs", () => {
     setActivePinia(createPinia());
   });
 
-  it("reuses created topics and roles only within their project room", async () => {
+  it("reuses created topics only within their project room", async () => {
     const store = useRoomsStore();
     const first = roomFixture();
     const second = {
@@ -29,15 +29,12 @@ describe("room catalogs", () => {
     };
     store.syncCatalog(first);
     store.syncCatalog(second);
-    const topic = { id: "review", name: "审查", description: "", messageCount: 0 };
+    const topic = { id: "review", name: "审查", description: "", messageCount: 0, deletedAt: null };
     vi.mocked(addRoomTopic).mockResolvedValue(topic);
 
     await store.createTopic(first.room.id, { name: "审查", description: "" });
-    store.rememberRole(first.room.id, "审查员");
-    store.syncCatalog({ ...first, topics: [...first.topics], members: [] });
 
     expect(store.catalogs[first.room.id].topics).toContainEqual(topic);
-    expect(store.catalogs[first.room.id].roles).toContain("审查员");
-    expect(store.catalogs[second.room.id]).toEqual({ topics: [], roles: [] });
+    expect(store.catalogs[second.room.id]).toEqual({ topics: [] });
   });
 });

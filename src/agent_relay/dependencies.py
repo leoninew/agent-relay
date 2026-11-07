@@ -4,6 +4,7 @@ from typing import Annotated, cast
 from fastapi import Depends, FastAPI, Request
 
 from agent_relay.config import Settings
+from agent_relay.member_sessions import MemberSessions
 from agent_relay.room_service import RoomService
 from agent_relay.service import GreetingService
 
@@ -35,3 +36,10 @@ def get_room_service(request: Request) -> RoomService:
 
 
 RoomServiceDependency = Annotated[RoomService, Depends(get_room_service)]
+
+
+def get_member_sessions(request: Request) -> MemberSessions:
+    return cast(MemberSessions, request.app.state.member_sessions)
+
+
+MemberSessionsDependency = Annotated[MemberSessions, Depends(get_member_sessions)]

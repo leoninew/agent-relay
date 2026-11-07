@@ -153,6 +153,17 @@
   );
 
   watch(
+    [() => props.topics, () => props.members],
+    () => {
+      topicIds.value = topicIds.value.filter((id) => props.topics.some((topic) => topic.id === id));
+      mentionedMemberIds.value = mentionedMemberIds.value.filter((id) =>
+        props.members.some((member) => member.id === id),
+      );
+    },
+    { immediate: true },
+  );
+
+  watch(
     [content, topicIds, mentionedMemberIds],
     () => {
       emit("draft", props.roomId, {
@@ -177,8 +188,12 @@
     () => props.replyTo,
     async (message) => {
       if (message) {
-        topicIds.value = [...message.topicIds];
-        mentionedMemberIds.value = [...message.mentionedMemberIds];
+        topicIds.value = message.topicIds.filter((id) =>
+          props.topics.some((topic) => topic.id === id),
+        );
+        mentionedMemberIds.value = message.mentionedMemberIds.filter((id) =>
+          props.members.some((member) => member.id === id),
+        );
         await nextTick();
         textarea.value?.focus();
       }

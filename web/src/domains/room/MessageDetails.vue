@@ -99,6 +99,6 @@
       };
     }),
   );
-  const enqueueLabels = { delivered: "已入队", queued: "排队中" };
-  const receiveLabels = { delivered: "未确认", queued: "待接收" };
+  const enqueueLabels = { pending: "待提交", delivered: "已入队", queued: "排队中" };
+  const receiveLabels = { pending: "—", delivered: "未确认", queued: "待接收" };
 </script>

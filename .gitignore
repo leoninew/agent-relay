@@ -30,6 +30,9 @@ build/
 !.env.example
 !.env.dev
 
+# Local persistent room database
+/data/
+
 # Logs and temp files
 logs/
 *.log

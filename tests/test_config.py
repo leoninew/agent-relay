@@ -1,6 +1,7 @@
 from pathlib import Path
 from shutil import copyfile
 
+import pytest
 from pytest import MonkeyPatch
 
 from agent_relay.config import load_settings
@@ -36,3 +37,17 @@ def test_load_settings_caches_one_settings_instance(monkeypatch: MonkeyPatch) ->
 
     assert load_settings() is initial_settings
     assert initial_settings.greeting.prefix == "Hi"
+
+
+@pytest.mark.parametrize("value", ["[]", '[""]', '["codex", ""]'])
+def test_empty_codex_commands_are_rejected(monkeypatch: MonkeyPatch, value: str) -> None:
+    monkeypatch.setenv("AGENT_RELAY_CODEX__COMMAND", value)
+    with pytest.raises(ValueError, match="codex.command"):
+        load_settings()
+
+
+def test_command_override_replaces_default_arguments(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setenv(
+        "AGENT_RELAY_CODEX__COMMAND", '["C:/tools/codex.exe", "app-server", "proxy"]'
+    )
+    assert load_settings().codex.command == ["C:/tools/codex.exe", "app-server", "proxy"]

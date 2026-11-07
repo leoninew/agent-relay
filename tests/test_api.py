@@ -17,6 +17,8 @@ from agent_relay.config import load_settings
 from agent_relay.dependencies import get_greeting_service
 from agent_relay.service import GreetingService
 
+pytestmark = pytest.mark.usefixtures("migrated_database")
+
 
 @contextmanager
 def api_client(test_app: FastAPI | None = None) -> Iterator[TestClient]:

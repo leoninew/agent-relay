@@ -8,6 +8,8 @@
     <form class="setup-form" novalidate @submit.prevent="submit">
       <div v-if="mode === 'member' && member" class="setup-field">
         <label>关联会话</label>
+        <p v-if="linkedSession" class="session-state">{{ linkedSession.name }}</p>
+        <p v-else class="session-state">会话名称不可用</p>
         <p class="session-state session-id">{{ member.sessionId }}</p>
       </div>
       <div v-else-if="mode === 'member'" class="setup-field">
@@ -25,6 +27,7 @@
           </AppButton>
         </div>
         <AppLoading v-if="sessionsLoading" class="session-state">正在加载会话…</AppLoading>
+        <p v-else-if="sessionsError" class="field-error" role="alert">{{ sessionsError }}</p>
         <template v-else>
           <RadioGroupRoot
             ref="sessionChoices"
@@ -39,11 +42,16 @@
               <RadioGroupItem
                 :value="session.id"
                 class="session-option"
+                :disabled="!!session.memberId"
                 :aria-invalid="!!errors.session"
               >
                 <span class="session-option-label">
                   <strong>{{ session.name }}</strong>
-                  <span :title="session.id">{{ session.id }}</span>
+                  <span>
+                    {{ session.id }}
+                    <template v-if="session.archived"> · 已归档</template>
+                    <template v-if="session.memberId"> · 已加入</template>
+                  </span>
                 </span>
                 <span class="session-option-check" aria-hidden="true"></span>
               </RadioGroupItem>
@@ -55,7 +63,7 @@
               />
             </div>
           </RadioGroupRoot>
-          <p v-if="!sessions?.length" class="session-state">暂无可加入的会话</p>
+          <p v-if="!sessions?.length" class="session-state">当前项目目录下暂无 Codex 会话</p>
         </template>
         <p v-if="errors.session" id="setup-session-error" class="field-error">
           {{ errors.session }}
@@ -63,7 +71,7 @@
       </div>
       <div class="setup-field">
         <label for="setup-name">
-          {{ mode === "room" ? "项目名称" : mode === "member" ? "成员名称" : "主题名称" }}
+          {{ mode === "room" ? "项目名称" : mode === "member" ? "成员名称" : "话题名称" }}
           <span class="required-mark">*</span>
         </label>
         <AppInput
@@ -96,72 +104,44 @@
         </p>
       </div>
       <template v-if="mode === 'member'">
-        <div class="setup-field">
-          <label for="setup-role">角色 <span class="required-mark">*</span></label>
-          <AppInput
-            id="setup-role"
-            v-model="role"
-            maxlength="80"
-            :disabled="saving"
-            :invalid="!!errors.role"
-            clear-label="清空角色"
-            aria-describedby="setup-role-error"
-            placeholder="输入新角色，或选择已有角色"
-          />
-          <p v-if="errors.role" id="setup-role-error" class="field-error">{{ errors.role }}</p>
-          <div v-if="roles?.length" class="setup-roles" aria-label="已有角色">
-            <button
-              v-for="existingRole in roles"
-              :key="existingRole"
-              type="button"
-              class="routing-choice"
-              :class="{ 'is-selected': role === existingRole }"
-              :aria-pressed="role === existingRole"
-              :disabled="saving"
-              @click="role = existingRole"
-            >
-              {{ existingRole }}
-            </button>
-          </div>
-        </div>
         <fieldset
           class="setup-field"
           :disabled="saving"
           :aria-invalid="!!errors.topics"
           aria-describedby="setup-topics-error"
         >
-          <legend>关注主题 <span class="required-mark">*</span></legend>
+          <legend>订阅话题 <span class="required-mark">*</span></legend>
           <AppCheckboxGroup
             v-model="topicIds"
             class="setup-topics"
-            aria-label="关注主题"
-            clear-label="清空关注主题"
+            aria-label="订阅话题"
+            clear-label="清空订阅话题"
             :disabled="saving"
             :invalid="!!errors.topics"
             described-by="setup-topics-error"
           >
             <AppCheckbox
-              v-for="topic in topics"
-              :key="topic.id"
+              v-for="subscription in topics"
+              :key="subscription.id"
               class="routing-choice"
-              :value="topic.id"
+              :value="subscription.id"
             >
-              <span># {{ topic.name }}</span>
+              <span># {{ subscription.name }}</span>
             </AppCheckbox>
           </AppCheckboxGroup>
           <p v-if="errors.topics" id="setup-topics-error" class="field-error">
             {{ errors.topics }}
           </p>
           <div class="inline-topic-create">
-            <label for="setup-new-topic" class="sr-only">新主题名称</label>
+            <label for="setup-new-topic" class="sr-only">新话题名称</label>
             <AppInput
               id="setup-new-topic"
               v-model="newTopicName"
               maxlength="40"
-              placeholder="新主题名称"
+              placeholder="新话题名称"
               :disabled="saving || topicSaving"
               :invalid="!!topicNameError"
-              clear-label="清空新主题名称"
+              clear-label="清空新话题名称"
               :aria-describedby="topicNameError ? 'setup-new-topic-error' : undefined"
               @keydown.enter.prevent="createInlineTopic"
             />
@@ -172,7 +152,7 @@
               :disabled="saving"
               @click="createInlineTopic"
             >
-              添加主题
+              添加话题
             </AppButton>
           </div>
           <p v-if="topicNameError" id="setup-new-topic-error" class="field-error">
@@ -182,13 +162,13 @@
         </fieldset>
       </template>
       <div v-if="mode === 'topic'" class="setup-field">
-        <label for="setup-description">主题说明</label>
+        <label for="setup-description">话题说明</label>
         <AppInput
           id="setup-description"
           v-model="description"
           maxlength="300"
           :disabled="saving"
-          clear-label="清空主题说明"
+          clear-label="清空话题说明"
         />
       </div>
       <p v-if="error" class="field-error" role="alert">{{ error }}</p>
@@ -200,9 +180,11 @@
           type="submit"
           :loading="saving"
           loading-label="保存中…"
-          :disabled="topicSaving || sessionsLoading"
+          :disabled="
+            topicSaving || (!member && mode === 'member' && (sessionsLoading || !!sessionsError))
+          "
         >
-          {{ member ? "保存成员" : title }}
+          {{ member ? "保存成员" : topic ? "保存话题" : title }}
         </AppButton>
       </footer>
     </form>
@@ -226,7 +208,7 @@
     CreateRoom,
     CreateTopic,
     Member,
-    Session,
+    SessionCandidate,
     Topic,
     UpdateMember,
   } from "@/services/roomApi";
@@ -238,11 +220,13 @@
     topics: Topic[];
     saving: boolean;
     error: string | null;
-    sessions?: Session[];
+    sessions?: SessionCandidate[];
     sessionsLoading?: boolean;
+    sessionsError?: string | null;
+    linkedSession?: { id: string; name: string };
     roomId?: string;
     member?: Member;
-    roles?: string[];
+    topic?: Topic;
   }>();
   const emit = defineEmits<{
     close: [];
@@ -250,6 +234,7 @@
     createMember: [request: CreateMember];
     updateMember: [memberId: string, request: UpdateMember];
     createTopic: [request: CreateTopic];
+    updateTopic: [topicId: string, request: CreateTopic];
     reloadSessions: [];
   }>();
 
@@ -259,7 +244,6 @@
   const sessionId = ref("");
   const sessionChoices = ref<InstanceType<typeof RadioGroupRoot>>();
   const projectPath = ref("");
-  const role = ref("");
   const description = ref("");
   const topicIds = ref<string[]>([]);
   const newTopicName = ref("");
@@ -274,36 +258,50 @@
         ? props.member
           ? "编辑成员"
           : "添加成员"
-        : "新建主题",
+        : props.topic
+          ? "编辑话题"
+          : "新建话题",
   );
 
-  watch([() => props.mode, () => props.member?.id], () => {
-    name.value = props.member?.name ?? "";
-    sessionId.value = props.member?.sessionId ?? "";
-    projectPath.value = "";
-    role.value = props.member?.role ?? "";
-    description.value = "";
-    topicIds.value = [...(props.member?.topicIds ?? [])];
-    newTopicName.value = "";
-    topicNameError.value = "";
-    topicRequestError.value = "";
-    errors.value = {};
-  });
+  watch(
+    [() => props.mode, () => props.member?.id, () => props.topic?.id, () => props.roomId],
+    () => {
+      name.value = props.member?.name ?? props.topic?.name ?? "";
+      sessionId.value = props.member?.sessionId ?? "";
+      projectPath.value = "";
+      description.value = props.topic?.description ?? "";
+      topicIds.value = [...(props.member?.topicIds ?? [])];
+      newTopicName.value = "";
+      topicNameError.value = "";
+      topicRequestError.value = "";
+      errors.value = {};
+    },
+  );
 
   watch(sessionId, (selected, previous) => {
+    if (props.member || props.mode !== "member") return;
     const previousName = props.sessions?.find((session) => session.id === previous)?.name;
     if (!name.value || name.value === previousName)
-      name.value = props.sessions?.find((session) => session.id === selected)?.name ?? "";
+      name.value =
+        props.sessions?.find((session) => session.id === selected)?.name.slice(0, 80) ?? "";
     if (selected) delete errors.value.session;
   });
+  watch(
+    () => props.sessions,
+    (sessions) => {
+      if (
+        !props.member &&
+        sessionId.value &&
+        !sessions?.some((session) => session.id === sessionId.value && !session.memberId)
+      )
+        sessionId.value = "";
+    },
+  );
   watch(name, (value) => {
     if (value.trim()) delete errors.value.name;
   });
   watch(projectPath, (value) => {
     if (value.trim()) delete errors.value.projectPath;
-  });
-  watch(role, (value) => {
-    if (value.trim()) delete errors.value.role;
   });
   watch(topicIds, (value) => {
     if (value.length) delete errors.value.topics;
@@ -329,7 +327,7 @@
     topicNameError.value = "";
     topicRequestError.value = "";
     if (!topicName) {
-      topicNameError.value = "请输入主题名称";
+      topicNameError.value = "请输入话题名称";
       return;
     }
     const existing = props.topics.find((topic) => topic.name === topicName);
@@ -342,13 +340,13 @@
     topicSaving.value = true;
     try {
       const topic = await roomsStore.createTopic(roomId, { name: topicName, description: "" });
-      toasts.success("主题已创建");
+      toasts.success("话题已创建");
       if (props.roomId === roomId && props.mode === "member") {
         topicIds.value = [...topicIds.value, topic.id];
         newTopicName.value = "";
       }
     } catch (caught) {
-      topicRequestError.value = describeApiError(caught, "主题添加失败，请重试。");
+      topicRequestError.value = describeApiError(caught, "话题添加失败，请重试。");
       toasts.error(topicRequestError.value);
     } finally {
       topicSaving.value = false;
@@ -356,7 +354,9 @@
   }
 
   function submit(): void {
-    if (props.saving || topicSaving.value || props.sessionsLoading) return;
+    if (props.saving || topicSaving.value) return;
+    if (props.mode === "member" && !props.member && (props.sessionsLoading || props.sessionsError))
+      return;
     errors.value = {};
     if (!name.value.trim()) errors.value.name = "请输入名称";
     if (props.mode === "room") {
@@ -365,9 +365,12 @@
         errors.value.projectPath = "请输入项目的绝对路径";
     }
     if (props.mode === "member") {
-      if (!sessionId.value) errors.value.session = "请选择要加入的会话";
-      if (!role.value.trim()) errors.value.role = "请输入角色";
-      if (!topicIds.value.length) errors.value.topics = "请至少选择一个关注主题";
+      if (
+        !props.member &&
+        !props.sessions?.some((session) => session.id === sessionId.value && !session.memberId)
+      )
+        errors.value.session = "请选择要加入的会话";
+      if (!topicIds.value.length) errors.value.topics = "请至少选择一个订阅话题";
     }
     if (Object.keys(errors.value).length) return;
     if (props.mode === "room")
@@ -375,13 +378,15 @@
     if (props.mode === "member") {
       const request = {
         name: name.value.trim(),
-        role: role.value.trim(),
         topicIds: [...topicIds.value],
       };
       if (props.member) emit("updateMember", props.member.id, request);
       else emit("createMember", { ...request, sessionId: sessionId.value });
     }
-    if (props.mode === "topic")
-      emit("createTopic", { name: name.value.trim(), description: description.value.trim() });
+    if (props.mode === "topic") {
+      const request = { name: name.value.trim(), description: description.value.trim() };
+      if (props.topic) emit("updateTopic", props.topic.id, request);
+      else emit("createTopic", request);
+    }
   }
 </script>

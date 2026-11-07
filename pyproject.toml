@@ -9,12 +9,16 @@ description = "Agent collaboration message relay service."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+  "alembic>=1.14,<2",
   "dynaconf>=3.3,<4",
   "fastapi>=0.115",
   "pydantic>=2.10",
   "PyYAML>=6.0",
   "python-dotenv>=1.0",
+  "sqlalchemy>=2.0,<2.1",
+  "sqlparse>=0.5,<1",
   "uvicorn[standard]>=0.34",
+  "websockets>=17.4,<18",
 ]
 
 [dependency-groups]

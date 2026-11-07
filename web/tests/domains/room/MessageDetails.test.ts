@@ -56,4 +56,22 @@ describe("MessageDetails", () => {
     expect(screen.getByRole("row", { name: /前端 Worker/ })).toBeTruthy();
     expect(screen.queryByRole("row", { name: /测试 Worker/ })).toBeNull();
   });
+
+  it("shows an unsubmitted delivery without implying queue acceptance", () => {
+    const room = roomFixture();
+    const delivery = { ...room.messages[0].deliveries[0], status: "pending" as const };
+    const message = {
+      ...room.messages[0],
+      recipientIds: [delivery.targetMemberId],
+      deliveries: [delivery],
+    };
+    render(MessageDetails, { props: { message, topics: room.topics, members: room.members } });
+
+    expect(screen.getByText("待提交")).toBeTruthy();
+    expect(screen.queryByText("已入队")).toBeNull();
+    expect(screen.queryByText("待接收")).toBeNull();
+    expect(screen.queryByText("待回执")).toBeNull();
+    const time = screen.getByText(/\d{2}:\d{2}:\d{2}/);
+    expect(time.getAttribute("datetime")).toBe(delivery.updatedAt);
+  });
 });
