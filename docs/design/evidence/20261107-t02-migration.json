@@ -1,0 +1,26 @@
+{
+  "recordedAt": "2026-11-07T11:45:39.633137+00:00",
+  "scope": "Actual local development database; explicit migration execution and data preservation check",
+  "revision": "remove_member_role",
+  "entityCountsBeforeFrameworkSwitch": {
+    "rooms": 1,
+    "topics": 1,
+    "sessions": 0,
+    "members": 0,
+    "member_topics": 0,
+    "messages": 0,
+    "deliveries": 0
+  },
+  "entityCountsAfterFrameworkSwitch": {
+    "rooms": 1,
+    "topics": 1,
+    "sessions": 0,
+    "members": 0,
+    "member_topics": 0,
+    "messages": 0,
+    "deliveries": 0
+  },
+  "existingRowsPreserved": true,
+  "foreignKeyCheck": [],
+  "note": "Before/after full resource rows were compared during the one-time local framework switch. No migration test cases are retained."
+}

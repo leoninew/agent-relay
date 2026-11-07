@@ -1,0 +1,22 @@
+{
+  "recordedAt": "2026-11-07T12:13:14.205382+00:00",
+  "scope": "Sidebar topic/member actions; normal business checks only",
+  "databaseRevision": "sidebar_node_actions",
+  "localDatabaseCounts": {
+    "rooms": 1,
+    "topics": 2,
+    "sessions": 1,
+    "members": 2,
+    "member_topics": 1,
+    "messages": 0,
+    "deliveries": 0
+  },
+  "localRowsPreservedDuringMigration": true,
+  "foreignKeyCheck": [],
+  "runningApiStatus": 200,
+  "newRoutesPresent": true,
+  "backendNormalTestsPassed": 9,
+  "frontendNormalTestsPassed": 12,
+  "migrationFeatureTestsAdded": false,
+  "browserVisualCheckRun": false
+}

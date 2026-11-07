@@ -1,0 +1,27 @@
+{
+  "recordedAt": "2026-11-07T07:27:17.788008+00:00",
+  "workspace": "C:\\Users\\leon\\AppData\\Local\\Temp\\agent-relay-t02-managed-_x1_5jwi",
+  "cliVersion": "codex-cli 0.167.0",
+  "modelInferenceStarted": false,
+  "queueSubmissionMade": false,
+  "existingWorkSessionsTouched": false,
+  "createdStatus": "ready",
+  "threadId": "01a1b4e7-940c-79d3-90a9-703b70289556",
+  "firstProcessId": 31888,
+  "restoredOriginal": true,
+  "connectionState": "connected",
+  "toolHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+  "secondProcessId": 64256,
+  "queueAfterResume": {
+    "data": [],
+    "nextCursor": null
+  },
+  "ownedTestThreadArchived": true,
+  "ownedProcessesStopped": true,
+  "sourceSha256": {
+    "src/agent_relay/drivers/codex.py": "c59c1714c96edc50eae64a26ea4cd20a20168e5d895fd038aec58e80981d9404",
+    "src/agent_relay/drivers/process_scope.py": "4188fbff33b645b0114849842265a49bc0acc77ff35c13dcd35710e73474f4b2",
+    "src/agent_relay/managed_members.py": "33a7b446baf7bb5986ec9a092afb7dc953b28f21b087e82674bcbca7e0994617",
+    "src/agent_relay/room_store.py": "6611939acdd1ac5d1f3c0f277e6144a55abafdd61d625ccbd2a91c59befceba9"
+  }
+}

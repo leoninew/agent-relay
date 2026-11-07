@@ -1,0 +1,478 @@
+{
+  "recordedAt": "2026-11-07T04:28:04.744528+00:00",
+  "scope": "Isolated protocol feasibility only; no Relay product implementation or existing work-thread submissions.",
+  "cliVersion": "0.167.0",
+  "daemonVersion": "0.167.0",
+  "platform": "Windows",
+  "effectiveModel": "auto/gpt-6.1-terra",
+  "modelOverridden": false,
+  "sources": [
+    "https://developers.openai.com/codex/app-server/",
+    "https://learn.chatgpt.com/docs/app-server",
+    "https://developers.openai.com/codex/mcp/",
+    "https://learn.chatgpt.com/docs/extend/mcp?surface=cli"
+  ],
+  "sharedDaemonMetadata": {
+    "initialize": {
+      "platformFamily": "windows",
+      "platformOs": "windows"
+    },
+    "projectFilter": "D:/SourceCodes/mywork/agent-relay",
+    "countOnFirstPage": 2,
+    "hasMore": false,
+    "readHistory": false,
+    "submittedMessages": false
+  },
+  "ownedThread": "01a1b43c-d83d-7b01-9e91-89c9894fa641",
+  "queueReceipt": {
+    "id": "01a1b43c-db7c-74a2-9e92-e2147d785790",
+    "input": [
+      {
+        "type": "text",
+        "text": "Call room_publish_probe exactly once with content='T01 tool probe', topicIds=['probe-topic'], mentionedMemberIds=[]. After the result reply exactly 'T01 final probe'. Do not use other tools.",
+        "text_elements": []
+      }
+    ],
+    "clientUserMessageId": "t01-tool-897fb3c8-3cea-4170-9a17-a95cc5aabdf2"
+  },
+  "busyQueue": {
+    "status": {
+      "type": "active",
+      "activeFlags": []
+    },
+    "receipts": [
+      {
+        "id": "01a1b43c-f363-7283-93e7-69b934185fd4",
+        "input": [
+          {
+            "type": "text",
+            "text": "Synthetic pending probe 0; do not execute.",
+            "text_elements": []
+          }
+        ],
+        "clientUserMessageId": "t01-pending-8d27f244-b18b-408e-b867-6567deaf1a17"
+      },
+      {
+        "id": "01a1b43c-f368-7822-86a5-e317e6fdad51",
+        "input": [
+          {
+            "type": "text",
+            "text": "Synthetic pending probe 1; do not execute.",
+            "text_elements": []
+          }
+        ],
+        "clientUserMessageId": "t01-pending-6164199c-e03f-4ae2-8b84-fb932755f03d"
+      }
+    ],
+    "pages": [
+      {
+        "data": [
+          {
+            "id": "01a1b43c-f363-7283-93e7-69b934185fd4",
+            "input": [
+              {
+                "type": "text",
+                "text": "Synthetic pending probe 0; do not execute.",
+                "text_elements": []
+              }
+            ],
+            "clientUserMessageId": "t01-pending-8d27f244-b18b-408e-b867-6567deaf1a17"
+          }
+        ],
+        "nextCursor": "1"
+      },
+      {
+        "data": [
+          {
+            "id": "01a1b43c-f368-7822-86a5-e317e6fdad51",
+            "input": [
+              {
+                "type": "text",
+                "text": "Synthetic pending probe 1; do not execute.",
+                "text_elements": []
+              }
+            ],
+            "clientUserMessageId": "t01-pending-6164199c-e03f-4ae2-8b84-fb932755f03d"
+          }
+        ],
+        "nextCursor": "2"
+      },
+      {
+        "data": [
+          {
+            "id": "01a1b43c-f36a-7850-8a17-934fea4886b6",
+            "input": [
+              {
+                "type": "text",
+                "text": "Synthetic pending probe 0; do not execute.",
+                "text_elements": []
+              }
+            ],
+            "clientUserMessageId": "t01-pending-8d27f244-b18b-408e-b867-6567deaf1a17"
+          }
+        ],
+        "nextCursor": null
+      }
+    ]
+  },
+  "duplicateIdentifier": {
+    "original": {
+      "id": "01a1b43c-f363-7283-93e7-69b934185fd4",
+      "input": [
+        {
+          "type": "text",
+          "text": "Synthetic pending probe 0; do not execute.",
+          "text_elements": []
+        }
+      ],
+      "clientUserMessageId": "t01-pending-8d27f244-b18b-408e-b867-6567deaf1a17"
+    },
+    "duplicate": {
+      "id": "01a1b43c-f36a-7850-8a17-934fea4886b6",
+      "input": [
+        {
+          "type": "text",
+          "text": "Synthetic pending probe 0; do not execute.",
+          "text_elements": []
+        }
+      ],
+      "clientUserMessageId": "t01-pending-8d27f244-b18b-408e-b867-6567deaf1a17"
+    },
+    "deduplicated": false
+  },
+  "toolCallback": {
+    "threadId": "01a1b43c-d83d-7b01-9e91-89c9894fa641",
+    "turnId": "01a1b43c-db80-7130-ac1a-26921a75032e",
+    "callId": "call_c26198d20f8b4edc97745aa15c499818",
+    "namespace": null,
+    "tool": "room_publish_probe",
+    "arguments": {
+      "content": "T01 tool probe",
+      "topicIds": [
+        "probe-topic"
+      ],
+      "mentionedMemberIds": []
+    }
+  },
+  "firstTurn": {
+    "status": "completed",
+    "items": [
+      {
+        "turnId": "01a1b43c-db80-7130-ac1a-26921a75032e",
+        "item": {
+          "type": "userMessage",
+          "id": "01a1b43c-e0d8-7670-a32c-01aa4c2e2330",
+          "clientId": "t01-tool-897fb3c8-3cea-4170-9a17-a95cc5aabdf2",
+          "content": [
+            {
+              "type": "text",
+              "text": "Call room_publish_probe exactly once with content='T01 tool probe', topicIds=['probe-topic'], mentionedMemberIds=[]. After the result reply exactly 'T01 final probe'. Do not use other tools.",
+              "text_elements": []
+            }
+          ],
+          "startedAtMs": 1794025251042,
+          "completedAtMs": 1794025251042
+        },
+        "startedAtMs": 1794025251042,
+        "completedAtMs": 1794025251042
+      },
+      {
+        "turnId": "01a1b43c-db80-7130-ac1a-26921a75032e",
+        "item": {
+          "type": "dynamicToolCall",
+          "id": "call_c26198d20f8b4edc97745aa15c499818",
+          "namespace": null,
+          "tool": "room_publish_probe",
+          "arguments": {
+            "content": "T01 tool probe",
+            "topicIds": [
+              "probe-topic"
+            ],
+            "mentionedMemberIds": []
+          },
+          "status": "completed",
+          "contentItems": [
+            {
+              "type": "inputText",
+              "text": "T01 synthetic saved"
+            }
+          ],
+          "success": true,
+          "durationMs": 40,
+          "startedAtMs": 1794025255767,
+          "completedAtMs": 1794025255807
+        },
+        "startedAtMs": 1794025255767,
+        "completedAtMs": 1794025255807
+      },
+      {
+        "turnId": "01a1b43c-db80-7130-ac1a-26921a75032e",
+        "item": {
+          "type": "agentMessage",
+          "id": "msg_18e5a877cd0dedc80000077f",
+          "text": "T01 final probe",
+          "phase": "final_answer",
+          "memoryCitation": null,
+          "delivery": null,
+          "questions": null,
+          "startedAtMs": 1794025259075,
+          "completedAtMs": 1794025259354
+        },
+        "startedAtMs": 1794025259075,
+        "completedAtMs": 1794025259354
+      }
+    ]
+  },
+  "resume": {
+    "sameThread": true,
+    "newAppServerProcess": true,
+    "dynamicToolsPassedToResume": false,
+    "callback": {
+      "threadId": "01a1b43c-d83d-7b01-9e91-89c9894fa641",
+      "turnId": "01a1b440-a91e-7682-961c-a34dc3c74b85",
+      "callId": "call_5ae84abd6e1d4e6db7dba58840a5fba5",
+      "namespace": null,
+      "tool": "room_publish_probe",
+      "arguments": {
+        "content": "T01 tool probe",
+        "topicIds": [
+          "probe-topic"
+        ],
+        "mentionedMemberIds": []
+      }
+    },
+    "status": "completed",
+    "previousCallIdStillInHistory": true,
+    "historyItemCount": 6
+  },
+  "invalidRequestRejection": {
+    "code": -32600,
+    "message": "Invalid request: missing field `clientUserMessageId`"
+  },
+  "cleanup": {
+    "pendingSyntheticFollowupsRemoved": 3,
+    "testThreadArchived": true,
+    "earlierQueueProbeArchived": true,
+    "userThreadsChanged": false
+  },
+  "schemas": [
+    {
+      "name": "ThreadStartParams",
+      "sha256": "80a40a7fac15b4bf70efb7f893fb353acc0a0d30c68f54aee4f01923deca85de",
+      "properties": [
+        "allowProviderModelFallback",
+        "approvalPolicy",
+        "approvalsReviewer",
+        "baseInstructions",
+        "config",
+        "cwd",
+        "daybreakEnabled",
+        "developerInstructions",
+        "dynamicTools",
+        "environments",
+        "ephemeral",
+        "experimentalRawEvents",
+        "historyMode",
+        "mockExperimentalField",
+        "model",
+        "modelProvider",
+        "multiAgentMode",
+        "permissions",
+        "personality",
+        "projectId",
+        "runtimeWorkspaceRoots",
+        "sandbox",
+        "selectedCapabilityRoots",
+        "serviceName",
+        "serviceTier",
+        "sessionStartSource",
+        "threadSource"
+      ],
+      "required": []
+    },
+    {
+      "name": "ThreadResumeParams",
+      "sha256": "9642460eb42e9a6e8fa8e12b4381e8ed939d10b1ad8690e694d84467ea76d41a",
+      "properties": [
+        "approvalPolicy",
+        "approvalsReviewer",
+        "baseInstructions",
+        "config",
+        "cwd",
+        "developerInstructions",
+        "excludeTurns",
+        "history",
+        "initialTurnsPage",
+        "model",
+        "modelProvider",
+        "path",
+        "permissions",
+        "personality",
+        "runtimeWorkspaceRoots",
+        "sandbox",
+        "serviceTier",
+        "threadId"
+      ],
+      "required": [
+        "threadId"
+      ]
+    },
+    {
+      "name": "ThreadSettingsUpdateParams",
+      "sha256": "749419634bb7ed66216d72bf9d8734ecf0e6efaa8cd46fe51a117d1b42ed9657",
+      "properties": [
+        "approvalPolicy",
+        "approvalsReviewer",
+        "collaborationMode",
+        "cwd",
+        "disabledPluginIds",
+        "effort",
+        "model",
+        "multiAgentMode",
+        "permissions",
+        "personality",
+        "sandboxPolicy",
+        "serviceTier",
+        "summary",
+        "threadId"
+      ],
+      "required": [
+        "threadId"
+      ]
+    },
+    {
+      "name": "ThreadQueueAddParams",
+      "sha256": "f6466a8f06cd4e68ec1999d06a0d70a1ddc339c0cb1baf12ee966a999fead17c",
+      "properties": [
+        "clientUserMessageId",
+        "input",
+        "threadId"
+      ],
+      "required": [
+        "clientUserMessageId",
+        "input",
+        "threadId"
+      ]
+    },
+    {
+      "name": "ThreadQueueAddResponse",
+      "sha256": "896a82716b432a8aa4d190591bcfa86adacdacb91ec5ec2c9c75ff6562561256",
+      "properties": [
+        "queuedSubmission"
+      ],
+      "required": [
+        "queuedSubmission"
+      ]
+    },
+    {
+      "name": "ThreadQueueListParams",
+      "sha256": "b4c889089eee8a0f785ff85e0128a4d3f347353870fa848221096a472223773b",
+      "properties": [
+        "cursor",
+        "limit",
+        "threadId"
+      ],
+      "required": [
+        "threadId"
+      ]
+    },
+    {
+      "name": "ThreadQueueListResponse",
+      "sha256": "7a320613604095eef93247b395dafeeb6d05b26256c4055b6a5bad05eff74ab5",
+      "properties": [
+        "data",
+        "nextCursor"
+      ],
+      "required": [
+        "data"
+      ]
+    },
+    {
+      "name": "ThreadQueueDeleteParams",
+      "sha256": "35d17cc17897a7f560250d0148ec9df0482ba3d33bdcca039dde8391d3b4edbe",
+      "properties": [
+        "queuedSubmissionId",
+        "threadId"
+      ],
+      "required": [
+        "queuedSubmissionId",
+        "threadId"
+      ]
+    },
+    {
+      "name": "ThreadItemsListParams",
+      "sha256": "d5cf9784413f1d1abba756e04e48b273a9d12ab2c5675442e91b6a4ee55e19f0",
+      "properties": [
+        "cursor",
+        "limit",
+        "sortDirection",
+        "threadId",
+        "turnId"
+      ],
+      "required": [
+        "threadId"
+      ]
+    },
+    {
+      "name": "ThreadItemsListResponse",
+      "sha256": "054ebb1e51fad510f1ff9bd2fd06a96d9db06ca4f8963207dccfef91ea8e540b",
+      "properties": [
+        "backwardsCursor",
+        "data",
+        "nextCursor"
+      ],
+      "required": [
+        "data"
+      ]
+    },
+    {
+      "name": "DynamicToolCallParams",
+      "sha256": "401bba20cfbd95762bef0467d840430c46be53369093ad9f26425ba757e34efc",
+      "properties": [
+        "arguments",
+        "callId",
+        "namespace",
+        "threadId",
+        "tool",
+        "turnId"
+      ],
+      "required": [
+        "arguments",
+        "callId",
+        "threadId",
+        "tool",
+        "turnId"
+      ]
+    },
+    {
+      "name": "DynamicToolCallResponse",
+      "sha256": "abb082cad67f11fcc98ba75f2eff75d7d1723af0c657655329b83ff160451a02",
+      "properties": [
+        "contentItems",
+        "success"
+      ],
+      "required": [
+        "contentItems",
+        "success"
+      ]
+    }
+  ],
+  "unverified": [
+    "Arbitrary active host threads adopting new dynamic tools",
+    "Shared-daemon dynamic callback ownership",
+    "Several accepted inputs mapping to one turn",
+    "Crash between upstream acceptance and local Relay receipt commit",
+    "Upstream replay guarantee for dynamic callbacks",
+    "MCP per-member credential lifecycle",
+    "WSL, remote and Orca-host integration"
+  ],
+  "probeScriptSha256": "6c0b2d300d45968f5c7fd38eaacc36737443bee76ada2bce968f82fa8cdc1b73",
+  "smokeChecks": {
+    "metadataTransportClosedCleanly": true,
+    "noModelModeSubmitsNothing": true,
+    "noModelTestThreadArchived": true,
+    "ruffCheck": "passed",
+    "ruffFormatCheck": "passed",
+    "mypyProbeScript": "passed"
+  }
+}

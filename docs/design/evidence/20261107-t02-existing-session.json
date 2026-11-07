@@ -1,0 +1,30 @@
+{
+  "recordedAt": "2026-11-07T12:09:23.836316+00:00",
+  "scope": "Existing-session metadata only; all Relay writes use a temporary database",
+  "configuredCommandUsed": true,
+  "defaultCodexCommandUsed": true,
+  "matchingSessionCount": 2,
+  "selectedThreadHash": "cdfb71311125f11679a9374794d5432b2a6948da6be49e57c943d1638dc9bd9d",
+  "sameThreadBound": true,
+  "joinedCandidateMarked": true,
+  "sameThreadAfterNewProcess": true,
+  "codexRpcMethods": {
+    "initialize": 3,
+    "thread/list": 8,
+    "thread/read": 1
+  },
+  "createdThreads": 0,
+  "resumedThreads": 0,
+  "submittedMessages": 0,
+  "sourceSha256": {
+    "src/agent_relay/drivers/codex.py": "37e27f8ef8c45cf72af08143793eaa1a045be96365004425da8cb22de7ec807e",
+    "src/agent_relay/member_sessions.py": "0816f90c3a98206b65674e5dd397a6c9c9356ffae5bb46f7c12f350798fc973b",
+    "src/agent_relay/room_store.py": "4baab3416fb74fc6a25e0f0d3b9fefede277306b209fbb6922ee2be1ec80e6db",
+    "src/agent_relay/room_models.py": "fbd514909895dd8159042360fb9faf1ee9e01d92be66dd4b70508795d48b042c",
+    "src/agent_relay/migrations.py": "d5dbb447eab351e02ebbe8fed458fdbee00c046257b65173fba2343c13fa65b7",
+    "migrations/sqlite/sql/0002_remove_member_role/01_remove_member_role.up.sql": "adc2ee2c27e45d2b85e24fd4f92767a846982ba86906a176696f1a368ba79980",
+    "migrations/sqlite/sql/0003_sidebar_node_actions/01_nodes.up.sql": "f7b99a366574e12a7de32a72e79a0941b0eab015501750ac7d4d2f2edc790ce7",
+    "migrations/sqlite/versions/0003_sidebar_node_actions.py": "6e32a138ff91aac44b543b415794929a40a44c85f77191ee4ae67a017e26dd36",
+    "scripts/probes/member_session_smoke.py": "9670bbb8ff32181184efb5ed04a11ae3dc04e2bf442415d0415f5d267c28eabe"
+  }
+}

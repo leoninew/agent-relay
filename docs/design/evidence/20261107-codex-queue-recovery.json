@@ -1,0 +1,186 @@
+{
+  "observedAt": "2026-11-07T05:38:23.092461+00:00",
+  "scope": "Owned temporary thread; abrupt process exit; no existing work sessions.",
+  "cliVersion": "0.167.0",
+  "platform": "Windows",
+  "effectiveModel": "auto/gpt-6.1-terra",
+  "modelOverridden": false,
+  "ownedThread": "01a1b483-ddab-7ca0-bd1d-51a380a3e579",
+  "workspace": "C:\\Users\\leon\\AppData\\Local\\Temp\\agent-relay-t01-queue-recovery-735xoife",
+  "heldCall": {
+    "threadId": "01a1b483-ddab-7ca0-bd1d-51a380a3e579",
+    "turnId": "01a1b483-e0e6-71a0-a9ff-84cfa13d07b3",
+    "callId": "call_773b23b2ec714538a6708dc0e23883c7",
+    "tool": "room_publish_probe"
+  },
+  "statusBeforeKill": {
+    "type": "active",
+    "activeFlags": []
+  },
+  "pendingReceipts": [
+    {
+      "id": "01a1b483-f85a-7133-aa7d-46f8f8103332",
+      "input": [
+        {
+          "type": "text",
+          "text": "Reply exactly 'recovered 0'.",
+          "text_elements": []
+        }
+      ],
+      "clientUserMessageId": "t01-recovery-pending-efb8920a-37b2-4d5b-b839-bc408a3b01e2"
+    },
+    {
+      "id": "01a1b483-f85b-7ca0-8a7a-237a8486bd61",
+      "input": [
+        {
+          "type": "text",
+          "text": "Reply exactly 'recovered 1'.",
+          "text_elements": []
+        }
+      ],
+      "clientUserMessageId": "t01-recovery-pending-3ececc67-f148-45a4-8622-66c7a5de3070"
+    }
+  ],
+  "queueBeforeKill": {
+    "data": [
+      {
+        "id": "01a1b483-f85a-7133-aa7d-46f8f8103332",
+        "input": [
+          {
+            "type": "text",
+            "text": "Reply exactly 'recovered 0'.",
+            "text_elements": []
+          }
+        ],
+        "clientUserMessageId": "t01-recovery-pending-efb8920a-37b2-4d5b-b839-bc408a3b01e2"
+      },
+      {
+        "id": "01a1b483-f85b-7ca0-8a7a-237a8486bd61",
+        "input": [
+          {
+            "type": "text",
+            "text": "Reply exactly 'recovered 1'.",
+            "text_elements": []
+          }
+        ],
+        "clientUserMessageId": "t01-recovery-pending-3ececc67-f148-45a4-8622-66c7a5de3070"
+      }
+    ],
+    "nextCursor": null
+  },
+  "firstObservationAfterResume": {
+    "queue": {
+      "data": [
+        {
+          "id": "01a1b483-f85b-7ca0-8a7a-237a8486bd61",
+          "input": [
+            {
+              "type": "text",
+              "text": "Reply exactly 'recovered 1'.",
+              "text_elements": []
+            }
+          ],
+          "clientUserMessageId": "t01-recovery-pending-3ececc67-f148-45a4-8622-66c7a5de3070"
+        }
+      ],
+      "nextCursor": null
+    },
+    "history": [
+      {
+        "turnId": "01a1b483-e0e6-71a0-a9ff-84cfa13d07b3",
+        "type": "userMessage",
+        "id": "01a1b483-e537-7de2-85c7-c40d254085eb",
+        "clientId": "t01-recovery-lead-e41c0184-0474-4123-9826-515ee82030cd",
+        "status": null
+      }
+    ],
+    "status": {
+      "type": "idle"
+    }
+  },
+  "lastObservationAfterResume": {
+    "queue": {
+      "data": [],
+      "nextCursor": null
+    },
+    "history": [
+      {
+        "turnId": "01a1b483-e0e6-71a0-a9ff-84cfa13d07b3",
+        "type": "userMessage",
+        "id": "01a1b483-e537-7de2-85c7-c40d254085eb",
+        "clientId": "t01-recovery-lead-e41c0184-0474-4123-9826-515ee82030cd",
+        "status": null
+      },
+      {
+        "turnId": "01a1b483-fcf7-70b0-a285-38dbe0dcffaf",
+        "type": "userMessage",
+        "id": "01a1b484-007b-7d52-aed6-576fe81d9084",
+        "clientId": "t01-recovery-pending-efb8920a-37b2-4d5b-b839-bc408a3b01e2",
+        "status": null
+      },
+      {
+        "turnId": "01a1b483-fcf7-70b0-a285-38dbe0dcffaf",
+        "type": "agentMessage",
+        "id": "msg_18e5acb42942b30400000ab4",
+        "clientId": null,
+        "status": null
+      },
+      {
+        "turnId": "01a1b484-1194-7743-8296-b86ee8c99434",
+        "type": "userMessage",
+        "id": "01a1b484-11bc-75d1-a6f1-24ac11346c79",
+        "clientId": "t01-recovery-pending-3ececc67-f148-45a4-8622-66c7a5de3070",
+        "status": null
+      }
+    ],
+    "status": {
+      "type": "active",
+      "activeFlags": []
+    }
+  },
+  "queueAddsAfterRestart": 0,
+  "explicitQueueStartCalls": 0,
+  "archivedOwnedThread": true,
+  "assertions": {
+    "twoItemsPendingBeforeProcessKill": true,
+    "bothPendingClientIdsInHistoryAfterResume": true,
+    "noReenqueueAfterRestart": true,
+    "continuedConsumptionWithoutExplicitQueueStart": true
+  },
+  "limits": [
+    "Single owned thread and same state directory on one Windows CLI version.",
+    "No power-loss, state corruption, backup rollback or cross-version test.",
+    "No Relay DB or product Delivery state involved.",
+    "Interrupted tool replay and completion are not proven.",
+    "Final active status is not a claim that both model replies completed."
+  ],
+  "serverRequestMethodsFromInstalledSchema": [
+    "item/commandExecution/requestApproval",
+    "item/fileChange/requestApproval",
+    "item/tool/requestUserInput",
+    "mcpServer/elicitation/request",
+    "item/permissions/requestApproval",
+    "item/tool/call",
+    "account/chatgptAuthTokens/refresh",
+    "attestation/generate",
+    "currentTime/read",
+    "applyPatchApproval",
+    "execCommandApproval"
+  ],
+  "schemaSha256": {
+    "ServerRequest.json": "84fe84cb202d1036f764d32dfc87a1edba50f85172e2a3224a33796f979008bb",
+    "v2/ThreadItemsListParams.json": "d5cf9784413f1d1abba756e04e48b273a9d12ab2c5675442e91b6a4ee55e19f0",
+    "v2/ThreadItemsListResponse.json": "054ebb1e51fad510f1ff9bd2fd06a96d9db06ca4f8963207dccfef91ea8e540b",
+    "v2/ThreadStartParams.json": "80a40a7fac15b4bf70efb7f893fb353acc0a0d30c68f54aee4f01923deca85de",
+    "v2/ThreadResumeParams.json": "9642460eb42e9a6e8fa8e12b4381e8ed939d10b1ad8690e694d84467ea76d41a"
+  },
+  "probeSha256": {
+    "codex_queue_recovery.py": "3c18c1da70e0d1872d75eb4397c10354634a264d93a63dbccc4b37c4405bda02",
+    "codex_capabilities.py": "6c0b2d300d45968f5c7fd38eaacc36737443bee76ada2bce968f82fa8cdc1b73"
+  },
+  "officialSource": {
+    "requested": "https://developers.openai.com/codex/app-server/",
+    "resolved": "https://learn.chatgpt.com/docs/app-server",
+    "queueFactsSource": "Installed 0.167.0 generated schemas and isolated real RPC, not an implied guarantee from the official page."
+  }
+}
