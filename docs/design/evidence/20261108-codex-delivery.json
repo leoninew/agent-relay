@@ -1,0 +1,146 @@
+{
+  "observedAt": "2026-11-08T04:42:44.088093+00:00",
+  "workspace": "C:\\Users\\leon\\AppData\\Local\\Temp\\agent-relay-n5-probe-2s4fnwua",
+  "scope": "New owned shared-daemon session, synthetic messages only",
+  "queueAdds": 3,
+  "queueStarts": 1,
+  "threadId": "01a1b977-460e-7051-9719-caf5ac3a0be5",
+  "initialStatus": {
+    "type": "idle"
+  },
+  "gate": {
+    "threadId": "01a1b977-460e-7051-9719-caf5ac3a0be5",
+    "turnId": "01a1b977-4672-77b2-9608-f069bd88f26c",
+    "callId": "call_043ab03de1214f0d85feeb3d91c16047"
+  },
+  "receipts": [
+    {
+      "id": "01a1b977-6910-7d92-92b9-3b1c18926a4a",
+      "clientUserMessageId": "n5-pending-49b1d1ba1cda44b9aca23b2ff2b58028"
+    },
+    {
+      "id": "01a1b977-6917-70f0-beb2-1931db7656dc",
+      "clientUserMessageId": "n5-pending-480e32afefde41b8b650541d8fa6ed70"
+    }
+  ],
+  "busy": {
+    "observedAt": "2026-11-08T04:42:53.084747+00:00",
+    "status": {
+      "type": "active",
+      "activeFlags": []
+    },
+    "pending": [
+      {
+        "id": "01a1b977-6910-7d92-92b9-3b1c18926a4a",
+        "clientUserMessageId": "n5-pending-49b1d1ba1cda44b9aca23b2ff2b58028"
+      },
+      {
+        "id": "01a1b977-6917-70f0-beb2-1931db7656dc",
+        "clientUserMessageId": "n5-pending-480e32afefde41b8b650541d8fa6ed70"
+      }
+    ]
+  },
+  "afterUserInterrupt": [
+    {
+      "observedAt": "2026-11-08T04:42:53.411067+00:00",
+      "status": {
+        "type": "idle"
+      },
+      "pending": [
+        {
+          "id": "01a1b977-6910-7d92-92b9-3b1c18926a4a",
+          "clientUserMessageId": "n5-pending-49b1d1ba1cda44b9aca23b2ff2b58028"
+        },
+        {
+          "id": "01a1b977-6917-70f0-beb2-1931db7656dc",
+          "clientUserMessageId": "n5-pending-480e32afefde41b8b650541d8fa6ed70"
+        }
+      ]
+    },
+    {
+      "observedAt": "2026-11-08T04:42:53.916087+00:00",
+      "status": {
+        "type": "idle"
+      },
+      "pending": [
+        {
+          "id": "01a1b977-6910-7d92-92b9-3b1c18926a4a",
+          "clientUserMessageId": "n5-pending-49b1d1ba1cda44b9aca23b2ff2b58028"
+        },
+        {
+          "id": "01a1b977-6917-70f0-beb2-1931db7656dc",
+          "clientUserMessageId": "n5-pending-480e32afefde41b8b650541d8fa6ed70"
+        }
+      ]
+    },
+    {
+      "observedAt": "2026-11-08T04:42:54.430600+00:00",
+      "status": {
+        "type": "idle"
+      },
+      "pending": [
+        {
+          "id": "01a1b977-6910-7d92-92b9-3b1c18926a4a",
+          "clientUserMessageId": "n5-pending-49b1d1ba1cda44b9aca23b2ff2b58028"
+        },
+        {
+          "id": "01a1b977-6917-70f0-beb2-1931db7656dc",
+          "clientUserMessageId": "n5-pending-480e32afefde41b8b650541d8fa6ed70"
+        }
+      ]
+    },
+    {
+      "observedAt": "2026-11-08T04:42:54.935808+00:00",
+      "status": {
+        "type": "idle"
+      },
+      "pending": [
+        {
+          "id": "01a1b977-6910-7d92-92b9-3b1c18926a4a",
+          "clientUserMessageId": "n5-pending-49b1d1ba1cda44b9aca23b2ff2b58028"
+        },
+        {
+          "id": "01a1b977-6917-70f0-beb2-1931db7656dc",
+          "clientUserMessageId": "n5-pending-480e32afefde41b8b650541d8fa6ed70"
+        }
+      ]
+    }
+  ],
+  "startedTurn": {
+    "id": "01a1b977-7257-7f00-9e68-505a0b940298",
+    "status": "inProgress",
+    "error": null
+  },
+  "receivedInputs": [
+    {
+      "turnId": "01a1b977-4672-77b2-9608-f069bd88f26c",
+      "itemId": "01a1b977-4d04-7291-a83c-615c4a74c23f",
+      "clientId": "n5-lead-9d751cb4047543fe95228d29e937e9bd",
+      "startedAtMs": 1794112966049,
+      "completedAtMs": 1794112966049
+    },
+    {
+      "turnId": "01a1b977-7257-7f00-9e68-505a0b940298",
+      "itemId": "01a1b977-737b-7862-a22d-3b8efa307dd1",
+      "clientId": "n5-pending-49b1d1ba1cda44b9aca23b2ff2b58028",
+      "startedAtMs": 1794112975752,
+      "completedAtMs": 1794112975752
+    },
+    {
+      "turnId": "01a1b978-782e-7cf3-af5f-30936dc7b00e",
+      "itemId": "01a1b978-796c-7810-aca5-fd74e0079ef5",
+      "clientId": "n5-pending-480e32afefde41b8b650541d8fa6ed70",
+      "startedAtMs": 1794113042829,
+      "completedAtMs": 1794113042829
+    }
+  ],
+  "allInputsReceived": true,
+  "final": {
+    "observedAt": "2026-11-08T04:44:21.085601+00:00",
+    "status": {
+      "type": "idle"
+    },
+    "pending": []
+  },
+  "archivedOwnedSession": true
+}

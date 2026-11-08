@@ -2,14 +2,14 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/vue";
 import { afterEach, describe, expect, it } from "vitest";
 
 import RoomComposer from "@/domains/room/RoomComposer.vue";
-import type { CreateMessage } from "@/services/roomApi";
+import type { MessageDraft } from "@/services/roomApi";
 
 import { roomFixture } from "../../fixtures/room";
 
 describe("RoomComposer", () => {
   afterEach(cleanup);
 
-  function renderComposer(draft?: CreateMessage) {
+  function renderComposer(draft?: MessageDraft) {
     const room = roomFixture();
     return render(RoomComposer, {
       props: {

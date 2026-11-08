@@ -10,7 +10,7 @@
       </button>
     </div>
     <div class="composer-fields">
-      <fieldset class="composer-routing" :disabled="sending">
+      <fieldset class="composer-routing" :disabled="sending || locked">
         <legend class="sr-only">消息路由</legend>
         <div class="routing-row">
           <span class="routing-label"> <AppIcon name="hash" />话题 </span>
@@ -19,7 +19,7 @@
             class="routing-options"
             aria-label="消息话题"
             clear-label="清空消息话题"
-            :disabled="sending"
+            :disabled="sending || locked"
             :invalid="showRecipientError"
             :described-by="showRecipientError ? 'routing-error' : undefined"
           >
@@ -44,7 +44,7 @@
             class="routing-options"
             aria-label="@ 成员"
             clear-label="清空 @ 成员"
-            :disabled="sending"
+            :disabled="sending || locked"
             :invalid="showRecipientError"
             :described-by="showRecipientError ? 'routing-error' : undefined"
           >
@@ -77,7 +77,7 @@
         placeholder="发送消息…"
         clear-label="清空消息内容"
         multiline
-        :disabled="sending"
+        :disabled="sending || locked"
         :invalid="showContentError"
         aria-describedby="content-error"
         @keydown.enter="onEnter"
@@ -93,6 +93,7 @@
             class="composer-send-button"
             :aria-label="sending ? '正在发送' : '发送消息'"
             :loading="sending"
+            :disabled="locked"
             loading-label="发送中…"
           >
             <template #icon><AppIcon name="enter" /></template>
@@ -112,28 +113,26 @@
   import AppCheckboxGroup from "@/components/AppCheckboxGroup.vue";
   import AppIcon from "@/components/AppIcon.vue";
   import AppInput from "@/components/AppInput.vue";
-  import type { CreateMessage, Member, RoomMessage, Topic } from "@/services/roomApi";
+  import type { MessageDraft, Member, RoomMessage, Topic } from "@/services/roomApi";
 
   const props = defineProps<{
     roomId: string;
-    draft?: CreateMessage;
+    draft?: MessageDraft;
     topics: Topic[];
     members: Member[];
-    defaultTopicId?: string;
     replyTo?: RoomMessage;
     sending: boolean;
+    locked?: boolean;
     error: string | null;
   }>();
   const emit = defineEmits<{
-    send: [message: CreateMessage];
+    send: [message: MessageDraft];
     cancelReply: [];
-    draft: [roomId: string, draft: CreateMessage];
+    draft: [roomId: string, draft: MessageDraft];
   }>();
 
   const content = ref(props.draft?.content ?? "");
-  const topicIds = ref<string[]>(
-    props.draft?.topicIds ?? (props.defaultTopicId ? [props.defaultTopicId] : []),
-  );
+  const topicIds = ref<string[]>(props.draft?.topicIds ?? []);
   const mentionedMemberIds = ref<string[]>(props.draft?.mentionedMemberIds ?? []);
   const attempted = ref(false);
   const textarea = ref<InstanceType<typeof AppInput>>();
@@ -176,15 +175,6 @@
   );
 
   watch(
-    () => props.defaultTopicId,
-    (topicId) => {
-      if (!content.value.trim() && mentionedMemberIds.value.length === 0) {
-        topicIds.value = topicId ? [topicId] : [];
-      }
-    },
-  );
-
-  watch(
     () => props.replyTo,
     async (message) => {
       if (message) {
@@ -202,7 +192,7 @@
   );
 
   function submit(): void {
-    if (props.sending) return;
+    if (props.sending || props.locked) return;
     attempted.value = true;
     if (showContentError.value || showRecipientError.value) return;
     emit("send", {

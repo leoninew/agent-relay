@@ -15,14 +15,17 @@
     </div>
 
     <div class="sidebar-member-list">
-      <div v-for="member in members" :key="member.id" class="sidebar-node">
+      <div
+        v-for="member in members"
+        :key="member.id"
+        class="sidebar-node"
+        :class="{ 'is-active': selectedMemberId === member.id }"
+      >
         <button
           type="button"
           class="sidebar-member"
-          :class="{ 'is-active': selectedMemberId === member.id }"
           :aria-label="`筛选成员：${member.name}`"
           :aria-pressed="selectedMemberId === member.id"
-          :title="member.activity"
           @click="$emit('select', member.id)"
         >
           <MemberIdentity :member="member" />
@@ -48,11 +51,18 @@
             删除
           </button>
         </div>
+        <p v-if="member.presence === 'unknown'" class="sidebar-member-observation">
+          {{ member.activity }}
+        </p>
       </div>
-      <p v-if="!members.length" class="sidebar-members-empty">
-        {{ selectedTopicId ? "暂无成员订阅此话题" : "暂无成员" }}
-      </p>
+      <p v-if="!members.length" class="sidebar-members-empty">暂无成员</p>
     </div>
+    <MemberTopicPositions
+      v-if="selectedMember"
+      :member="selectedMember"
+      :topics="snapshot.topics"
+      :positions="snapshot.positions.filter((position) => position.memberId === selectedMemberId)"
+    />
   </section>
 </template>
 
@@ -61,12 +71,12 @@
 
   import AppIcon from "@/components/AppIcon.vue";
   import MemberIdentity from "@/domains/room/MemberIdentity.vue";
+  import MemberTopicPositions from "@/domains/room/MemberTopicPositions.vue";
   import type { Member, RoomSnapshot } from "@/services/roomApi";
 
   const props = defineProps<{
     snapshot: RoomSnapshot;
     busy: boolean;
-    selectedTopicId?: string;
     selectedMemberId?: string;
   }>();
   defineEmits<{
@@ -76,12 +86,14 @@
     deleteMember: [member: Member];
   }>();
 
-  const members = computed(() =>
-    props.snapshot.members.filter(
-      (member) =>
-        !member.deletedAt &&
-        (!props.selectedTopicId || member.topicIds.includes(props.selectedTopicId)),
-    ),
+  const members = computed(() => props.snapshot.members.filter((member) => !member.deletedAt));
+  const selectedMember = computed(() =>
+    members.value.find((member) => member.id === props.selectedMemberId),
   );
-  const presenceLabel = { available: "可接收", busy: "忙碌", offline: "离线" };
+  const presenceLabel = {
+    available: "空闲",
+    busy: "忙碌",
+    offline: "离线",
+    unknown: "接入未确认",
+  };
 </script>

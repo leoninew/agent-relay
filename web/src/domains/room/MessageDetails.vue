@@ -35,25 +35,61 @@
           <thead>
             <tr>
               <th>成员</th>
-              <th>入队状态</th>
-              <th>接收状态</th>
-              <th>回执状态</th>
+              <th>投递状态</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="{ member, status, updatedAt } in dispatchRows" :key="member.id">
+            <tr
+              v-for="{
+                member,
+                status,
+                updatedAt,
+                queuedAt,
+                receiptId,
+                receivedItemId,
+                receivedTurnId,
+                note,
+                error,
+              } in dispatchRows"
+              :key="member.id"
+            >
               <td><MemberIdentity :member="member" /></td>
               <td :data-state="status">
                 <span>{{ status ? enqueueLabels[status] : "—" }}</span>
                 <time v-if="updatedAt" class="dispatch-time" :datetime="updatedAt">
                   {{ formatTime(updatedAt) }}
                 </time>
-              </td>
-              <td class="dispatch-unconfirmed">
-                {{ status ? receiveLabels[status] : "—" }}
-              </td>
-              <td class="dispatch-unconfirmed">
-                {{ status === "delivered" ? "待回执" : "—" }}
+                <small v-if="status === 'received' && queuedAt" class="dispatch-receipt">
+                  入队 {{ formatTime(queuedAt) }}
+                </small>
+                <small v-if="note" class="dispatch-receipt">{{ note }}</small>
+                <small v-if="error" class="dispatch-receipt">{{ error }}</small>
+                <details
+                  v-if="receiptId || receivedItemId || receivedTurnId"
+                  class="dispatch-evidence"
+                >
+                  <summary>投递凭证<AppIcon name="chevron" /></summary>
+                  <dl>
+                    <template v-if="receiptId">
+                      <dt>入队凭证</dt>
+                      <dd>
+                        <code>{{ receiptId }}</code>
+                      </dd>
+                    </template>
+                    <template v-if="receivedItemId">
+                      <dt>接收凭证</dt>
+                      <dd>
+                        <code>{{ receivedItemId }}</code>
+                      </dd>
+                    </template>
+                    <template v-if="receivedTurnId">
+                      <dt>Turn ID</dt>
+                      <dd>
+                        <code>{{ receivedTurnId }}</code>
+                      </dd>
+                    </template>
+                  </dl>
+                </details>
               </td>
             </tr>
           </tbody>
@@ -96,9 +132,21 @@
         member,
         status: delivery?.status,
         updatedAt: delivery?.updatedAt,
+        queuedAt: delivery?.queuedAt,
+        receiptId: delivery?.queuedSubmissionId,
+        receivedItemId: delivery?.receivedItemId,
+        receivedTurnId: delivery?.receivedTurnId,
+        note: delivery?.note,
+        error: delivery?.error,
       };
     }),
   );
-  const enqueueLabels = { pending: "待提交", delivered: "已入队", queued: "排队中" };
-  const receiveLabels = { pending: "—", delivered: "未确认", queued: "待接收" };
+  const enqueueLabels = {
+    pending: "待提交",
+    submitting: "提交中",
+    queued: "已入队",
+    received: "已进入会话",
+    rejected: "已拒绝",
+    unknown: "结果未知",
+  };
 </script>

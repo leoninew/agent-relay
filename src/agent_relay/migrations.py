@@ -5,7 +5,7 @@ from pathlib import Path
 from alembic import command
 from alembic.config import Config
 
-MIGRATION_HEAD = "sidebar_node_actions"
+MIGRATION_HEAD = "member_api"
 
 
 def _configuration(path: Path) -> Config:

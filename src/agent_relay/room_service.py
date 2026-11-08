@@ -5,6 +5,11 @@ from pathlib import PurePosixPath, PureWindowsPath
 from threading import Lock
 from uuid import uuid4
 
+from agent_relay.room_errors import (
+    RoomConflictError,
+    RoomInputError,
+    RoomNotFoundError,
+)
 from agent_relay.room_models import (
     CreateMessage,
     CreateRoom,
@@ -14,24 +19,12 @@ from agent_relay.room_models import (
     Message,
     Room,
     RoomSnapshot,
-    RoomSummary,
     Topic,
     UpdateMember,
 )
+from agent_relay.room_queries import RoomQueries
 from agent_relay.room_state import RoomState
 from agent_relay.room_store import SQLiteRoomStore
-
-
-class RoomNotFoundError(LookupError):
-    pass
-
-
-class RoomInputError(ValueError):
-    pass
-
-
-class RoomConflictError(ValueError):
-    pass
 
 
 class RoomService:
@@ -197,46 +190,50 @@ class RoomService:
         return posix_path.as_posix()
 
     def snapshot(self, room_id: str, topic_id: str | None = None) -> RoomSnapshot:
-        with self._transaction(write=False):
-            state = self._get_room(room_id)
-            if topic_id is not None and topic_id not in {
-                topic.id for topic in state.topics if not topic.deleted_at
-            }:
-                raise RoomNotFoundError("话题不存在")
-            deliveries = [delivery for message in state.messages for delivery in message.deliveries]
-            return RoomSnapshot(
-                room=state.room.model_copy(deep=True),
-                topics=[
-                    topic.model_copy(
-                        update={
-                            "message_count": sum(
-                                topic.id in message.topic_ids for message in state.messages
-                            )
-                        },
-                        deep=True,
-                    )
-                    for topic in state.topics
-                ],
-                members=[member.model_copy(deep=True) for member in state.members],
-                sessions=[session.model_copy(deep=True) for session in state.sessions],
-                messages=[
-                    message.model_copy(deep=True)
-                    for message in state.messages
-                    if topic_id is None or topic_id in message.topic_ids
-                ],
-                summary=RoomSummary(
-                    total_messages=len(state.messages),
-                    delivered_count=sum(delivery.status == "delivered" for delivery in deliveries),
-                    queued_count=sum(delivery.status == "queued" for delivery in deliveries),
-                    pending_count=sum(delivery.status == "pending" for delivery in deliveries),
-                ),
-            )
+        return RoomQueries(self._store).snapshot(room_id, topic_id)
 
-    def post_message(self, room_id: str, request: CreateMessage) -> Message:
+    @staticmethod
+    def _publisher(state: RoomState, member_id: str | None) -> Member | None:
+        if member_id is None:
+            return None
+        member = next(
+            (
+                member
+                for member in state.members
+                if member.id == member_id and not member.deleted_at
+            ),
+            None,
+        )
+        if member is None:
+            raise RoomNotFoundError("聊天室成员不存在")
+        return member
+
+    def post_message(
+        self, room_id: str, request: CreateMessage, *, member_id: str | None = None
+    ) -> Message:
         with self._transaction(write=True):
             state = self._get_room(room_id)
+            sender = self._publisher(state, member_id)
+            sender_id = sender.id if sender is not None else None
             topic_ids = list(dict.fromkeys(request.topic_ids))
             mentioned_member_ids = list(dict.fromkeys(request.mentioned_member_ids))
+            existing = next(
+                (
+                    m
+                    for m in state.messages
+                    if m.sender_id == sender_id and m.publication_id == request.publication_id
+                ),
+                None,
+            )
+            if existing is not None:
+                if (
+                    existing.content != request.content
+                    or set(existing.topic_ids) != set(topic_ids)
+                    or set(existing.mentioned_member_ids) != set(mentioned_member_ids)
+                    or existing.reply_to_message_id != request.reply_to_message_id
+                ):
+                    raise RoomConflictError("发布编号已用于另一条消息")
+                return existing.model_copy(deep=True)
             if request.reply_to_message_id is not None and not any(
                 message.id == request.reply_to_message_id for message in state.messages
             ):
@@ -246,12 +243,25 @@ class RoomService:
                 content=request.content,
                 topic_ids=topic_ids,
                 mentioned_member_ids=mentioned_member_ids,
-                sender_id=None,
-                sender_name="控制台",
+                sender_id=sender_id,
+                sender_name=sender.name if sender is not None else "控制台",
                 created_at=datetime.now(UTC),
                 reply_to_message_id=request.reply_to_message_id,
+                publication_id=request.publication_id,
             )
             return message.model_copy(deep=True)
+
+    def publication(
+        self, room_id: str, publication_id: str, *, member_id: str | None = None
+    ) -> Message:
+        with self._transaction(write=False):
+            state = self._get_room(room_id)
+            sender = self._publisher(state, member_id)
+            sender_id = sender.id if sender is not None else None
+            for message in state.messages:
+                if message.sender_id == sender_id and message.publication_id == publication_id:
+                    return message.model_copy(deep=True)
+            raise RoomNotFoundError("发布记录不存在")
 
     @staticmethod
     def _resolve_recipient_ids(
@@ -291,6 +301,7 @@ class RoomService:
         sender_name: str,
         created_at: datetime,
         reply_to_message_id: str | None = None,
+        publication_id: str | None = None,
     ) -> Message:
         recipient_ids = self._resolve_recipient_ids(
             state, topic_ids, mentioned_member_ids, sender_id=sender_id
@@ -299,6 +310,7 @@ class RoomService:
         message_id = f"{state.room.id}-msg-{seq:04d}"
         message = Message(
             id=message_id,
+            publication_id=publication_id,
             seq=seq,
             sender_id=sender_id,
             sender_name=sender_name,
@@ -312,6 +324,10 @@ class RoomService:
                 Delivery(
                     id=f"{message_id}:{recipient_id}",
                     target_member_id=recipient_id,
+                    target_session_id=next(
+                        m.session_id for m in state.members if m.id == recipient_id
+                    ),
+                    client_message_id=str(uuid4()),
                     status="pending",
                     updated_at=created_at,
                 )

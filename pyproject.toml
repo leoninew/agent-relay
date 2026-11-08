@@ -21,6 +21,9 @@ dependencies = [
   "websockets>=17.4,<18",
 ]
 
+[project.scripts]
+agent-relay = "agent_relay.cli:main"
+
 [dependency-groups]
 dev = [
   "build>=1.2",

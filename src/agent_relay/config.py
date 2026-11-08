@@ -4,7 +4,7 @@ from pathlib import Path
 
 from dotenv import dotenv_values
 from dynaconf import Dynaconf
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, field_validator
 
 
 class RequestLogMessages(BaseModel):
@@ -34,12 +34,14 @@ class StaticSettings(BaseModel):
 class DatabaseSettings(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
     path: Path
+    migrate_on_startup: bool = False
 
 
 class CodexSettings(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
     command: list[str] = Field(min_length=1)
     rpc_timeout: float = Field(gt=0, le=300)
+    queue_concurrency: int = Field(default=4, ge=1, le=32)
 
     @field_validator("command")
     @classmethod
@@ -58,7 +60,23 @@ class ServerSettings(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
     host: str = Field(min_length=1)
     port: int = Field(ge=0, le=65535)
+    public_url: AnyHttpUrl
     reload: bool
+    reload_paths: list[str] = Field(min_length=1)
+
+    @field_validator("public_url")
+    @classmethod
+    def validate_public_url(cls, value: AnyHttpUrl) -> AnyHttpUrl:
+        if value.username or value.password or value.query or value.fragment:
+            raise ValueError("Public URL must not contain credentials, a query or a fragment")
+        return value
+
+    @field_validator("reload_paths")
+    @classmethod
+    def validate_reload_paths(cls, value: list[str]) -> list[str]:
+        if any(not path.strip() for path in value):
+            raise ValueError("Reload paths cannot be blank")
+        return value
 
 
 class LoggingSettings(BaseModel):

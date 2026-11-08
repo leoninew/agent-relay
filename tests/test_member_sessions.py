@@ -6,13 +6,15 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 from room_fixtures import create_room_store
-from session_fixtures import FakeSessionDriver
+from session_fixtures import FakeQueueDriver, FakeSessionDriver
 
 from agent_relay.api import create_app
 from agent_relay.drivers.codex import SessionInfo
 from agent_relay.member_sessions import MemberSessions, SessionUnavailableError
+from agent_relay.room_errors import RoomConflictError, RoomInputError
 from agent_relay.room_models import CreateMember, CreateRoom, CreateTopic
-from agent_relay.room_service import RoomConflictError, RoomInputError, RoomService
+from agent_relay.room_queries import RoomQueries
+from agent_relay.room_service import RoomService
 from agent_relay.room_state import RoomState
 from agent_relay.room_store import SQLiteRoomStore
 
@@ -45,7 +47,7 @@ def test_directory_discovery_and_join_bind_the_original_session(tmp_path: Path) 
     members, rooms, driver, room_id, topic_id = setup(tmp_path)
     candidates = members.candidates(room_id)
     assert [info.id for info in candidates] == ["one", "two"]
-    assert candidates[1].archived and candidates[1].presence == "offline"
+    assert candidates[1].archived and candidates[1].presence == "unknown"
     assert rooms.snapshot(room_id).members == []
     member = members.add(room_id, request(topic_id))
     assert member.session_id == "one"
@@ -53,7 +55,12 @@ def test_directory_discovery_and_join_bind_the_original_session(tmp_path: Path) 
     assert member.name == "Worker" and driver.sessions["one"].name == "Existing"
     assert member.presence == "busy" and member.activity_source == "codex"
     assert members.candidates(room_id)[0].member_id == member.id
-    assert rooms.snapshot(room_id).members[0].model_dump() == member.model_dump(exclude={"session"})
+    current = rooms.snapshot(room_id).members[0]
+    assert current.model_dump(exclude={"observed_at"}) == member.model_dump(
+        exclude={"session", "observed_at"}
+    )
+    assert current.observed_at is not None and member.observed_at is not None
+    assert current.observed_at >= member.observed_at
     assert member.session.name == "Existing"
     with pytest.raises(RoomConflictError):
         members.add(room_id, request(topic_id))
@@ -84,6 +91,24 @@ def test_posix_paths_remain_case_sensitive(tmp_path: Path) -> None:
         ]
     }
     assert [info.id for info in members.candidates(room.id)] == ["exact"]
+
+
+def test_running_member_observations_refresh_when_the_original_session_changes_state(
+    tmp_path: Path,
+) -> None:
+    members, rooms, driver, room_id, topic_id = setup(tmp_path)
+    member = members.add(room_id, request(topic_id))
+    assert member.presence == "busy"
+    driver.sessions["one"] = SessionInfo("one", "D:/project", "provider-a", "Existing", "notLoaded")
+    candidate = members.candidates(room_id)[0]
+    assert candidate.presence == "unknown" and not candidate.usable
+    assert candidate.unavailable_reason and "独立实例" in candidate.unavailable_reason
+    current = RoomQueries(rooms.store).metadata(room_id).members[0]
+    assert current.presence == "unknown"
+    assert current.activity == candidate.unavailable_reason
+    driver.sessions["one"] = SessionInfo("one", "D:/project", "provider-a", "Existing", "idle")
+    assert members.candidates(room_id)[0].usable
+    assert RoomQueries(rooms.store).metadata(room_id).members[0].presence == "available"
 
 
 def test_join_revalidates_directory_id_topics_and_does_not_write_on_failure(tmp_path: Path) -> None:
@@ -142,7 +167,11 @@ def test_api_preserves_bindings_on_restart_and_hides_upstream_errors(tmp_path: P
     members, rooms, driver, room_id, topic_id = setup(tmp_path)
     route = f"/api/room/{room_id}"
     logger = logging.getLogger("tests.member-sessions")
-    with TestClient(create_app(logger, room_service=rooms, session_driver=driver)) as client:
+    with TestClient(
+        create_app(
+            logger, room_service=rooms, queue_driver=FakeQueueDriver(), session_driver=driver
+        )
+    ) as client:
         assert driver.listed == 0 and driver.inspected == []
         response = client.post(route + "/member", json=request(topic_id).model_dump(by_alias=True))
         assert response.status_code == 201
@@ -150,10 +179,15 @@ def test_api_preserves_bindings_on_restart_and_hides_upstream_errors(tmp_path: P
         session = member.pop("session")
         assert session["name"] == "Existing"
         assert client.get(route + "/session").json()[0]["memberId"] == member["id"]
+        member = client.get(route).json()["members"][0]
         assert client.get(route + "/member-operation/old").status_code == 404
     driver = FakeSessionDriver()
     restored = RoomService(SQLiteRoomStore(members.store.path))
-    with TestClient(create_app(logger, room_service=restored, session_driver=driver)) as client:
+    with TestClient(
+        create_app(
+            logger, room_service=restored, queue_driver=FakeQueueDriver(), session_driver=driver
+        )
+    ) as client:
         assert client.get(route).json()["members"] == [member]
         assert client.get(route).json()["sessions"][0]["name"] == "Existing"
         assert driver.listed == 0 and driver.inspected == []

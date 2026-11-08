@@ -5,6 +5,10 @@ import { apiClient } from "@/services/api";
 import {
   addRoomMember,
   fetchRoom,
+  fetchRoomEvents,
+  fetchRoomMessage,
+  fetchRoomMessages,
+  fetchRoomMetadata,
   fetchRoomSessions,
   fetchRooms,
   postRoomMessage,
@@ -38,21 +42,61 @@ describe("room API", () => {
     vi.clearAllMocks();
   });
 
-  it("loads a room with an optional topic filter", async () => {
+  it("loads a room and sends combined filters and a pagination cursor", async () => {
     await expect(fetchRooms()).resolves.toEqual([roomFixture().room]);
     await expect(fetchRoom("agent-relay")).resolves.toEqual(roomFixture());
-    await fetchRoom("agent-relay", "frontend");
+    await fetchRoom("agent-relay", {
+      topicId: "frontend",
+      memberId: "frontend-worker",
+      beforeSeq: 80,
+      limit: 25,
+    });
     expect(adapterMock).toHaveBeenLastCalledWith(
       expect.objectContaining({
         method: "get",
         url: "/api/room/agent-relay",
-        params: { topic_id: "frontend" },
+        params: { topic_id: "frontend", member_id: "frontend-worker", before_seq: 80, limit: 25 },
+      }),
+    );
+  });
+
+  it("loads history, exact references, metadata and event catchup independently", async () => {
+    const signal = new AbortController().signal;
+    await fetchRoomMessages("room/one", { beforeSeq: 50 }, signal);
+    expect(adapterMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        url: "/api/room/room%2Fone/message",
+        params: expect.objectContaining({ before_seq: 50 }),
+        signal,
+      }),
+    );
+    await fetchRoomMessage("room/one", "message/one", signal);
+    expect(adapterMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        url: "/api/room/room%2Fone/message/message%2Fone",
+        signal,
+      }),
+    );
+    await fetchRoomMetadata("room/one", signal);
+    expect(adapterMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        url: "/api/room/room%2Fone/metadata",
+        signal,
+      }),
+    );
+    await fetchRoomEvents("room/one", 123, signal);
+    expect(adapterMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        url: "/api/room/room%2Fone/event",
+        params: { after_event_id: 123 },
+        signal,
       }),
     );
   });
 
   it("posts structured routing fields to the message endpoint", async () => {
     const request = {
+      publicationId: "test-publication",
       content: "核对契约",
       topicIds: ["frontend", "backend"],
       mentionedMemberIds: ["test-worker"],

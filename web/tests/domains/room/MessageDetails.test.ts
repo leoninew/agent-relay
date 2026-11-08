@@ -27,17 +27,12 @@ describe("MessageDetails", () => {
     expect(memberTags.getByText("测试 Worker")).toBeTruthy();
     expect(screen.getAllByRole("columnheader").map((header) => header.textContent)).toEqual([
       "成员",
-      "入队状态",
-      "接收状态",
-      "回执状态",
+      "投递状态",
     ]);
     const queued = within(screen.getByRole("row", { name: /前端 Worker/ }));
-    expect(queued.getByText("排队中")).toBeTruthy();
-    expect(queued.getByText("待接收")).toBeTruthy();
+    expect(queued.getByText("提交中")).toBeTruthy();
     const enqueued = within(screen.getByRole("row", { name: /测试 Worker/ }));
     expect(enqueued.getByText("已入队")).toBeTruthy();
-    expect(enqueued.getByText("未确认")).toBeTruthy();
-    expect(enqueued.getByText("待回执")).toBeTruthy();
     expect(screen.queryByText(message.content)).toBeNull();
   });
 
@@ -55,6 +50,30 @@ describe("MessageDetails", () => {
     expect(screen.getByText("未选择话题")).toBeTruthy();
     expect(screen.getByRole("row", { name: /前端 Worker/ })).toBeTruthy();
     expect(screen.queryByRole("row", { name: /测试 Worker/ })).toBeNull();
+  });
+
+  it("shows confirmed original-session input evidence separately from queue acceptance", () => {
+    const room = roomFixture();
+    const delivery = {
+      ...room.messages[0].deliveries[0],
+      status: "received" as const,
+      queuedAt: "2026-11-08T04:00:01Z",
+      receivedAt: "2026-11-08T04:00:03Z",
+      updatedAt: "2026-11-08T04:00:03Z",
+      receivedItemId: "original-input",
+      receivedTurnId: "original-turn",
+    };
+    const message = {
+      ...room.messages[0],
+      recipientIds: [delivery.targetMemberId],
+      deliveries: [delivery],
+    };
+    render(MessageDetails, { props: { message, topics: room.topics, members: room.members } });
+    expect(screen.getByText("已进入会话")).toBeTruthy();
+    expect(screen.getByText("投递凭证")).toBeTruthy();
+    expect(screen.getByText("original-input")).toBeTruthy();
+    expect(screen.getByText(/入队 \d{2}:\d{2}:\d{2}/)).toBeTruthy();
+    expect(document.querySelector("time")?.getAttribute("datetime")).toBe(delivery.receivedAt);
   });
 
   it("shows an unsubmitted delivery without implying queue acceptance", () => {

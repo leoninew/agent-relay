@@ -4,7 +4,8 @@ from pathlib import Path
 import pytest
 from room_fixtures import DemoRoomService, create_room_store
 
-from agent_relay.room_service import RoomInputError, RoomService
+from agent_relay.room_errors import RoomInputError
+from agent_relay.room_service import RoomService
 from agent_relay.room_state import RoomState
 
 

@@ -31,6 +31,8 @@ describe("RoomSetupDialog form", () => {
             observedAt: "2026-11-07T03:04:05Z",
             archived: false,
             memberId: null,
+            usable: true,
+            unavailableReason: null,
           },
           {
             id: "joined",
@@ -41,6 +43,20 @@ describe("RoomSetupDialog form", () => {
             observedAt: "2026-11-07T03:04:05Z",
             archived: true,
             memberId: "member-1",
+            usable: false,
+            unavailableReason: "会话已归档",
+          },
+          {
+            id: "not-connected",
+            name: "未接入的会话",
+            provider: "codex",
+            projectPath: room.room.projectPath,
+            presence: "unknown",
+            observedAt: "2026-11-07T03:04:05Z",
+            archived: false,
+            memberId: null,
+            usable: false,
+            unavailableReason: "请使用共享 daemon 打开此会话后刷新",
           },
         ],
         saving: false,
@@ -69,8 +85,14 @@ describe("RoomSetupDialog form", () => {
     createTopic.mockResolvedValue(topic);
     const { rerender, emitted } = renderForm();
     await rerender({ mode: "member" });
-    expect(screen.getAllByRole("radio")).toHaveLength(2);
+    expect(screen.getAllByRole("radio")).toHaveLength(3);
     expect(screen.getByRole("radio", { name: /已加入会话/ }).hasAttribute("disabled")).toBe(true);
+    expect(screen.getByRole("radio", { name: /未接入的会话/ }).hasAttribute("disabled")).toBe(true);
+    expect(
+      screen.getByRole("button", {
+        name: "未接入的会话不可用：请使用共享 daemon 打开此会话后刷新",
+      }),
+    ).toBeTruthy();
     await fireEvent.click(screen.getByRole("radio", { name: /^已有会话/ }));
     await fireEvent.update(screen.getByLabelText(/成员名称/), "审查 Worker");
     await fireEvent.update(screen.getByLabelText("新话题名称"), "代码审查");
@@ -129,29 +151,6 @@ describe("RoomSetupDialog form", () => {
     expect(screen.getByRole("button", { name: "添加成员" }).hasAttribute("disabled")).toBe(true);
     await fireEvent.click(screen.getByRole("button", { name: "刷新会话" }));
     expect(emitted().reloadSessions).toEqual([[]]);
-  });
-
-  it("emits an edited member with multiple subscriptions", async () => {
-    const member = roomFixture().members[0];
-    const { rerender, emitted } = renderForm();
-    await rerender({ mode: "member", member });
-    await fireEvent.click(screen.getByRole("checkbox", { name: "# 后端" }));
-    await fireEvent.click(screen.getByRole("button", { name: "保存成员" }));
-
-    expect(emitted().updateMember).toEqual([
-      [member.id, { name: member.name, topicIds: ["frontend", "backend"] }],
-    ]);
-  });
-
-  it("shows the linked session name and ID when editing a member", async () => {
-    const member = { ...roomFixture().members[0], sessionId: "joined" };
-    const { rerender } = renderForm();
-    await rerender({ mode: "member", member, linkedSession: { id: "joined", name: "已加入会话" } });
-    expect(screen.getByText("已加入会话")).toBeTruthy();
-    expect(screen.getByText("joined")).toBeTruthy();
-    expect(screen.queryByRole("status")).toBeNull();
-    await rerender({ linkedSession: undefined });
-    expect(screen.getByText("会话名称不可用")).toBeTruthy();
   });
 
   it("prefills and saves the topic name and description", async () => {

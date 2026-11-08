@@ -1,0 +1,49 @@
+.setup-form .session-options {
+  align-content: start;
+  max-height: 456px;
+  scrollbar-gutter: stable;
+}
+
+.setup-form .session-option {
+  min-height: 68px;
+  padding: 10px 12px;
+}
+
+.setup-form .session-option:disabled {
+  background: hsl(var(--muted) / 0.3);
+}
+
+.setup-form .session-option:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: -2px;
+}
+
+.setup-form .session-option-label {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+}
+
+.setup-form .session-option-label strong,
+.setup-form .session-option-label > span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-align: start;
+}
+
+.setup-form .session-option-label strong {
+  padding-inline-end: 112px;
+}
+
+.setup-form .session-option-meta {
+  position: absolute;
+  inset-block-start: 11px;
+  inset-inline-end: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: hsl(var(--muted-foreground));
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-caption);
+  white-space: nowrap;
+}

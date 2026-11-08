@@ -2,8 +2,11 @@ import sqlite3
 from collections.abc import Iterator
 from contextlib import closing, contextmanager
 from copy import deepcopy
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
+from agent_relay.drivers.codex import QueueHead, ReceivedInput
 from agent_relay.room_models import (
     Delivery,
     Member,
@@ -14,7 +17,15 @@ from agent_relay.room_models import (
 )
 from agent_relay.room_state import RoomState
 
-_MIGRATION_HEAD = "sidebar_node_actions"
+_MIGRATION_HEAD = "member_api"
+
+
+@dataclass(frozen=True)
+class ClaimedDelivery:
+    room_id: str
+    room: Room
+    message: Message
+    delivery: Delivery
 
 
 class SQLiteRoomStore:
@@ -46,6 +57,27 @@ class SQLiteRoomStore:
             yield connection
 
     @contextmanager
+    def read(self) -> Iterator[sqlite3.Connection]:
+        with self._connection() as connection:
+            connection.execute("BEGIN")
+            try:
+                yield connection
+            finally:
+                connection.rollback()
+
+    @contextmanager
+    def write(self) -> Iterator[sqlite3.Connection]:
+        """A short SQL transaction for bounded reads with associated writes."""
+        with self._connection() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                yield connection
+                connection.commit()
+            except BaseException:
+                connection.rollback()
+                raise
+
+    @contextmanager
     def transaction(self, *, write: bool) -> Iterator[dict[str, RoomState]]:
         with self._connection() as connection:
             connection.execute("BEGIN IMMEDIATE" if write else "BEGIN")
@@ -59,6 +91,117 @@ class SQLiteRoomStore:
             except BaseException:
                 connection.rollback()
                 raise
+
+    def interrupt_submissions(self) -> None:
+        """Called only while holding the exclusive local submitter lock."""
+        with self._connection() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            connection.execute(
+                "UPDATE deliveries SET status = 'unknown', payload = json_set(payload, "
+                "'$.status', 'unknown', '$.updated_at', ?, '$.error', ?) "
+                "WHERE status = 'submitting'",
+                (datetime.now(UTC).isoformat(), "提交中断，入队结果未知；不会自动重发"),
+            )
+            connection.commit()
+
+    def claim_delivery(self) -> ClaimedDelivery | None:
+        with self._connection() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT d.room_id, d.payload, m.payload AS message, r.payload AS room "
+                "FROM deliveries d JOIN messages m ON m.room_id = d.room_id "
+                "AND m.id = d.message_id JOIN rooms r ON r.id = d.room_id "
+                "WHERE d.status = 'pending' AND NOT EXISTS (SELECT 1 FROM deliveries active "
+                "WHERE active.target_session_id = d.target_session_id "
+                "AND active.status = 'submitting') ORDER BY d.rowid LIMIT 1"
+            ).fetchone()
+            if row is None:
+                connection.commit()
+                return None
+            delivery = Delivery.model_validate_json(row["payload"])
+            delivery.status = "submitting"
+            delivery.updated_at = datetime.now(UTC)
+            connection.execute(
+                "UPDATE deliveries SET status = ?, payload = ? WHERE room_id = ? AND id = ?",
+                (delivery.status, delivery.model_dump_json(), row["room_id"], delivery.id),
+            )
+            connection.commit()
+            return ClaimedDelivery(
+                row["room_id"],
+                Room.model_validate_json(row["room"]),
+                Message.model_validate_json(row["message"]),
+                delivery,
+            )
+
+    def finish_delivery(self, room_id: str, delivery: Delivery) -> None:
+        with self._connection() as connection:
+            connection.execute(
+                "UPDATE deliveries SET status = ?, payload = ? "
+                "WHERE room_id = ? AND id = ? AND status = 'submitting' "
+                "AND json_extract(payload, '$.client_message_id') = ?",
+                (
+                    delivery.status,
+                    delivery.model_dump_json(),
+                    room_id,
+                    delivery.id,
+                    delivery.client_message_id,
+                ),
+            )
+
+    def claim_activation(self, session_id: str, head: QueueHead) -> bool:
+        """A fresh submission may start a confirmed Relay FIFO head at most once."""
+        if head.client_message_id is None:
+            return False
+        with self.write() as connection:
+            cursor = connection.execute(
+                "UPDATE deliveries SET payload = json_set(payload, '$.activation_attempted_at', ?) "
+                "WHERE target_session_id = ? AND status = 'queued' "
+                "AND json_extract(payload, '$.queued_submission_id') = ? "
+                "AND json_extract(payload, '$.client_message_id') = ? "
+                "AND json_extract(payload, '$.activation_attempted_at') IS NULL",
+                (datetime.now(UTC).isoformat(), session_id, head.id, head.client_message_id),
+            )
+            return cursor.rowcount == 1
+
+    def delivery_note(self, session_id: str, client_message_id: str, note: str) -> None:
+        with self.write() as connection:
+            connection.execute(
+                "UPDATE deliveries SET payload = json_set(payload, '$.note', ?) "
+                "WHERE target_session_id = ? AND status = 'queued' "
+                "AND json_extract(payload, '$.client_message_id') = ?",
+                (note, session_id, client_message_id),
+            )
+
+    def unconfirmed_inputs(self) -> dict[str, set[str]]:
+        with self.read() as connection:
+            result: dict[str, set[str]] = {}
+            for row in connection.execute(
+                "SELECT target_session_id, "
+                "json_extract(payload, '$.client_message_id') AS client_id "
+                "FROM deliveries WHERE status IN ('queued', 'unknown') ORDER BY rowid"
+            ):
+                result.setdefault(row["target_session_id"], set()).add(row["client_id"])
+            return result
+
+    def confirm_input(self, session_id: str, received: ReceivedInput) -> None:
+        now = datetime.now(UTC).isoformat()
+        with self.write() as connection:
+            connection.execute(
+                "UPDATE deliveries SET status = 'received', payload = json_set(payload, "
+                "'$.status', 'received', '$.updated_at', ?, '$.received_at', ?, "
+                "'$.received_item_id', ?, '$.received_turn_id', ?, "
+                "'$.note', NULL, '$.error', NULL) "
+                "WHERE target_session_id = ? AND status IN ('queued', 'unknown') "
+                "AND json_extract(payload, '$.client_message_id') = ?",
+                (
+                    now,
+                    now,
+                    received.item_id,
+                    received.turn_id,
+                    session_id,
+                    received.client_message_id,
+                ),
+            )
 
     @staticmethod
     def _load(connection: sqlite3.Connection) -> dict[str, RoomState]:
@@ -193,12 +336,14 @@ class SQLiteRoomStore:
                 self._upsert(
                     connection,
                     "messages",
-                    ("room_id", "id", "seq", "payload"),
+                    ("room_id", "id", "seq", "payload", "publisher_id", "publication_id"),
                     (
                         room_id,
                         message.id,
                         message.seq,
                         message.model_copy(update={"deliveries": []}).model_dump_json(),
+                        message.sender_id or "",
+                        message.publication_id,
                     ),
                 )
                 old_deliveries = (
@@ -211,12 +356,22 @@ class SQLiteRoomStore:
                         self._upsert(
                             connection,
                             "deliveries",
-                            ("room_id", "id", "message_id", "target_member_id", "payload"),
+                            (
+                                "room_id",
+                                "id",
+                                "message_id",
+                                "target_member_id",
+                                "payload",
+                                "target_session_id",
+                                "status",
+                            ),
                             (
                                 room_id,
                                 delivery.id,
                                 message.id,
                                 delivery.target_member_id,
                                 delivery.model_dump_json(),
+                                delivery.target_session_id,
+                                delivery.status,
                             ),
                         )

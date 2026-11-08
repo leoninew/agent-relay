@@ -344,7 +344,7 @@ def test_diagnostic_exception_logs_internal_error_without_response_leak(caplog: 
 @pytest.mark.parametrize(
     ("status_code", "code", "headers"),
     [
-        (401, "unauthorized", {"WWW-Authenticate": "Bearer"}),
+        (401, "unauthorized", {}),
         (403, "forbidden", {}),
         (409, "conflict", {}),
         (500, "internal_error", {}),

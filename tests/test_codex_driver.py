@@ -84,12 +84,30 @@ def test_metadata_queries_cover_all_pages_providers_sources_and_archives() -> No
     sessions = driver().list_sessions()
     assert [info.id for info in sessions] == ["one", "two", "archived"]
     assert sessions[0].presence == "busy"
-    assert sessions[1].presence == "offline"
+    assert sessions[1].presence == "unknown"
+    assert sessions[0].usable and not sessions[1].usable
     assert sessions[-1].archived is True
     info = driver().inspect("original-id")
     assert info.id == "original-id"
     assert info.cwd == "D:/project"
     assert info.name == "Worker original-id"
+
+
+def test_queue_submits_to_original_thread_and_preserves_receipt() -> None:
+    receipt = driver().enqueue("original-id", "stable-client-id", "hello from Relay")
+    assert receipt == {"id": "queued-original", "clientUserMessageId": "stable-client-id"}
+
+
+def test_queue_activation_and_input_receipt_use_original_identities() -> None:
+    runtime = driver("delivery")
+    head = runtime.activation_candidate("original-id")
+    assert head is not None and head.client_message_id == "stable-client-id"
+    assert runtime.activate("original-id", head.id) == "turn-original"
+    page = runtime.read_input_page("original-id")
+    assert page.next_cursor is None
+    assert [(item.client_message_id, item.item_id, item.turn_id) for item in page.inputs] == [
+        ("stable-client-id", "input-original", "turn-original")
+    ]
 
 
 @pytest.mark.parametrize(

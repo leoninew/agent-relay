@@ -188,9 +188,6 @@
   flex-shrink: 0;
   animation: app-spin 800ms linear infinite;
 }
-.app-spinner-track {
-  opacity: 0.2;
-}
 .app-loading {
   display: flex;
   align-items: center;

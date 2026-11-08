@@ -2,7 +2,11 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
-from agent_relay.dependencies import MemberSessionsDependency, RoomServiceDependency
+from agent_relay.dependencies import (
+    MemberSessionsDependency,
+    RoomQueriesDependency,
+    RoomServiceDependency,
+)
 from agent_relay.room_models import (
     CreatedMember,
     CreateMember,
@@ -11,7 +15,10 @@ from agent_relay.room_models import (
     CreateTopic,
     Member,
     Message,
+    MessagePage,
     Room,
+    RoomEventPage,
+    RoomMetadata,
     RoomSnapshot,
     SessionCandidate,
     Topic,
@@ -22,8 +29,8 @@ router = APIRouter(prefix="/room", tags=["room"])
 
 
 @router.get("")
-def list_rooms(service: RoomServiceDependency) -> list[Room]:
-    return service.list_rooms()
+def list_rooms(queries: RoomQueriesDependency) -> list[Room]:
+    return queries.rooms()
 
 
 @router.post("", status_code=201)
@@ -34,15 +41,59 @@ def create_room(request: CreateRoom, service: RoomServiceDependency) -> Room:
 @router.get("/{room_id}")
 def get_room(
     room_id: str,
-    service: RoomServiceDependency,
+    queries: RoomQueriesDependency,
     topic_id: Annotated[str | None, Query()] = None,
+    member_id: Annotated[str | None, Query()] = None,
+    before_seq: Annotated[int | None, Query(ge=1)] = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
 ) -> RoomSnapshot:
-    return service.snapshot(room_id, topic_id)
+    return queries.snapshot(
+        room_id, topic_id, member_id=member_id, before_seq=before_seq, limit=limit
+    )
+
+
+@router.get("/{room_id}/metadata")
+def get_metadata(room_id: str, queries: RoomQueriesDependency) -> RoomMetadata:
+    return queries.metadata(room_id)
+
+
+@router.get("/{room_id}/message")
+def list_messages(
+    room_id: str,
+    queries: RoomQueriesDependency,
+    topic_id: Annotated[str | None, Query()] = None,
+    member_id: Annotated[str | None, Query()] = None,
+    before_seq: Annotated[int | None, Query(ge=1)] = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> MessagePage:
+    return queries.page(
+        room_id, topic_id=topic_id, member_id=member_id, before_seq=before_seq, limit=limit
+    )
+
+
+@router.get("/{room_id}/message/{message_id}")
+def get_message(room_id: str, message_id: str, queries: RoomQueriesDependency) -> Message:
+    return queries.message(room_id, message_id)
+
+
+@router.get("/{room_id}/event")
+def get_events(
+    room_id: str,
+    queries: RoomQueriesDependency,
+    after_event_id: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=200)] = 200,
+) -> RoomEventPage:
+    return queries.events(room_id, after_event_id, limit)
 
 
 @router.post("/{room_id}/message", status_code=201)
 def create_message(room_id: str, request: CreateMessage, service: RoomServiceDependency) -> Message:
     return service.post_message(room_id, request)
+
+
+@router.get("/{room_id}/publication/{publication_id}")
+def get_publication(room_id: str, publication_id: str, service: RoomServiceDependency) -> Message:
+    return service.publication(room_id, publication_id)
 
 
 @router.get("/{room_id}/session")

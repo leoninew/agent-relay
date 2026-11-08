@@ -1,14 +1,7 @@
 <template>
-  <svg
-    class="app-spinner"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    stroke-width="2"
-    aria-hidden="true"
-    focusable="false"
-  >
-    <circle class="app-spinner-track" cx="12" cy="12" r="9" />
-    <path d="M12 3a9 9 0 0 1 9 9" stroke-linecap="round" />
-  </svg>
+  <LoaderCircle class="app-spinner" aria-hidden="true" focusable="false" />
 </template>
+
+<script setup lang="ts">
+  import { LoaderCircle } from "@lucide/vue";
+</script>

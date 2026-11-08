@@ -6,7 +6,7 @@ import shutil
 import socket
 import subprocess
 from contextlib import ExitStack, suppress
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from threading import Thread
 from time import monotonic
@@ -37,6 +37,10 @@ class RpcDisconnected(RuntimeError):
     pass
 
 
+class QueueRejected(RpcRejected):
+    """The queue/add call itself was explicitly rejected."""
+
+
 @dataclass(frozen=True)
 class SessionInfo:
     id: str
@@ -47,10 +51,50 @@ class SessionInfo:
     archived: bool = False
 
     @property
-    def presence(self) -> Literal["available", "busy", "offline"]:
+    def usable(self) -> bool:
+        return not self.archived and self.status in {"idle", "active"}
+
+    @property
+    def unavailable_reason(self) -> str | None:
+        if self.archived:
+            return "会话已归档；请在 Codex 中恢复并接入共享 daemon 后刷新"
+        if self.status == "systemError":
+            return "会话状态异常；请在原 Codex 会话处理后刷新"
+        if not self.usable:
+            return (
+                "未接入当前消息通道，可能未运行或在独立实例中运行；"
+                "请使用共享 daemon 打开此会话后刷新"
+            )
+        return None
+
+    @property
+    def presence(self) -> Literal["available", "busy", "offline", "unknown"]:
+        if not self.usable:
+            return "unknown"
         if self.status == "idle":
             return "available"
-        return "busy" if self.status == "active" else "offline"
+        if self.status == "active":
+            return "busy"
+        return "unknown"
+
+
+@dataclass(frozen=True)
+class QueueHead:
+    id: str
+    client_message_id: str | None
+
+
+@dataclass(frozen=True)
+class ReceivedInput:
+    client_message_id: str
+    item_id: str
+    turn_id: str
+
+
+@dataclass(frozen=True)
+class InputPage:
+    inputs: tuple[ReceivedInput, ...]
+    next_cursor: str | None
 
 
 def _launch_command(command: list[str]) -> list[str]:
@@ -274,9 +318,114 @@ class CodexDriver:
                     if not isinstance(cursor, str) or not cursor or cursor in seen:
                         raise RpcDisconnected("Invalid Codex pagination cursor")
                     seen.add(cursor)
+            loaded: set[str] = set()
+            cursor = None
+            seen = set()
+            while True:
+                page = rpc.call("thread/loaded/list", {"cursor": cursor, "limit": 100})
+                ids = page.get("data")
+                if not isinstance(ids, list) or any(not isinstance(sid, str) for sid in ids):
+                    raise RpcDisconnected("Invalid loaded Codex session list")
+                loaded.update(ids)
+                cursor = page.get("nextCursor")
+                if cursor is None:
+                    break
+                if not isinstance(cursor, str) or not cursor or cursor in seen:
+                    raise RpcDisconnected("Invalid loaded Codex pagination cursor")
+                seen.add(cursor)
+            for sid, info in tuple(result.items()):
+                if sid not in loaded:
+                    result[sid] = replace(info, status="notLoaded")
+            for sid in sorted(loaded):
+                row = rpc.call("thread/read", {"threadId": sid, "includeTurns": False})
+                info = self._session(row.get("thread"))
+                if info.id != sid:
+                    raise RpcDisconnected("Loaded Codex session identity mismatch")
+                result[sid] = (
+                    replace(info, archived=result[sid].archived) if sid in result else info
+                )
         return list(result.values())
 
     def inspect(self, thread_id: str) -> SessionInfo:
         with ProxyRpc(self.command, self.timeout) as rpc:
             result = rpc.call("thread/read", {"threadId": thread_id, "includeTurns": False})
             return self._session(result.get("thread"))
+
+    def enqueue(self, thread_id: str, client_message_id: str, text: str) -> dict[str, object]:
+        with ProxyRpc(self.command, self.timeout) as rpc:
+            try:
+                result = rpc.call(
+                    "thread/queue/add",
+                    {
+                        "threadId": thread_id,
+                        "clientUserMessageId": client_message_id,
+                        "input": [{"type": "text", "text": text}],
+                    },
+                )
+            except RpcRejected as exc:
+                raise QueueRejected(str(exc)) from exc
+            receipt = result.get("queuedSubmission")
+            if (
+                not isinstance(receipt, dict)
+                or not isinstance(receipt.get("id"), str)
+                or not receipt["id"]
+                or receipt.get("clientUserMessageId") != client_message_id
+            ):
+                raise RpcDisconnected("Queue receipt does not match this submission")
+            return cast(dict[str, object], receipt)
+
+    def activation_candidate(self, thread_id: str) -> QueueHead | None:
+        with ProxyRpc(self.command, self.timeout) as rpc:
+            metadata = rpc.call("thread/read", {"threadId": thread_id, "includeTurns": False})
+            info = self._session(metadata.get("thread"))
+            if info.id != thread_id:
+                raise RpcDisconnected("Codex session identity mismatch")
+            if info.status != "idle":
+                return None
+            page = rpc.call("thread/queue/list", {"threadId": thread_id, "limit": 1})
+            data = page.get("data")
+            if not isinstance(data, list):
+                raise RpcDisconnected("Missing Codex queue list")
+            if not data:
+                return None
+            head = data[0]
+            if not isinstance(head, dict) or not isinstance(head.get("id"), str) or not head["id"]:
+                raise RpcDisconnected("Invalid Codex queue head")
+            client_id = head.get("clientUserMessageId")
+            return QueueHead(head["id"], client_id if isinstance(client_id, str) else None)
+
+    def activate(self, thread_id: str, queued_submission_id: str) -> str:
+        with ProxyRpc(self.command, self.timeout) as rpc:
+            result = rpc.call(
+                "thread/queue/start",
+                {"threadId": thread_id, "queuedSubmissionId": queued_submission_id},
+            )
+            turn = result.get("turn")
+            if not isinstance(turn, dict) or not isinstance(turn.get("id"), str) or not turn["id"]:
+                raise RpcDisconnected("Missing started Codex turn identity")
+            return cast(str, turn["id"])
+
+    def read_input_page(self, thread_id: str, cursor: str | None = None) -> InputPage:
+        with ProxyRpc(self.command, self.timeout) as rpc:
+            page = rpc.call(
+                "thread/items/list",
+                {"threadId": thread_id, "cursor": cursor, "limit": 100, "sortDirection": "desc"},
+            )
+            data = page.get("data")
+            if not isinstance(data, list):
+                raise RpcDisconnected("Missing Codex input history page")
+            inputs = []
+            for row in data:
+                if not isinstance(row, dict) or not isinstance(row.get("item"), dict):
+                    raise RpcDisconnected("Invalid Codex history item")
+                item = row["item"]
+                if item.get("type") != "userMessage" or not item.get("clientId"):
+                    continue
+                values = (item["clientId"], item.get("id"), row.get("turnId"))
+                if any(not isinstance(value, str) or not value for value in values):
+                    raise RpcDisconnected("Incomplete Codex input identity")
+                inputs.append(ReceivedInput(*(cast(str, value) for value in values)))
+            next_cursor = page.get("nextCursor")
+            if next_cursor is not None and (not isinstance(next_cursor, str) or not next_cursor):
+                raise RpcDisconnected("Invalid Codex input history cursor")
+            return InputPage(tuple(inputs), next_cursor)

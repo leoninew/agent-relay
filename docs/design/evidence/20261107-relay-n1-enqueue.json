@@ -1,0 +1,140 @@
+{
+  "observedAt": "2026-11-07T13:57:35.869697+00:00",
+  "workspace": "C:\\Users\\leon\\AppData\\Local\\Temp\\agent-relay-n1-73f6rlee",
+  "threadId": "01a1b64c-ddbd-7041-bd11-99876596752b",
+  "scope": "Newly owned thread only; no existing work sessions",
+  "publications": [
+    {
+      "id": "room-cef53fff55b3-msg-0001",
+      "publicationId": "d49be8e7-69f5-4acd-9587-9f681a97ddc9",
+      "seq": 1,
+      "senderId": null,
+      "senderName": "控制台",
+      "content": "仅验证入队，请只回复 Relay N1 received。",
+      "topicIds": [
+        "topic-51d89c8993bc"
+      ],
+      "mentionedMemberIds": [],
+      "recipientIds": [
+        "member-00f457d4346d"
+      ],
+      "replyToMessageId": null,
+      "createdAt": "2026-11-07T13:57:37.101460Z",
+      "deliveries": [
+        {
+          "id": "room-cef53fff55b3-msg-0001:member-00f457d4346d",
+          "targetMemberId": "member-00f457d4346d",
+          "targetSessionId": "01a1b64c-ddbd-7041-bd11-99876596752b",
+          "clientMessageId": "593511d6-07f7-4baf-841a-1914edb3ca9e",
+          "status": "queued",
+          "updatedAt": "2026-11-07T13:57:38.344749Z",
+          "queuedSubmissionId": "01a1b64c-ed7c-7e30-b2a7-0eeca0f4dcd5",
+          "receipt": {
+            "id": "01a1b64c-ed7c-7e30-b2a7-0eeca0f4dcd5",
+            "input": [
+              {
+                "type": "text",
+                "text": "聊天室消息\n{\"roomId\": \"room-cef53fff55b3\", \"roomName\": \"N1 probe\", \"messageId\": \"room-cef53fff55b3-msg-0001\", \"seq\": 1, \"senderId\": null, \"senderName\": \"控制台\", \"topicIds\": [\"topic-51d89c8993bc\"], \"mentionedMemberIds\": [], \"targetMemberId\": \"member-00f457d4346d\", \"replyToMessageId\": null, \"content\": \"仅验证入队，请只回复 Relay N1 received。\"}",
+                "text_elements": []
+              }
+            ],
+            "clientUserMessageId": "593511d6-07f7-4baf-841a-1914edb3ca9e"
+          },
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "room-cef53fff55b3-msg-0002",
+      "publicationId": "7d4c9e29-f016-4391-9b15-b57aa7b4f0f8",
+      "seq": 2,
+      "senderId": null,
+      "senderName": "控制台",
+      "content": "仅验证入队，请只回复 Relay N1 received。",
+      "topicIds": [],
+      "mentionedMemberIds": [
+        "member-00f457d4346d"
+      ],
+      "recipientIds": [
+        "member-00f457d4346d"
+      ],
+      "replyToMessageId": null,
+      "createdAt": "2026-11-07T13:57:37.115903Z",
+      "deliveries": [
+        {
+          "id": "room-cef53fff55b3-msg-0002:member-00f457d4346d",
+          "targetMemberId": "member-00f457d4346d",
+          "targetSessionId": "01a1b64c-ddbd-7041-bd11-99876596752b",
+          "clientMessageId": "d7e7633b-3369-41af-aa47-57b4041ec3f8",
+          "status": "queued",
+          "updatedAt": "2026-11-07T13:57:39.567281Z",
+          "queuedSubmissionId": "01a1b64c-f264-78f1-ba43-381cda508fb3",
+          "receipt": {
+            "id": "01a1b64c-f264-78f1-ba43-381cda508fb3",
+            "input": [
+              {
+                "type": "text",
+                "text": "聊天室消息\n{\"roomId\": \"room-cef53fff55b3\", \"roomName\": \"N1 probe\", \"messageId\": \"room-cef53fff55b3-msg-0002\", \"seq\": 2, \"senderId\": null, \"senderName\": \"控制台\", \"topicIds\": [], \"mentionedMemberIds\": [\"member-00f457d4346d\"], \"targetMemberId\": \"member-00f457d4346d\", \"replyToMessageId\": null, \"content\": \"仅验证入队，请只回复 Relay N1 received。\"}",
+                "text_elements": []
+              }
+            ],
+            "clientUserMessageId": "d7e7633b-3369-41af-aa47-57b4041ec3f8"
+          },
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "room-cef53fff55b3-msg-0003",
+      "publicationId": "2236a70b-a5f8-4a8a-8ea6-ac36977e432a",
+      "seq": 3,
+      "senderId": null,
+      "senderName": "控制台",
+      "content": "仅验证入队，请只回复 Relay N1 received。",
+      "topicIds": [
+        "topic-51d89c8993bc"
+      ],
+      "mentionedMemberIds": [
+        "member-00f457d4346d"
+      ],
+      "recipientIds": [
+        "member-00f457d4346d"
+      ],
+      "replyToMessageId": null,
+      "createdAt": "2026-11-07T13:57:37.130983Z",
+      "deliveries": [
+        {
+          "id": "room-cef53fff55b3-msg-0003:member-00f457d4346d",
+          "targetMemberId": "member-00f457d4346d",
+          "targetSessionId": "01a1b64c-ddbd-7041-bd11-99876596752b",
+          "clientMessageId": "ba079363-7546-4d5f-a1ac-ba361e4853f8",
+          "status": "queued",
+          "updatedAt": "2026-11-07T13:57:40.820583Z",
+          "queuedSubmissionId": "01a1b64c-f751-7991-8539-7984e1b51bff",
+          "receipt": {
+            "id": "01a1b64c-f751-7991-8539-7984e1b51bff",
+            "input": [
+              {
+                "type": "text",
+                "text": "聊天室消息\n{\"roomId\": \"room-cef53fff55b3\", \"roomName\": \"N1 probe\", \"messageId\": \"room-cef53fff55b3-msg-0003\", \"seq\": 3, \"senderId\": null, \"senderName\": \"控制台\", \"topicIds\": [\"topic-51d89c8993bc\"], \"mentionedMemberIds\": [\"member-00f457d4346d\"], \"targetMemberId\": \"member-00f457d4346d\", \"replyToMessageId\": null, \"content\": \"仅验证入队，请只回复 Relay N1 received。\"}",
+                "text_elements": []
+              }
+            ],
+            "clientUserMessageId": "ba079363-7546-4d5f-a1ac-ba361e4853f8"
+          },
+          "error": null
+        }
+      ]
+    }
+  ],
+  "allQueued": true,
+  "summary": {
+    "totalMessages": 3,
+    "queuedCount": 3,
+    "pendingCount": 0,
+    "submittingCount": 0,
+    "rejectedCount": 0,
+    "unknownCount": 0
+  },
+  "persistentLookupMatches": true
+}

@@ -7,7 +7,11 @@ from agent_relay.dependencies import application_settings, get_logger
 from agent_relay.errors import error_json_response
 from agent_relay.member_sessions import SessionUnavailableError
 from agent_relay.middleware import log_request_failure
-from agent_relay.room_service import RoomConflictError, RoomInputError, RoomNotFoundError
+from agent_relay.room_errors import (
+    RoomConflictError,
+    RoomInputError,
+    RoomNotFoundError,
+)
 
 
 def register_exception_handlers(app: FastAPI) -> None:

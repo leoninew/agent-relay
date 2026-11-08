@@ -31,7 +31,7 @@ class Member(RoomModel):
     session_id: str
     name: str
     initials: str
-    presence: Literal["available", "busy", "offline"]
+    presence: Literal["available", "busy", "offline", "unknown"]
     activity: str
     activity_source: str = "unknown"
     observed_at: datetime | None = None
@@ -44,7 +44,7 @@ class Session(RoomModel):
     name: str
     provider: str
     project_path: str
-    presence: Literal["available", "busy", "offline"]
+    presence: Literal["available", "busy", "offline", "unknown"]
 
     observed_at: datetime | None = None
 
@@ -52,6 +52,8 @@ class Session(RoomModel):
 class SessionCandidate(Session):
     archived: bool
     member_id: str | None = None
+    usable: bool
+    unavailable_reason: str | None
 
 
 class CreatedMember(Member):
@@ -61,12 +63,24 @@ class CreatedMember(Member):
 class Delivery(RoomModel):
     id: str
     target_member_id: str
-    status: Literal["pending", "queued", "delivered"]
+    target_session_id: str
+    client_message_id: str
+    status: Literal["pending", "submitting", "queued", "received", "rejected", "unknown"]
     updated_at: datetime
+    queued_at: datetime | None = None
+    received_at: datetime | None = None
+    received_item_id: str | None = None
+    received_turn_id: str | None = None
+    activation_attempted_at: datetime | None = None
+    note: str | None = None
+    queued_submission_id: str | None = None
+    receipt: dict[str, object] | None = None
+    error: str | None = None
 
 
 class Message(RoomModel):
     id: str
+    publication_id: str | None = None
     seq: int
     sender_id: str | None
     sender_name: str
@@ -81,23 +95,61 @@ class Message(RoomModel):
 
 class RoomSummary(RoomModel):
     total_messages: int
-    delivered_count: int
     queued_count: int
+    received_count: int = 0
     pending_count: int = 0
+    submitting_count: int = 0
+    rejected_count: int = 0
+    unknown_count: int = 0
 
 
-class RoomSnapshot(RoomModel):
+class MessagePage(RoomModel):
+    messages: list[Message]
+    has_more: bool
+    next_before_seq: int | None
+    has_newer: bool
+
+
+class TopicPosition(RoomModel):
+    member_id: str
+    topic_id: str
+    seq: int
+    updated_at: datetime | None
+    later_count: int
+
+
+class RoomMetadata(RoomModel):
     room: Room
     topics: list[Topic]
     members: list[Member]
     sessions: list[Session]
-    messages: list[Message]
+    positions: list[TopicPosition]
     summary: RoomSummary
+    event_id: int
+
+
+class RoomSnapshot(RoomMetadata, MessagePage):
+    pass
+
+
+class RoomEvent(RoomModel):
+    event_id: int
+    kind: Literal["room", "topic", "member", "session", "message", "delivery", "position"]
+    entity_id: str
+    message_id: str | None
+
+
+class RoomEventPage(RoomModel):
+    events: list[RoomEvent]
+    next_event_id: int
+    has_more: bool
+    resync_required: bool
 
 
 class CreateMessage(RoomModel):
     model_config = ConfigDict(extra="forbid")
 
+    publication_id: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
     content: str = Field(min_length=1, max_length=6000)
     topic_ids: list[str] = Field(default_factory=list)
     mentioned_member_ids: list[str] = Field(default_factory=list)

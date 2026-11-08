@@ -1,4 +1,4 @@
-"""Explicit schema upgrade entry point; never invoked by application startup."""
+"""Explicit database schema upgrade entry point."""
 
 import argparse
 import logging

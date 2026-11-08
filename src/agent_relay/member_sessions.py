@@ -4,13 +4,9 @@ from typing import Protocol, TypeVar
 from uuid import uuid4
 
 from agent_relay.drivers.codex import SessionInfo
+from agent_relay.room_errors import RoomConflictError, RoomInputError, RoomNotFoundError
 from agent_relay.room_models import CreatedMember, CreateMember, Member, Session, SessionCandidate
-from agent_relay.room_service import (
-    RoomConflictError,
-    RoomInputError,
-    RoomNotFoundError,
-    RoomService,
-)
+from agent_relay.room_service import RoomService
 from agent_relay.room_state import RoomState
 from agent_relay.room_store import SQLiteRoomStore
 
@@ -50,6 +46,7 @@ class MemberSessions:
             cwd = self._room(rooms, room_id).room.project_path
         sessions = self._metadata(self.driver.list_sessions)
         observed_at = datetime.now(UTC)
+        self.record_observations(room_id, sessions, observed_at)
         with self.store.transaction(write=False) as rooms:
             state = self._room(rooms, room_id)
             joined = {
@@ -69,9 +66,56 @@ class MemberSessions:
                     archived=info.archived,
                     observed_at=observed_at,
                     member_id=joined.get(info.id),
+                    usable=info.usable,
+                    unavailable_reason=info.unavailable_reason,
                 )
             )
         return result
+
+    def record_observations(
+        self, room_id: str, sessions: list[SessionInfo], observed_at: datetime
+    ) -> None:
+        """Update observation fields only; never overwrite names or subscriptions."""
+        by_id = {info.id: info for info in sessions}
+        with self.store.write() as connection:
+            rows = connection.execute(
+                "SELECT m.id, m.session_id, r.project_path FROM members m "
+                "JOIN rooms r ON r.id = m.room_id WHERE m.room_id = ? AND m.deleted_at IS NULL",
+                (room_id,),
+            ).fetchall()
+            for row in rows:
+                info = by_id.get(row["session_id"])
+                valid = (
+                    info is not None
+                    and RoomService._normalize_project_path(info.cwd) == row["project_path"]
+                )
+                presence = info.presence if valid and info is not None else "unknown"
+                activity = (
+                    self.activity(info)
+                    if valid and info is not None
+                    else "未能核验原会话的当前接入状态；请使用共享 daemon 打开后刷新"
+                )
+                connection.execute(
+                    "UPDATE members SET payload = json_set(payload, '$.presence', ?, "
+                    "'$.activity', ?, '$.activity_source', 'codex', '$.observed_at', ?) "
+                    "WHERE room_id = ? AND id = ? AND deleted_at IS NULL",
+                    (presence, activity, observed_at.isoformat(), room_id, row["id"]),
+                )
+                connection.execute(
+                    "UPDATE sessions SET payload = json_set(payload, '$.presence', ?, "
+                    "'$.observed_at', ?) WHERE room_id = ? AND id = ?",
+                    (presence, observed_at.isoformat(), room_id, row["session_id"]),
+                )
+
+    @staticmethod
+    def activity(info: SessionInfo) -> str:
+        return (
+            info.unavailable_reason
+            or {
+                "idle": "共享 Codex 会话空闲",
+                "active": "共享 Codex 会话忙碌，消息可排队",
+            }[info.status]
+        )
 
     @staticmethod
     def _validate_add(state: RoomState, request: CreateMember) -> None:
@@ -93,6 +137,8 @@ class MemberSessions:
             raise SessionUnavailableError("Codex 返回的会话身份不匹配")
         if RoomService._normalize_project_path(info.cwd) != cwd:
             raise RoomInputError("所选 Codex 会话不属于当前聊天室项目目录")
+        if not info.usable:
+            raise RoomConflictError(info.unavailable_reason or "所选 Codex 会话当前不可用")
         with self.store.transaction(write=True) as rooms:
             state = self._room(rooms, room_id)
             self._validate_add(state, request)
@@ -114,12 +160,7 @@ class MemberSessions:
                 name=request.name,
                 initials=request.name[:2].upper(),
                 presence=info.presence,
-                activity={
-                    "idle": "会话空闲",
-                    "active": "会话运行中",
-                    "notLoaded": "会话未加载",
-                    "systemError": "会话状态异常",
-                }[info.status],
+                activity=self.activity(info),
                 activity_source="codex",
                 observed_at=now,
                 topic_ids=list(dict.fromkeys(request.topic_ids)),

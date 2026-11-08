@@ -1,0 +1,19 @@
+{
+  "database": "D:\\SourceCodes\\mywork\\agent-relay\\data\\agent-relay.sqlite3",
+  "before": {
+    "rooms": 1,
+    "topics": 2,
+    "members": 2,
+    "messages": 1,
+    "deliveries": 1
+  },
+  "after": {
+    "rooms": 1,
+    "topics": 2,
+    "members": 2,
+    "messages": 1,
+    "deliveries": 1
+  },
+  "revision": "queue_delivery",
+  "foreignKeyCheck": []
+}

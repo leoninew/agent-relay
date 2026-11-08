@@ -7,6 +7,7 @@ import sys
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
@@ -16,8 +17,9 @@ from session_fixtures import FakeSessionDriver
 from agent_relay.api import create_app
 from agent_relay.config import load_settings
 from agent_relay.migrations import run_migrations
+from agent_relay.room_errors import RoomConflictError
 from agent_relay.room_models import CreateMessage, CreateRoom, CreateTopic, UpdateMember
-from agent_relay.room_service import RoomConflictError, RoomService
+from agent_relay.room_service import RoomService
 from agent_relay.room_store import SQLiteRoomStore
 
 pytestmark = pytest.mark.usefixtures("migrated_database")
@@ -44,7 +46,10 @@ def test_resources_and_historical_routing_survive_a_new_process(tmp_path: Path) 
     message = service.post_message(
         "agent-relay",
         CreateMessage(
-            content="持久化消息", topic_ids=["backend"], mentioned_member_ids=["frontend-worker"]
+            publication_id=str(uuid4()),
+            content="持久化消息",
+            topic_ids=["backend"],
+            mentioned_member_ids=["frontend-worker"],
         ),
     )
     service.update_member(
@@ -95,7 +100,10 @@ def test_concurrent_publications_have_unique_sequences_and_no_lost_writes(tmp_pa
     def publish(index: int) -> int:
         service = RoomService(SQLiteRoomStore(path))
         return service.post_message(
-            "agent-relay", CreateMessage(content=f"message {index}", topic_ids=["frontend"])
+            "agent-relay",
+            CreateMessage(
+                publication_id=str(uuid4()), content=f"message {index}", topic_ids=["frontend"]
+            ),
         ).seq
 
     with ThreadPoolExecutor(max_workers=4) as pool:
@@ -154,7 +162,8 @@ def test_delivery_write_failure_rolls_back_message_and_resource_changes(tmp_path
     reopened = RoomService(SQLiteRoomStore(path))
     assert reopened.snapshot("agent-relay") == before
     message = reopened.post_message(
-        "agent-relay", CreateMessage(content="after rollback", topic_ids=["backend"])
+        "agent-relay",
+        CreateMessage(publication_id=str(uuid4()), content="after rollback", topic_ids=["backend"]),
     )
     assert message.seq == before.messages[-1].seq + 1
 

@@ -1,13 +1,15 @@
 import logging
 from collections.abc import Iterator
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
 from room_fixtures import DemoRoomService, create_room_store
-from session_fixtures import FakeSessionDriver
+from session_fixtures import FakeQueueDriver, FakeSessionDriver
 
 from agent_relay.api import create_app
+from agent_relay.delivery_service import DeliveryService
 from agent_relay.drivers.codex import SessionInfo
 
 pytestmark = pytest.mark.usefixtures("migrated_database")
@@ -18,10 +20,19 @@ ROOM_ROUTE = "/api/room/agent-relay"
 @pytest.fixture
 def client(tmp_path: Path) -> Iterator[TestClient]:
     service = DemoRoomService(create_room_store(tmp_path / "room.sqlite3"))
-    with TestClient(
+    queue = FakeQueueDriver()
+    submitter = DeliveryService(
+        service.store, queue, logging.getLogger("tests.queue.seed"), 1, "http://testserver"
+    )
+    while work := service.store.claim_delivery():
+        submitter.submit(work)
+    # API contract checks read committed fixtures without racing the dispatcher.
+    # Dispatcher lifecycle and queued results are exercised in test_delivery_service.
+    test_client = TestClient(
         create_app(
             logging.getLogger("tests.agent_relay.room"),
             room_service=service,
+            queue_driver=queue,
             session_driver=FakeSessionDriver(
                 [
                     SessionInfo("acme-1", "D:/work/acme", "codex", "Acme", "idle"),
@@ -42,8 +53,9 @@ def client(tmp_path: Path) -> Iterator[TestClient]:
                 ]
             ),
         )
-    ) as test_client:
-        yield test_client
+    )
+    yield test_client
+    test_client.close()
 
 
 def test_room_returns_topics_members_messages_and_delivery_summary(client: TestClient) -> None:
@@ -59,8 +71,9 @@ def test_room_returns_topics_members_messages_and_delivery_summary(client: TestC
     tester = next(member for member in room["members"] if member["id"] == "test-worker")
     assert {"frontend", "backend"} <= set(tester["topicIds"])
     assert room["summary"]["totalMessages"] == len(room["messages"])
-    assert room["summary"]["pendingCount"] > 0
-    assert room["summary"]["queuedCount"] == room["summary"]["deliveredCount"] == 0
+    assert (
+        sum(room["summary"][key] for key in ("pendingCount", "submittingCount", "queuedCount")) > 0
+    )
     assert all(message["senderId"] not in message["recipientIds"] for message in room["messages"])
     assert response.headers["X-Request-Id"]
 
@@ -83,6 +96,7 @@ def test_post_message_deduplicates_topics_recipients_and_deliveries(client: Test
     response = client.post(
         f"{ROOM_ROUTE}/message",
         json={
+            "publicationId": str(uuid4()),
             "content": "  请核对跨话题消息契约  ",
             "topicIds": ["frontend", "backend", "frontend"],
             "mentionedMemberIds": ["test-worker", "frontend-worker", "test-worker"],
@@ -122,7 +136,11 @@ def test_topic_message_routes_to_subscribers_without_parsing_body_mentions(
 ) -> None:
     response = client.post(
         f"{ROOM_ROUTE}/message",
-        json={"content": "同步前端进展 @后端 Worker #后端", "topicIds": ["frontend"]},
+        json={
+            "publicationId": str(uuid4()),
+            "content": "同步前端进展 @后端 Worker #后端",
+            "topicIds": ["frontend"],
+        },
     )
 
     assert response.status_code == 201
@@ -145,6 +163,7 @@ def test_direct_mention_does_not_require_a_topic(
     response = client.post(
         f"{ROOM_ROUTE}/message",
         json={
+            "publicationId": str(uuid4()),
             "content": "请核对界面",
             "mentionedMemberIds": ["frontend-worker"],
             **topic_payload,
@@ -171,6 +190,7 @@ def test_mentions_combine_with_topic_subscribers_without_subscription_restrictio
     response = client.post(
         f"{ROOM_ROUTE}/message",
         json={
+            "publicationId": str(uuid4()),
             "content": "请前后端一起核对",
             "topicIds": ["backend"],
             "mentionedMemberIds": ["frontend-worker"],
@@ -204,6 +224,7 @@ def test_invalid_target_rejects_entire_message_without_partial_write(
         f"{ROOM_ROUTE}/message",
         headers={"X-Request-Id": "req_routing"},
         json={
+            "publicationId": str(uuid4()),
             "content": "检查后端接口",
             **targets,
         },
@@ -218,8 +239,13 @@ def test_invalid_target_rejects_entire_message_without_partial_write(
 @pytest.mark.parametrize(
     "payload",
     [
-        {"content": "   ", "topicIds": ["frontend"]},
-        {"content": "必须选择投递目标", "topicIds": [], "mentionedMemberIds": []},
+        {"publicationId": str(uuid4()), "content": "   ", "topicIds": ["frontend"]},
+        {
+            "publicationId": str(uuid4()),
+            "content": "必须选择投递目标",
+            "topicIds": [],
+            "mentionedMemberIds": [],
+        },
     ],
 )
 def test_message_requires_content_and_targets(
@@ -238,7 +264,11 @@ def test_empty_topic_requires_an_additional_member_and_does_not_save_an_unroutab
     before = client.get(ROOM_ROUTE).json()
     response = client.post(
         f"{ROOM_ROUTE}/message",
-        json={"content": "同步进展", "topicIds": [topic["id"]]},
+        json={
+            "publicationId": str(uuid4()),
+            "content": "同步进展",
+            "topicIds": [topic["id"]],
+        },
     )
 
     assert response.status_code == 422
@@ -248,6 +278,7 @@ def test_empty_topic_requires_an_additional_member_and_does_not_save_an_unroutab
     routed = client.post(
         f"{ROOM_ROUTE}/message",
         json={
+            "publicationId": str(uuid4()),
             "content": "同步进展",
             "topicIds": [topic["id"]],
             "mentionedMemberIds": ["backend-worker"],
@@ -266,7 +297,10 @@ def test_unknown_topic_returns_standard_not_found(client: TestClient) -> None:
 
 
 def test_different_database_paths_isolate_room_state(client: TestClient) -> None:
-    client.post(f"{ROOM_ROUTE}/message", json={"content": "本库消息", "topicIds": ["summary"]})
+    client.post(
+        f"{ROOM_ROUTE}/message",
+        json={"publicationId": str(uuid4()), "content": "本库消息", "topicIds": ["summary"]},
+    )
     with TestClient(create_app(logging.getLogger("tests.agent_relay.other_room"))) as other_client:
         assert other_client.get("/api/room").json() == []
         assert other_client.get(ROOM_ROUTE).status_code == 404
@@ -302,6 +336,7 @@ def test_create_room_add_topic_and_invite_member(client: TestClient) -> None:
     message_response = client.post(
         f"{room_route}/message",
         json={
+            "publicationId": str(uuid4()),
             "content": "开始联调",
             "topicIds": [topic_response.json()["id"]],
             "mentionedMemberIds": [member["id"]],
@@ -316,7 +351,11 @@ def test_create_room_add_topic_and_invite_member(client: TestClient) -> None:
 def test_member_edit_updates_subscriptions_used_by_message_routing(client: TestClient) -> None:
     previous = client.post(
         f"{ROOM_ROUTE}/message",
-        json={"content": "此前的后端约定", "topicIds": ["backend"]},
+        json={
+            "publicationId": str(uuid4()),
+            "content": "此前的后端约定",
+            "topicIds": ["backend"],
+        },
     ).json()
     assert "frontend-worker" not in previous["recipientIds"]
     updated = client.patch(
@@ -331,6 +370,7 @@ def test_member_edit_updates_subscriptions_used_by_message_routing(client: TestC
     sent = client.post(
         f"{ROOM_ROUTE}/message",
         json={
+            "publicationId": str(uuid4()),
             "content": "请检查后端契约",
             "topicIds": ["backend"],
         },
@@ -439,7 +479,11 @@ def test_edit_and_delete_nodes_preserve_history_and_release_names_and_bindings(
     assert joined.status_code == 201
     published = client.post(
         f"{ROOM_ROUTE}/message",
-        json={"content": "新的界面讨论", "topicIds": [topic.json()["id"]]},
+        json={
+            "publicationId": str(uuid4()),
+            "content": "新的界面讨论",
+            "topicIds": [topic.json()["id"]],
+        },
     )
     assert published.status_code == 201
     assert published.json()["recipientIds"] == [joined.json()["id"]]

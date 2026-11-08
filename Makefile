@@ -40,5 +40,5 @@ migrate webapi: export AGENT_RELAY_PROFILE = $(profile)
 migrate:
 	uv run --locked python -m agent_relay.migrate
 
-webapi: migrate
+webapi:
 	uv run --locked python -m agent_relay.server

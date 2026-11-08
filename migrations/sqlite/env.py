@@ -22,7 +22,9 @@ def run_migrations_offline() -> None:
         url=database_url(),
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        transactional_ddl=True,
     )
+    context.execute("PRAGMA foreign_keys=ON")
     with context.begin_transaction():
         context.run_migrations()
 
@@ -51,7 +53,7 @@ def run_migrations_online() -> None:
 
     try:
         with connectable.connect() as connection:
-            context.configure(connection=connection, target_metadata=None)
+            context.configure(connection=connection, target_metadata=None, transactional_ddl=True)
             with context.begin_transaction():
                 context.run_migrations()
     finally:

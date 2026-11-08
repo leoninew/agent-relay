@@ -8,21 +8,18 @@ import { roomFixture } from "../../fixtures/room";
 describe("MemberPanel", () => {
   afterEach(cleanup);
 
-  it("filters subscribed members by topic and keeps member actions available", async () => {
+  it("lists active senders independently of their subscriptions and exposes member actions", async () => {
     const snapshot = roomFixture();
-    const { rerender, emitted } = render(MemberPanel, { props: { snapshot, busy: false } });
-
-    await rerender({ selectedTopicId: "frontend" });
+    snapshot.members[2].topicIds = [];
+    snapshot.members[0].presence = "unknown";
+    snapshot.members[0].activity = "当前 Codex daemon 未加载会话；宿主运行状态未知";
+    const { emitted } = render(MemberPanel, { props: { snapshot, busy: false } });
     expect(screen.getByRole("button", { name: "筛选成员：前端 Worker" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "筛选成员：测试 Worker" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "筛选成员：后端 Worker" })).toBeNull();
-
-    await rerender({ selectedTopicId: "backend" });
     expect(screen.getByRole("button", { name: "筛选成员：后端 Worker" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "筛选成员：测试 Worker" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "筛选成员：前端 Worker" })).toBeNull();
-
-    await rerender({ selectedTopicId: undefined });
+    expect(screen.getByRole("button", { name: "筛选成员：前端 Worker" }).textContent).toContain(
+      "接入未确认",
+    );
     await fireEvent.click(screen.getByRole("button", { name: "筛选成员：前端 Worker" }));
     await fireEvent.click(screen.getByRole("button", { name: "编辑成员：前端 Worker" }));
     await fireEvent.click(screen.getByRole("button", { name: "删除成员：前端 Worker" }));

@@ -39,23 +39,39 @@ def test_profile_switch_does_not_pollute_process_environment(
 
 def test_os_environment_overrides_profile(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
     prepare_config(tmp_path)
-    (tmp_path / ".env.qa").write_text("AGENT_RELAY_GREETING__PREFIX=QA\n", encoding="utf-8")
+    (tmp_path / ".env.qa").write_text(
+        "AGENT_RELAY_GREETING__PREFIX=QA\nAGENT_RELAY_DATABASE__MIGRATE_ON_STARTUP=true\n",
+        encoding="utf-8",
+    )
     monkeypatch.setenv("AGENT_RELAY_PROFILE", "qa")
     monkeypatch.setenv("AGENT_RELAY_GREETING__PREFIX", "Override")
+    monkeypatch.setenv("AGENT_RELAY_SERVER__RELOAD_PATHS", '["src/**/*.py", ".env.qa"]')
+    monkeypatch.setenv("AGENT_RELAY_DATABASE__MIGRATE_ON_STARTUP", "false")
 
     settings = load_settings(tmp_path)
 
     assert settings.profile == "qa"
     assert settings.greeting.prefix == "Override"
+    assert settings.server.reload_paths == ["src/**/*.py", ".env.qa"]
+    assert settings.database.migrate_on_startup is False
 
 
-def test_dev_profile_enables_reload(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+def test_dev_profile_enables_reload_and_startup_migrations(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
     prepare_config(tmp_path)
-    (tmp_path / ".env.dev").write_text("AGENT_RELAY_SERVER__RELOAD=true\n", encoding="utf-8")
+    (tmp_path / ".env.dev").write_text(
+        "AGENT_RELAY_SERVER__RELOAD=true\n"
+        "AGENT_RELAY_DATABASE__MIGRATE_ON_STARTUP=true\n"
+        'AGENT_RELAY_SERVER__RELOAD_PATHS=["src/**/*.py", ".env.dev"]\n',
+        encoding="utf-8",
+    )
     monkeypatch.setenv("AGENT_RELAY_PROFILE", "dev")
 
     settings = load_settings(tmp_path)
     assert settings.server.reload is True
+    assert settings.server.reload_paths == ["src/**/*.py", ".env.dev"]
+    assert settings.database.migrate_on_startup is True
 
 
 def test_prod_profile_uses_defaults_without_loading_other_dotenv_files(
@@ -70,3 +86,4 @@ def test_prod_profile_uses_defaults_without_loading_other_dotenv_files(
 
     assert settings.profile == "prod"
     assert settings.server.reload is False
+    assert settings.database.migrate_on_startup is False

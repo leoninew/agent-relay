@@ -1,0 +1,154 @@
+{
+  "observedAt": "2026-11-08T05:04:36.702611+00:00",
+  "scope": "Temporary Relay database, production HTTP handlers, owned Codex session",
+  "workspace": "C:\\Users\\leon\\AppData\\Local\\Temp\\agent-relay-n5-http-ucr99lev",
+  "threadId": "01a1b98b-4d74-78a0-893a-254cedc6f04b",
+  "beforePublication": {
+    "type": "idle"
+  },
+  "candidate": {
+    "id": "01a1b98b-4d74-78a0-893a-254cedc6f04b",
+    "name": "[Relay N5 HTTP probe]",
+    "provider": "magpie",
+    "projectPath": "C:\\Users\\leon\\AppData\\Local\\Temp\\agent-relay-n5-http-ucr99lev",
+    "presence": "available",
+    "observedAt": "2026-11-08T05:04:49.585642Z",
+    "archived": false,
+    "memberId": null,
+    "usable": true,
+    "unavailableReason": null
+  },
+  "messages": [
+    {
+      "id": "room-3ee35d4bf161-msg-0001",
+      "publicationId": "e8dcb7736d024d4abb7bd50e56cac1bd",
+      "seq": 1,
+      "senderId": null,
+      "senderName": "控制台",
+      "content": "N5_TOPIC_43203dc3",
+      "topicIds": [
+        "topic-fba220e4d9a3"
+      ],
+      "mentionedMemberIds": [],
+      "recipientIds": [
+        "member-1ffd1f3c8919"
+      ],
+      "replyToMessageId": null,
+      "createdAt": "2026-11-08T05:04:50.844539Z",
+      "deliveries": [
+        {
+          "id": "room-3ee35d4bf161-msg-0001:member-1ffd1f3c8919",
+          "targetMemberId": "member-1ffd1f3c8919",
+          "targetSessionId": "01a1b98b-4d74-78a0-893a-254cedc6f04b",
+          "clientMessageId": "8c55dd29-e1b0-41af-891a-66cd8669e349",
+          "status": "received",
+          "updatedAt": "2026-11-08T05:04:55.731773Z",
+          "queuedAt": "2026-11-08T05:04:52.129189Z",
+          "receivedAt": "2026-11-08T05:04:55.731773Z",
+          "receivedItemId": "01a1b98b-8fc3-76e1-b300-953c27ee7fa7",
+          "receivedTurnId": "01a1b98b-8eb8-7c51-884d-e07f54673a1b",
+          "activationAttemptedAt": "2026-11-08T05:04:53.316226Z",
+          "note": null,
+          "queuedSubmissionId": "01a1b98b-859b-7ee3-acc6-df5f5496b4df",
+          "receipt": {
+            "id": "01a1b98b-859b-7ee3-acc6-df5f5496b4df",
+            "clientUserMessageId": "8c55dd29-e1b0-41af-891a-66cd8669e349"
+          },
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "room-3ee35d4bf161-msg-0002",
+      "publicationId": "dca414b8481f479f8bdc4525b3db81c1",
+      "seq": 2,
+      "senderId": null,
+      "senderName": "控制台",
+      "content": "N5_MENTION_9aad700a",
+      "topicIds": [],
+      "mentionedMemberIds": [
+        "member-1ffd1f3c8919"
+      ],
+      "recipientIds": [
+        "member-1ffd1f3c8919"
+      ],
+      "replyToMessageId": null,
+      "createdAt": "2026-11-08T05:04:50.929961Z",
+      "deliveries": [
+        {
+          "id": "room-3ee35d4bf161-msg-0002:member-1ffd1f3c8919",
+          "targetMemberId": "member-1ffd1f3c8919",
+          "targetSessionId": "01a1b98b-4d74-78a0-893a-254cedc6f04b",
+          "clientMessageId": "e82627b6-c206-4542-ad43-2a82ae89513d",
+          "status": "received",
+          "updatedAt": "2026-11-08T05:05:06.389409Z",
+          "queuedAt": "2026-11-08T05:04:53.453337Z",
+          "receivedAt": "2026-11-08T05:05:06.389409Z",
+          "receivedItemId": "01a1b98b-b6f7-7353-b96c-7d29e7a44f28",
+          "receivedTurnId": "01a1b98b-b591-7bc1-bf64-60d97b2ee3ab",
+          "activationAttemptedAt": null,
+          "note": null,
+          "queuedSubmissionId": "01a1b98b-8ac3-7b41-81d4-62a45f4372b5",
+          "receipt": {
+            "id": "01a1b98b-8ac3-7b41-81d4-62a45f4372b5",
+            "clientUserMessageId": "e82627b6-c206-4542-ad43-2a82ae89513d"
+          },
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "room-3ee35d4bf161-msg-0003",
+      "publicationId": "a0ae47aefab24e3aa8fd3385be1af8ef",
+      "seq": 3,
+      "senderId": null,
+      "senderName": "控制台",
+      "content": "N5_BOTH_ce4a3eb0",
+      "topicIds": [
+        "topic-fba220e4d9a3"
+      ],
+      "mentionedMemberIds": [
+        "member-1ffd1f3c8919"
+      ],
+      "recipientIds": [
+        "member-1ffd1f3c8919"
+      ],
+      "replyToMessageId": null,
+      "createdAt": "2026-11-08T05:04:50.981964Z",
+      "deliveries": [
+        {
+          "id": "room-3ee35d4bf161-msg-0003:member-1ffd1f3c8919",
+          "targetMemberId": "member-1ffd1f3c8919",
+          "targetSessionId": "01a1b98b-4d74-78a0-893a-254cedc6f04b",
+          "clientMessageId": "6b78aa72-32b3-4340-9bec-f1cd1fb0df60",
+          "status": "received",
+          "updatedAt": "2026-11-08T05:05:12.870899Z",
+          "queuedAt": "2026-11-08T05:04:54.652642Z",
+          "receivedAt": "2026-11-08T05:05:12.870899Z",
+          "receivedItemId": "01a1b98b-d14b-7123-ba06-8ccd09befe71",
+          "receivedTurnId": "01a1b98b-d00e-7480-8266-db0889fc5c32",
+          "activationAttemptedAt": null,
+          "note": null,
+          "queuedSubmissionId": "01a1b98b-8f7f-7552-8a8c-c3c4de642525",
+          "receipt": {
+            "id": "01a1b98b-8f7f-7552-8a8c-c3c4de642525",
+            "clientUserMessageId": "6b78aa72-32b3-4340-9bec-f1cd1fb0df60"
+          },
+          "error": null
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "totalMessages": 3,
+    "queuedCount": 0,
+    "receivedCount": 3,
+    "pendingCount": 0,
+    "submittingCount": 0,
+    "rejectedCount": 0,
+    "unknownCount": 0
+  },
+  "allOriginalInputsConfirmed": true,
+  "unconfirmedAfterReopen": {},
+  "archivedOwnedSession": true
+}

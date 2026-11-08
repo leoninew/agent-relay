@@ -7,6 +7,16 @@
       <h3>暂无消息</h3>
     </div>
     <template v-else>
+      <div v-if="hasMore" class="timeline-page-actions">
+        <AppButton
+          variant="plain"
+          :loading="loadingOlder"
+          loading-label="加载中…"
+          @click="$emit('loadOlder')"
+        >
+          加载更早消息
+        </AppButton>
+      </div>
       <template v-for="(message, index) in messages" :key="message.id">
         <div v-if="startsNewDay(index)" class="timeline-date">
           <span>{{ formatDate(message.createdAt) }}</span>
@@ -94,6 +104,9 @@
           </div>
         </article>
       </template>
+      <div v-if="hasNewer" class="timeline-page-actions">
+        <AppButton variant="plain" @click="$emit('latest')">返回最新消息</AppButton>
+      </div>
     </template>
   </div>
 </template>
@@ -102,6 +115,7 @@
   import { ref } from "vue";
 
   import AppIcon from "@/components/AppIcon.vue";
+  import AppButton from "@/components/AppButton.vue";
   import AppLoading from "@/components/AppLoading.vue";
   import MemberAvatar from "@/domains/room/MemberAvatar.vue";
   import type { Member, RoomMessage, Topic } from "@/services/roomApi";
@@ -115,15 +129,32 @@
     detailsOpen: boolean;
     loading: boolean;
     unavailable: boolean;
+    hasMore: boolean;
+    hasNewer: boolean;
+    loadingOlder: boolean;
   }>();
   const emit = defineEmits<{
     reply: [message: RoomMessage];
     reference: [messageId: string];
     select: [messageId: string];
     showDetails: [];
+    loadOlder: [];
+    latest: [];
   }>();
 
   const timeline = ref<HTMLElement>();
+  let previousScroll = 0;
+  let previousHeight = 0;
+
+  function rememberScroll(): void {
+    previousScroll = timeline.value?.scrollTop ?? 0;
+    previousHeight = timeline.value?.scrollHeight ?? 0;
+  }
+
+  function restoreScroll(): void {
+    if (timeline.value)
+      timeline.value.scrollTop = previousScroll + timeline.value.scrollHeight - previousHeight;
+  }
 
   function findMember(memberId: string | null): Member | undefined {
     return props.members.find((member) => member.id === memberId);
@@ -135,16 +166,19 @@
   }
 
   function deliverySummary(message: RoomMessage): string {
-    const enqueued = message.deliveries.filter(
-      (delivery) => delivery.status === "delivered",
-    ).length;
-    const queued = message.deliveries.filter((delivery) => delivery.status === "queued").length;
-    const pending = message.deliveries.filter((delivery) => delivery.status === "pending").length;
-    return [
-      pending ? `${pending} 待提交` : "",
-      enqueued ? `${enqueued} 已入队` : "",
-      queued ? `${queued} 排队中` : "",
-    ]
+    const labels = {
+      pending: "待提交",
+      submitting: "提交中",
+      queued: "已入队",
+      received: "已进入会话",
+      rejected: "已拒绝",
+      unknown: "结果未知",
+    } as const;
+    return Object.entries(labels)
+      .map(([status, label]) => {
+        const count = message.deliveries.filter((delivery) => delivery.status === status).length;
+        return count ? `${count} ${label}` : "";
+      })
       .filter(Boolean)
       .join(" · ");
   }
@@ -171,9 +205,9 @@
   function scrollToMessage(messageId: string): void {
     const index = props.messages.findIndex((message) => message.id === messageId);
     const article = timeline.value?.querySelectorAll<HTMLElement>("article")[index];
-    article?.scrollIntoView({ behavior: "smooth", block: "center" });
+    article?.scrollIntoView?.({ behavior: "smooth", block: "center" });
     article?.focus({ preventScroll: true });
   }
 
-  defineExpose({ scrollToEnd, scrollToMessage });
+  defineExpose({ scrollToEnd, scrollToMessage, rememberScroll, restoreScroll });
 </script>

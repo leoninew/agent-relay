@@ -1,4 +1,4 @@
-"""WebSocket-over-stdio fixture. Rejects all non-metadata Codex calls."""
+"""WebSocket-over-stdio fixture for metadata and queue submission."""
 
 import json
 import os
@@ -54,7 +54,13 @@ def row(thread_id: str) -> dict[str, Any]:
         "cwd": "D:/project",
         "modelProvider": "test-provider",
         "name": "Worker " + thread_id,
-        "status": {"type": "active" if thread_id == "one" else "notLoaded"},
+        "status": {
+            "type": "idle"
+            if mode == "delivery"
+            else "active"
+            if thread_id == "one"
+            else "notLoaded"
+        },
     }
 
 
@@ -95,9 +101,47 @@ try:
                 result["nextCursor"] = "same-cursor"
             if mode == "malformed":
                 result = {"data": "invalid"}
+        elif method == "thread/loaded/list":
+            result = {"data": ["one"], "nextCursor": None}
         elif method == "thread/read":
             assert params["includeTurns"] is False
             result = {"thread": row(params["threadId"])}
+        elif method == "thread/queue/list":
+            result = {
+                "data": [{"id": "queued-original", "clientUserMessageId": "stable-client-id"}],
+                "nextCursor": None,
+            }
+        elif method == "thread/queue/start":
+            assert params["queuedSubmissionId"] == "queued-original"
+            result = {"turn": {"id": "turn-original", "status": "inProgress"}}
+        elif method == "thread/items/list":
+            assert params["sortDirection"] == "desc"
+            result = {
+                "data": [
+                    {
+                        "turnId": "turn-original",
+                        "item": {"type": "agentMessage", "text": "ignored"},
+                    },
+                    {
+                        "turnId": "turn-original",
+                        "item": {
+                            "type": "userMessage",
+                            "id": "input-original",
+                            "clientId": "stable-client-id",
+                        },
+                    },
+                ],
+                "nextCursor": None,
+            }
+        elif method == "thread/queue/add":
+            assert params["threadId"] == "original-id"
+            assert params["input"] == [{"type": "text", "text": "hello from Relay"}]
+            result = {
+                "queuedSubmission": {
+                    "id": "queued-original",
+                    "clientUserMessageId": params["clientUserMessageId"],
+                }
+            }
         else:
             raise AssertionError("Unexpected operation: " + str(method))
         if mode == "reject" and method != "initialize":

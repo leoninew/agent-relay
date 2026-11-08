@@ -1,0 +1,83 @@
+{
+  "observedAt": "2026-11-07T15:15:38.703013+00:00",
+  "scope": "Only two newly owned threads; no dynamicTools registered",
+  "threadIds": [
+    "01a1b694-0d1f-7d40-bfa0-b64b239d8dfd",
+    "01a1b694-0d97-7c61-80f6-5cd5d16b4cb1"
+  ],
+  "workspace": "C:\\Users\\leon\\AppData\\Local\\Temp\\agent-relay-n2-m72vu9h1",
+  "consoleMessage": {
+    "id": "room-4313f1c94426-msg-0001",
+    "publicationId": "457c1fd0-d077-4733-89d5-c80f49527135",
+    "seq": 1,
+    "senderId": null,
+    "senderName": "控制台",
+    "content": "Publish exactly this JSON via publish.url, adding replyToMessageId from the envelope messageId: {\"publicationId\": \"e9e77492-dbd4-4c5e-89a7-63dafa4606ed\", \"content\": \"N2 real member publication\", \"topicIds\": [\"topic-22518bcb31ea\"]}",
+    "topicIds": [],
+    "mentionedMemberIds": [
+      "member-be0b15416da7"
+    ],
+    "recipientIds": [
+      "member-be0b15416da7"
+    ],
+    "replyToMessageId": null,
+    "createdAt": "2026-11-07T15:15:20.973650Z",
+    "deliveries": [
+      {
+        "id": "room-4313f1c94426-msg-0001:member-be0b15416da7",
+        "targetMemberId": "member-be0b15416da7",
+        "targetSessionId": "01a1b694-0d1f-7d40-bfa0-b64b239d8dfd",
+        "clientMessageId": "198b29cf-19f6-469a-8375-4f7cb2f53304",
+        "status": "queued",
+        "updatedAt": "2026-11-07T15:15:22.364089Z",
+        "queuedSubmissionId": "01a1b694-186b-78e3-b7c7-7517c9c36a9b",
+        "receipt": {
+          "id": "01a1b694-186b-78e3-b7c7-7517c9c36a9b",
+          "clientUserMessageId": "198b29cf-19f6-469a-8375-4f7cb2f53304"
+        },
+        "error": null
+      }
+    ]
+  },
+  "memberMessage": {
+    "id": "room-4313f1c94426-msg-0002",
+    "publicationId": "e9e77492-dbd4-4c5e-89a7-63dafa4606ed",
+    "seq": 2,
+    "senderId": "member-be0b15416da7",
+    "senderName": "Sender",
+    "content": "N2 real member publication",
+    "topicIds": [
+      "topic-22518bcb31ea"
+    ],
+    "mentionedMemberIds": [],
+    "recipientIds": [
+      "member-6052e4530793"
+    ],
+    "replyToMessageId": "room-4313f1c94426-msg-0001",
+    "createdAt": "2026-11-07T15:15:37.329610Z",
+    "deliveries": [
+      {
+        "id": "room-4313f1c94426-msg-0002:member-6052e4530793",
+        "targetMemberId": "member-6052e4530793",
+        "targetSessionId": "01a1b694-0d97-7c61-80f6-5cd5d16b4cb1",
+        "clientMessageId": "f2d6c12a-7442-4ae6-827b-29e3b143d92b",
+        "status": "queued",
+        "updatedAt": "2026-11-07T15:15:38.515300Z",
+        "queuedSubmissionId": "01a1b694-5777-7c72-908a-963dc83130ea",
+        "receipt": {
+          "id": "01a1b694-5777-7c72-908a-963dc83130ea",
+          "clientUserMessageId": "f2d6c12a-7442-4ae6-827b-29e3b143d92b"
+        },
+        "error": null
+      }
+    ]
+  },
+  "summary": {
+    "totalMessages": 2,
+    "queuedCount": 2,
+    "pendingCount": 0,
+    "submittingCount": 0,
+    "rejectedCount": 0,
+    "unknownCount": 0
+  }
+}

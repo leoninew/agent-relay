@@ -37,4 +37,4 @@ COPY --from=web-build /web/dist ./static
 
 USER appuser
 EXPOSE 80
-CMD ["sh", "-c", "python -m agent_relay.migrate && exec python -m agent_relay.server"]
+CMD ["python", "-m", "agent_relay.server"]
