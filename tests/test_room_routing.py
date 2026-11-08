@@ -37,8 +37,9 @@ def test_member_publication_excludes_sender_and_preserves_explicit_targets(
 ) -> None:
     service, state = member_room
 
-    message = service._append_message(
+    message = service._build_message(
         state,
+        seq=1,
         content="同步协作进展",
         topic_ids=topic_ids,
         mentioned_member_ids=mentions,
@@ -51,22 +52,22 @@ def test_member_publication_excludes_sender_and_preserves_explicit_targets(
     assert message.mentioned_member_ids == mentions
     assert message.recipient_ids == recipients
     assert [delivery.target_member_id for delivery in message.deliveries] == recipients
-    assert state.messages == [message]
 
 
 @pytest.mark.parametrize(
     ("topic_ids", "mentions"),
     [(["frontend"], []), ([], ["coordinator"]), (["frontend"], ["coordinator"])],
 )
-def test_publication_with_no_other_recipient_is_rejected_without_saving(
+def test_publication_with_no_other_recipient_is_rejected(
     member_room: tuple[RoomService, RoomState], topic_ids: list[str], mentions: list[str]
 ) -> None:
     service, state = member_room
     state.members = [member for member in state.members if member.id == "coordinator"]
 
     with pytest.raises(RoomInputError, match="排除发布成员后没有实际接收人"):
-        service._append_message(
+        service._build_message(
             state,
+            seq=1,
             content="只有自己接收",
             topic_ids=topic_ids,
             mentioned_member_ids=mentions,
@@ -75,8 +76,6 @@ def test_publication_with_no_other_recipient_is_rejected_without_saving(
             created_at=datetime.now(UTC),
         )
 
-    assert state.messages == []
-
 
 def test_invalid_explicit_target_is_not_hidden_by_sender_exclusion(
     member_room: tuple[RoomService, RoomState],
@@ -84,8 +83,9 @@ def test_invalid_explicit_target_is_not_hidden_by_sender_exclusion(
     service, state = member_room
 
     with pytest.raises(RoomInputError, match="@ 成员不存在"):
-        service._append_message(
+        service._build_message(
             state,
+            seq=1,
             content="不能部分投递",
             topic_ids=["frontend"],
             mentioned_member_ids=["coordinator", "missing"],
@@ -93,5 +93,3 @@ def test_invalid_explicit_target_is_not_hidden_by_sender_exclusion(
             sender_name="主会话",
             created_at=datetime.now(UTC),
         )
-
-    assert state.messages == []

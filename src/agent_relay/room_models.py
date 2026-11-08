@@ -56,10 +56,6 @@ class SessionCandidate(Session):
     unavailable_reason: str | None
 
 
-class CreatedMember(Member):
-    session: Session
-
-
 class Delivery(RoomModel):
     id: str
     target_member_id: str
@@ -128,6 +124,18 @@ class RoomMetadata(RoomModel):
     event_id: int
 
 
+class ChangedMember(Member):
+    metadata: RoomMetadata
+
+
+class CreatedMember(ChangedMember):
+    session: Session
+
+
+class ChangedTopic(Topic):
+    metadata: RoomMetadata
+
+
 class RoomSnapshot(RoomMetadata, MessagePage):
     pass
 
@@ -187,7 +195,7 @@ class UpdateMember(RoomModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(min_length=1, max_length=80)
-    topic_ids: list[str] = Field(min_length=1)
+    topic_ids: list[str]
 
     @field_validator("name")
     @classmethod

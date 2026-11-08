@@ -57,7 +57,7 @@ def test_directory_discovery_and_join_bind_the_original_session(tmp_path: Path) 
     assert members.candidates(room_id)[0].member_id == member.id
     current = rooms.snapshot(room_id).members[0]
     assert current.model_dump(exclude={"observed_at"}) == member.model_dump(
-        exclude={"session", "observed_at"}
+        exclude={"session", "metadata", "observed_at"}
     )
     assert current.observed_at is not None and member.observed_at is not None
     assert current.observed_at >= member.observed_at
@@ -147,20 +147,17 @@ def test_failed_local_commit_rolls_back_session_and_member(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     members, rooms, _, room_id, topic_id = setup(tmp_path)
-    original = members.store._save
+    original = members.store.save_resources
 
-    def fail(
-        connection: sqlite3.Connection, current: dict[str, RoomState], before: dict[str, RoomState]
-    ) -> None:
+    def fail(connection: sqlite3.Connection, current: RoomState, before: RoomState) -> None:
         original(connection, current, before)
         raise sqlite3.OperationalError("injected failure")
 
-    monkeypatch.setattr(members.store, "_save", fail)
+    monkeypatch.setattr(members.store, "save_resources", fail)
     with pytest.raises(sqlite3.OperationalError):
         members.add(room_id, request(topic_id))
     assert rooms.snapshot(room_id).members == []
-    with members.store.transaction(write=False) as saved:
-        assert saved[room_id].sessions == []
+    assert RoomQueries(rooms.store).metadata(room_id).sessions == []
 
 
 def test_api_preserves_bindings_on_restart_and_hides_upstream_errors(tmp_path: Path) -> None:

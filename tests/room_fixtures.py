@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from agent_relay.migrations import run_migrations
-from agent_relay.room_models import Member, Room, Session, Topic
+from agent_relay.room_models import Member, Message, Room, Session, Topic
 from agent_relay.room_service import RoomService
 from agent_relay.room_state import RoomState
 from agent_relay.room_store import SQLiteRoomStore
@@ -18,10 +18,15 @@ def create_room_store(path: Path) -> SQLiteRoomStore:
 class DemoRoomService(RoomService):
     def __init__(self, store: SQLiteRoomStore) -> None:
         super().__init__(store)
-        with self._transaction(write=True):
-            self._seed_rooms()
+        with store.write() as connection:
+            for state in self._seed_rooms():
+                store.insert_room(connection, state.room)
+                store.save_resources(connection, state, RoomState(room=state.room))
+                if state.room.id == "agent-relay":
+                    for message in self._seed_messages(state):
+                        store.insert_message(connection, state.room.id, message)
 
-    def _seed_rooms(self) -> None:
+    def _seed_rooms(self) -> list[RoomState]:
         room = Room(
             id="agent-relay",
             name="Agent Relay 开发室",
@@ -86,9 +91,7 @@ class DemoRoomService(RoomService):
                 for member in members
             ],
         )
-        self._rooms[room.id] = state
-        self._seed_messages(state)
-        self._rooms["housekeeper"] = RoomState(
+        other = RoomState(
             room=Room(
                 id="housekeeper",
                 name="Housekeeper",
@@ -97,8 +100,9 @@ class DemoRoomService(RoomService):
             ),
             topics=[],
         )
+        return [state, other]
 
-    def _seed_messages(self, state: RoomState) -> None:
+    def _seed_messages(self, state: RoomState) -> list[Message]:
         started_at = datetime.now(UTC) - timedelta(minutes=18)
         examples = [
             (
@@ -141,9 +145,11 @@ class DemoRoomService(RoomService):
             ),
         ]
         members = {member.id: member for member in state.members}
+        messages = []
         for index, (sender_id, topic_ids, mentioned_member_ids, content) in enumerate(examples):
-            self._append_message(
+            message = self._build_message(
                 state,
+                seq=index + 1,
                 content=content,
                 topic_ids=topic_ids,
                 mentioned_member_ids=mentioned_member_ids,
@@ -152,3 +158,5 @@ class DemoRoomService(RoomService):
                 created_at=started_at + timedelta(minutes=index * 3),
                 reply_to_message_id=f"{state.room.id}-msg-0004" if index == 4 else None,
             )
+            messages.append(message)
+        return messages

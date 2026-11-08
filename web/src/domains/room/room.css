@@ -891,6 +891,9 @@ button.topic-chip:hover {
 .dispatch-table td[data-state="queued"] {
   color: hsl(158 45% 34%);
 }
+.dispatch-table td[data-state="rejected"] {
+  color: hsl(var(--destructive));
+}
 .dispatch-table td[data-state="submitting"],
 .dispatch-table td[data-state="unknown"] {
   color: hsl(33 70% 42%);

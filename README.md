@@ -37,7 +37,7 @@ make web profile=dev
 
 ## 成员会话
 
-打开“添加成员”会查询聊天室项目目录下的真实 Codex 会话；选择会话，再填写成员名称和订阅话题。已加入会话仍显示并标明“已加入”，不可重复添加。只有当前共享 daemon 中未归档、状态为 idle/active 的会话可选，忙碌可排队；其他会话禁选并显示原因及处理办法。加载失败和空列表分别显示，可手动刷新。
+打开“添加成员”会查询聊天室项目目录下的真实 Codex 会话；选择会话，再填写成员名称和可选订阅话题。成员允许订阅零个或多个话题，无话题也可先加入并通过直接 @ 协作；删除最后订阅话题后仍可编辑成员和被 @。已加入会话仍显示并标明“已加入”，不可重复添加。只有当前共享 daemon 中未归档、状态为 idle/active 的会话可选，忙碌可排队；其他会话禁选并显示原因及处理办法。加载失败和空列表分别显示，可手动刷新。
 
 - 合并当前运行账户/Codex 环境可见的全部 provider、公开来源与分页，以及共享 daemon 的已加载记录，包含未加载历史和归档记录；归档标识不触发取消归档。Windows 路径按大小写/分隔符规范匹配，POSIX 保留大小写，不递归包含子目录。
 - `codex.command` 默认 `[codex, app-server, proxy]`，通过公开 proxy 连接共享 daemon。Windows 使用官方 npm 安装时自动通过 Node 启动同一安装下的 Codex 入口，无需另配原生路径；参数按列表传递，不经 shell 执行包装脚本。也可显式指定原生 `codex.exe` 或 Node 入口。
@@ -52,7 +52,7 @@ make web profile=dev
 
 新消息入队后，Relay 检查原会话是否空闲。若原队列首项有 Relay 的真实入队回执且尚未尝试启动，先持久记录一次尝试，再对该项调用 `queue/start`；不会越过外部队列项，也不会自动恢复未加载会话。后台只读核验输入，不反复启动队列覆盖用户之后的中断；中断后仍等待的消息请在原 Codex 会话继续。
 
-接口：`GET /api/room/{roomId}/session` 返回真实候选、`usable/unavailableReason`、观察时间及加入状态；`POST /api/room/{roomId}/member` 接受 `sessionId/name/topicIds`，成功返回 `201 Member`。重复会话/名称或所选会话当前不可用返回 `409`，跨项目/无效订阅返回 `422`，元数据服务不可用返回 `503`。移除原 `operationId` 创建流程和创建操作查询，不提供兼容分支。
+接口：`GET /api/room/{roomId}/session` 返回真实候选、`usable/unavailableReason`、观察时间及加入状态；`POST /api/room/{roomId}/member` 接受 `sessionId/name/topicIds`，`topicIds` 必填但可为 `[]`，成功返回 `201`，包含成员字段、原会话 `session` 及资源快照 `metadata`。成员和话题的创建、编辑、删除响应均附带同一写事务生成的 `metadata`，Web 直接应用保存结果；额外查询不作为保存成功的条件。内联话题独立创建，取消成员表单不会撤销已创建话题。重复会话/名称或所选会话当前不可用返回 `409`，跨项目/无效订阅返回 `422`，元数据服务不可用返回 `503`。移除原 `operationId` 创建流程和创建操作查询，不提供兼容分支。
 
 ## 消息发布与投递
 
@@ -131,7 +131,7 @@ uv run --locked agent-relay delivery list ROOM_ID MESSAGE_ID --status queued
 
 发布使用控制台身份，必须显式传入稳定 `--publication-id`；`--topic-id`、`--mention` 可重复传入，至少选话题或 @ 成员，实际接收人由服务端计算。响应丢失时用同一编号执行 `message publication` 只读找回。CLI 不自动重试、不跟随重定向，也不等待模型回复；HTTP 超时仅约束本次 HTTP 请求。写请求遇到网络中断、5xx 或取消时输出 `outcome: unknown`，先查询服务记录，再决定后续操作。
 
-成员加入和编辑按现有 API 要求填写名称及至少一个订阅话题，重复 `--topic-id` 指定多个订阅；加入绑定已有会话。更新话题需同时提供 `--name`、`--description`，空字符串可清空说明。话题和成员列表保留已删除记录的 `deletedAt`，用于解释历史消息。`room get` 和 `message list` 支持组合话题/发言成员筛选及 `--before-seq` 翻页；`room events` 按 `--after-event-id` 单次补取。`delivery list|get` 从指定消息读取当前投递，可按状态/接收成员筛选。
+CLI 使用 Click 组织命令与帮助。成员加入和编辑要求填写名称，`--topic-id` 可重复指定多个订阅，也可省略；省略时明确发送 `topicIds=[]`，加入时不订阅话题，编辑时清空订阅。加入绑定已有会话。资源写命令直接输出服务端资源字段及 `metadata`。更新话题需同时提供 `--name`、`--description`，空字符串可清空说明。话题和成员列表保留已删除记录的 `deletedAt`，用于解释历史消息。`room get` 和 `message list` 支持组合话题/发言成员筛选及 `--before-seq` 翻页；`room events` 按 `--after-event-id` 单次补取。`delivery list|get` 从指定消息读取当前投递，可按状态/接收成员筛选。
 
 成功在 stdout 输出 `{requestId, data}`；错误在 stderr 输出 `{requestId, error:{code,message,httpStatus?,outcome?}}`。`--help` 输出普通帮助文本；未获得服务端响应的本地错误，`requestId` 为 `null`。
 
@@ -151,6 +151,19 @@ make check
 make check fix=1
 make test
 ```
+
+本机运行链路集成验证使用既有共享 Codex daemon、临时数据库和专门新建的测试会话。先构建 Web，再从仓库根执行：
+
+```bash
+cd web
+corepack yarn build
+cd ..
+uv run --locked --no-sync python scripts/probes/relay_runtime_integration.py --run-model --output runtime-evidence.json
+```
+
+该探测通过真实 HTTP 和 Click CLI 验证零订阅直接 @、话题投递、叠加去重、发布找回、分页、成员查阅位置及 HTTP/WebSocket 事件补取；随后正常退出 Relay，以同一临时数据库启动新进程，比较持久记录和原会话输入。接收依据为匹配的输入项 ID/turn ID，不等待模型最终答复。它还检查已构建页面及静态资源的 HTTP 响应，不代替浏览器交互验收。
+
+`--run-model` 明确允许测试会话处理合成消息；结束时归档自有测试会话、关闭自有 Relay 和 proxy，临时目录及 JSON 证据保留以便核对。不启停开发服务器、不使用原业务数据库或工作会话，不运行容器测试。当前投递支持范围仍为本机同一共享 daemon。
 
 ## 配置与部署
 

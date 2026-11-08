@@ -1,7 +1,7 @@
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { addRoomTopic, fetchRoomMetadata } from "@/services/roomApi";
+import { addRoomTopic } from "@/services/roomApi";
 import { useRoomsStore } from "@/stores/rooms";
 
 import { roomFixture } from "../fixtures/room";
@@ -10,7 +10,6 @@ vi.mock("@/services/roomApi", () => ({
   addRoomTopic: vi.fn(),
   createRoom: vi.fn(),
   fetchRooms: vi.fn(),
-  fetchRoomMetadata: vi.fn(),
 }));
 
 describe("room state", () => {
@@ -19,7 +18,7 @@ describe("room state", () => {
     setActivePinia(createPinia());
   });
 
-  it("refreshes resources in one room while keeping messages and the applied cursor", async () => {
+  it("applies saved resources in one room while keeping messages and the applied cursor", async () => {
     const store = useRoomsStore();
     const first = roomFixture();
     const second = {
@@ -31,14 +30,16 @@ describe("room state", () => {
     store.sync(first);
     store.sync(second);
     const topic = { id: "review", name: "审查", description: "", messageCount: 0, deletedAt: null };
-    vi.mocked(addRoomTopic).mockResolvedValue(topic);
-    vi.mocked(fetchRoomMetadata).mockResolvedValue({
-      ...first,
-      topics: [...first.topics, topic],
-      positions: [
-        { ...first.positions[0], seq: 1, laterCount: 0, updatedAt: "2026-11-06T10:00:00Z" },
-      ],
-      eventId: 20,
+    vi.mocked(addRoomTopic).mockResolvedValue({
+      ...topic,
+      metadata: {
+        ...first,
+        topics: [...first.topics, topic],
+        positions: [
+          { ...first.positions[0], seq: 1, laterCount: 0, updatedAt: "2026-11-06T10:00:00Z" },
+        ],
+        eventId: 20,
+      },
     });
 
     await store.createTopic(first.room.id, { name: "审查", description: "" });

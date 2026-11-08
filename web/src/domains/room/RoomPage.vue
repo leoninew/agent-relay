@@ -187,6 +187,7 @@
     RoomMessage,
     MessageQuery,
     RoomEventPage,
+    RoomMetadata,
     SessionCandidate,
     Topic,
     UpdateMember,
@@ -601,18 +602,17 @@
     }
   }
 
-  async function refreshMetadata(roomId: string): Promise<void> {
-    const metadata = await fetchRoomMetadata(roomId);
+  function applyResourceChange(metadata: RoomMetadata): void {
     roomsStore.syncMetadata(metadata);
-    if (roomId === currentRoomId.value && clearDeletedFilters()) await loadRoom();
+    if (metadata.room.id === currentRoomId.value && clearDeletedFilters()) void loadRoom();
   }
 
   async function saveNewMember(request: CreateMember): Promise<void> {
     if (!currentRoomId.value) return;
     const roomId = currentRoomId.value;
     await saveSetup(async () => {
-      await addRoomMember(roomId, request);
-      await refreshMetadata(roomId);
+      const result = await addRoomMember(roomId, request);
+      applyResourceChange(result.metadata);
     }, "成员已加入");
   }
 
@@ -620,8 +620,8 @@
     if (!currentRoomId.value) return;
     const roomId = currentRoomId.value;
     await saveSetup(async () => {
-      await updateRoomMember(roomId, memberId, request);
-      await refreshMetadata(roomId);
+      const result = await updateRoomMember(roomId, memberId, request);
+      applyResourceChange(result.metadata);
     }, "成员已保存");
   }
 
@@ -629,8 +629,8 @@
     if (!currentRoomId.value) return;
     const roomId = currentRoomId.value;
     await saveSetup(async () => {
-      await addRoomTopic(roomId, request);
-      await refreshMetadata(roomId);
+      const result = await addRoomTopic(roomId, request);
+      applyResourceChange(result.metadata);
     }, "话题已创建");
   }
 
@@ -638,8 +638,8 @@
     if (!currentRoomId.value) return;
     const roomId = currentRoomId.value;
     await saveSetup(async () => {
-      await updateRoomTopic(roomId, topicId, request);
-      await refreshMetadata(roomId);
+      const result = await updateRoomTopic(roomId, topicId, request);
+      applyResourceChange(result.metadata);
     }, "话题已保存");
   }
 
@@ -650,9 +650,11 @@
     saving.value = true;
     setupError.value = null;
     try {
-      if (target.kind === "topic") await deleteRoomTopic(roomId, target.node.id);
-      else await deleteRoomMember(roomId, target.node.id);
-      await refreshMetadata(roomId);
+      const result =
+        target.kind === "topic"
+          ? await deleteRoomTopic(roomId, target.node.id)
+          : await deleteRoomMember(roomId, target.node.id);
+      applyResourceChange(result.metadata);
       toasts.success(target.kind === "topic" ? "话题已删除" : "成员已删除");
       if (currentRoomId.value === roomId) deleteTarget.value = undefined;
     } catch (caught) {

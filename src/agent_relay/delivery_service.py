@@ -96,16 +96,24 @@ class DeliveryService:
                 while not self.stop.is_set():
                     done = {future for future in active if future.done()}
                     for future in done:
-                        future.result()
+                        self.collect(future)
                         observations.pop(future, None)
                     active -= done
                     while len(active) < self.concurrency and not self.stop.is_set():
-                        work = self.store.claim_delivery()
+                        try:
+                            work = self.store.claim_delivery()
+                        except Exception:
+                            self.logger.exception("Unable to claim a delivery")
+                            break
                         if work is None:
                             break
                         active.add(pool.submit(self.submit, work))
                     if len(active) < self.concurrency and monotonic() >= next_observation:
-                        pending = self.store.unconfirmed_inputs()
+                        try:
+                            pending = self.store.unconfirmed_inputs()
+                        except Exception:
+                            self.logger.exception("Unable to read unconfirmed inputs")
+                            pending = {}
                         sessions = list(pending)
                         if sessions:
                             index = observation_offset % len(sessions)
@@ -122,7 +130,7 @@ class DeliveryService:
                         next_observation = monotonic() + 2
                     self.stop.wait(0.2)
                 for future in active:
-                    future.result()
+                    self.collect(future)
         except Exception:
             # No RPC is repeated after a local persistence/scheduler failure.
             self.logger.exception("Queue dispatcher stopped")
@@ -130,6 +138,27 @@ class DeliveryService:
             lock.release()
 
     def submit(self, work: ClaimedDelivery) -> None:
+        try:
+            self._submit(work)
+        except Exception:
+            self.logger.exception("Delivery processing failed delivery=%s", work.delivery.id)
+            delivery = work.delivery.model_copy(deep=True)
+            delivery.status = "unknown"
+            delivery.error = "本次投递处理失败，无法确认入队结果；不会自动重发"
+            delivery.updated_at = datetime.now(UTC)
+            # Only an unfinished submission can change. A saved queue receipt or
+            # received input must survive an error in the later activation step.
+            self.store.finish_delivery(work.room_id, delivery)
+
+    def collect(self, future: Future[None]) -> None:
+        try:
+            future.result()
+        except Exception:
+            # A local result-write failure belongs to this work item. Never
+            # repeat its RPC or stop processing unrelated deliveries.
+            self.logger.exception("Unable to finish a delivery task")
+
+    def _submit(self, work: ClaimedDelivery) -> None:
         delivery = work.delivery.model_copy(deep=True)
         envelope: dict[str, object] = {
             "roomId": work.room_id,

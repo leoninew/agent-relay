@@ -37,6 +37,7 @@ def test_server_uses_configured_startup(
             port=settings.server.port,
             reload=False,
             factory=True,
+            loop="asyncio:SelectorEventLoop",
             access_log=False,
             log_config=None,
         )

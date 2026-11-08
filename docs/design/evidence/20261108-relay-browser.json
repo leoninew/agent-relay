@@ -1,0 +1,459 @@
+{
+  "status": "core_ui_passed_with_findings",
+  "startedAt": "2026-11-08T10:10:36.303978+00:00",
+  "completedAt": "2026-11-08T10:33:58.743710+00:00",
+  "scope": "Jev browser interaction against production SPA/API, isolated SQLite and owned shared-daemon Codex sessions",
+  "browser": {
+    "tool": "jev-ultrafast-mcp 0.1.5",
+    "mode": "launch",
+    "version": "Chrome/156.0.8078.80",
+    "viewport": [
+      1280,
+      860
+    ],
+    "manualAuthorizationRequired": false
+  },
+  "workspace": "C:\\Users\\leon\\AppData\\Local\\Temp\\agent-relay-browser-1f1c6a2d",
+  "baseUrl": "http://127.0.0.1:3953",
+  "checks": [
+    "Created chatroom in browser; selected room name shown at upper right, no project path at upper left",
+    "Six actual directory sessions visible; archived and already joined sessions disabled; unavailable reason tooltip above modal",
+    "Added member without any topic subscription through browser",
+    "Published zero-subscription direct mention, topic only and topic plus mention through browser; each received exactly once",
+    "Delivery pending/submitting to received updated on page without manual reload",
+    "Edited member in independent dialog showing stored session card and no candidate refresh control",
+    "Created topic inline in member edit, auto-selected subscription, saved and used it for routing",
+    "Reply copied original topic and mention, preserved existing body; topic/member filters preserved draft and routing",
+    "Published reply preserving replyToMessageId, topicIds and mentionedMemberIds; reference link located original message",
+    "Edited member to zero subscriptions and published another successful direct mention",
+    "Created, renamed and deleted auxiliary topic via hover actions and modal dialogs",
+    "Added and deleted second member via browser without delivering messages to it",
+    "Reloaded page; five received messages, resource changes and delivery evidence restored",
+    "Message and delivery times include seconds; delivery time below status; matching member identity colors; only explicit mentions in @ section",
+    "Five delivery client IDs, received item IDs and turn IDs exactly match five original inputs; all other owned sessions have zero inputs"
+  ],
+  "findings": [
+    {
+      "id": "UI-01",
+      "kind": "usability",
+      "blockingCoreDelivery": false,
+      "detail": "At 1280x860 all six session cards fit, but the member dialog footer requires scrolling. Consider keeping actions visible; no product change made during acceptance.",
+      "status": "closed",
+      "resolutionEvidence": "20261108-relay-receive.json",
+      "resolution": "Fixed create/edit dialog footer; browser reverified at 1280x860."
+    },
+    {
+      "id": "RUN-01",
+      "kind": "shutdown_observation",
+      "blockingCoreDelivery": false,
+      "detail": "Stopping fixture with browser WebSockets open logged Windows ConnectionResetError and Uvicorn graceful timeout (Cancel 0 running tasks). Service exited 0, HTTP/dispatch threads stopped and submitter lock released. Root cause not isolated; do not claim warning-free browser-connected shutdown.",
+      "status": "closed",
+      "resolutionEvidence": "20261108-relay-receive.json",
+      "resolution": "Selected standard SelectorEventLoop in all HTTP entry points; browser-connected shutdown completed in 0.203 seconds with zero tasks/connections/errors."
+    }
+  ],
+  "toolLimitations": [
+    "Jev observer omits inputs whose type attribute is absent; used normal keyboard focus, copy/paste and clear buttons. No application code changed to accommodate the tool.",
+    "Jev CDP keepalive dropped during acceptance; new named tool session restored connection. Read-only HTTP check confirmed publication count before continuing; no blind resend.",
+    "Some screenshots timed out once and succeeded on the tool retry."
+  ],
+  "notExercised": [
+    "forced busy-turn timing",
+    "receiver native Codex/Orca UI",
+    "large-history browser pagination",
+    "rejected/unknown fault injection",
+    "containers",
+    "cross-host or non-shared-daemon routing"
+  ],
+  "artifacts": {
+    "six-candidates-tooltip.png": "20261108-relay-browser/six-candidates-tooltip.png",
+    "member-edit.png": "20261108-relay-browser/member-edit.png",
+    "three-routing-modes.png": "20261108-relay-browser/three-routing-modes.png",
+    "filter-preserves-draft.png": "20261108-relay-browser/filter-preserves-draft.png",
+    "received-evidence.png": "20261108-relay-browser/received-evidence.png"
+  },
+  "servedAssets": [
+    {
+      "path": "web/dist/assets/index-BdnQPc6K.js",
+      "sha256": "f1ddda5f5a6ddbfa901914ef9cf7a987355215f2e34b0f0a406af0da715f3706"
+    },
+    {
+      "path": "web/dist/assets/index-C804S5Eg.css",
+      "sha256": "0479ea08c379412729290816a5cce6869a2482a90d9549fb30f2205181446133"
+    }
+  ],
+  "room": {
+    "messages": [
+      {
+        "id": "room-c25f8523bfe7-msg-0001",
+        "publicationId": "4ede39ea-192b-4f9e-92c4-a9c9e4bf708b",
+        "seq": 1,
+        "senderId": null,
+        "senderName": "控制台",
+        "content": "浏览器验收：零订阅成员直接 @，请仅回复 OK。",
+        "topicIds": [],
+        "mentionedMemberIds": [
+          "member-5772c06dc777"
+        ],
+        "recipientIds": [
+          "member-5772c06dc777"
+        ],
+        "replyToMessageId": null,
+        "createdAt": "2026-11-08T10:17:23.005691Z",
+        "deliveries": [
+          {
+            "id": "room-c25f8523bfe7-msg-0001:member-5772c06dc777",
+            "targetMemberId": "member-5772c06dc777",
+            "targetSessionId": "01a1baa3-72f8-7bf2-baf6-269bbcfd49b6",
+            "clientMessageId": "c7ed50d8-e66f-4e27-bf17-ffe65b7af3eb",
+            "status": "received",
+            "updatedAt": "2026-11-08T10:17:26.708591Z",
+            "queuedAt": "2026-11-08T10:17:24.303292Z",
+            "receivedAt": "2026-11-08T10:17:26.708591Z",
+            "receivedItemId": "01a1baa9-ab05-74d1-943b-4abbf24fee6a",
+            "receivedTurnId": "01a1baa9-a831-79f1-a629-1b745c4bff9c",
+            "activationAttemptedAt": null,
+            "note": null,
+            "queuedSubmissionId": "01a1baa9-a828-70b0-9651-fe9425807d41",
+            "receipt": {
+              "id": "01a1baa9-a828-70b0-9651-fe9425807d41",
+              "clientUserMessageId": "c7ed50d8-e66f-4e27-bf17-ffe65b7af3eb"
+            },
+            "error": null
+          }
+        ]
+      },
+      {
+        "id": "room-c25f8523bfe7-msg-0002",
+        "publicationId": "ff08e92b-3e4a-41d3-a36f-02ee51448e60",
+        "seq": 2,
+        "senderId": null,
+        "senderName": "控制台",
+        "content": "浏览器验收：只有一个订阅成员的话题投递。",
+        "topicIds": [
+          "topic-7fcb36e5fcaa"
+        ],
+        "mentionedMemberIds": [],
+        "recipientIds": [
+          "member-5772c06dc777"
+        ],
+        "replyToMessageId": null,
+        "createdAt": "2026-11-08T10:19:30.110743Z",
+        "deliveries": [
+          {
+            "id": "room-c25f8523bfe7-msg-0002:member-5772c06dc777",
+            "targetMemberId": "member-5772c06dc777",
+            "targetSessionId": "01a1baa3-72f8-7bf2-baf6-269bbcfd49b6",
+            "clientMessageId": "0a35c022-6bcd-4d29-a417-0b17c49fb4c9",
+            "status": "received",
+            "updatedAt": "2026-11-08T10:19:34.564596Z",
+            "queuedAt": "2026-11-08T10:19:31.406458Z",
+            "receivedAt": "2026-11-08T10:19:34.564596Z",
+            "receivedItemId": "01a1baab-99e0-7ce3-a9f8-2bedb47c281b",
+            "receivedTurnId": "01a1baab-98bc-79c2-b11d-79ecf9e4a345",
+            "activationAttemptedAt": null,
+            "note": null,
+            "queuedSubmissionId": "01a1baab-98ba-7922-a493-320f1f170386",
+            "receipt": {
+              "id": "01a1baab-98ba-7922-a493-320f1f170386",
+              "clientUserMessageId": "0a35c022-6bcd-4d29-a417-0b17c49fb4c9"
+            },
+            "error": null
+          }
+        ]
+      },
+      {
+        "id": "room-c25f8523bfe7-msg-0003",
+        "publicationId": "f4077cbb-284c-48ed-8ae0-52cb4998c561",
+        "seq": 3,
+        "senderId": null,
+        "senderName": "控制台",
+        "content": "浏览器验收：话题与 @ 叠加，只投递一次。",
+        "topicIds": [
+          "topic-7fcb36e5fcaa"
+        ],
+        "mentionedMemberIds": [
+          "member-5772c06dc777"
+        ],
+        "recipientIds": [
+          "member-5772c06dc777"
+        ],
+        "replyToMessageId": null,
+        "createdAt": "2026-11-08T10:22:20.093060Z",
+        "deliveries": [
+          {
+            "id": "room-c25f8523bfe7-msg-0003:member-5772c06dc777",
+            "targetMemberId": "member-5772c06dc777",
+            "targetSessionId": "01a1baa3-72f8-7bf2-baf6-269bbcfd49b6",
+            "clientMessageId": "26af57e1-6c0e-4ba6-a1aa-1850ec1186a5",
+            "status": "received",
+            "updatedAt": "2026-11-08T10:22:22.538743Z",
+            "queuedAt": "2026-11-08T10:22:21.356381Z",
+            "receivedAt": "2026-11-08T10:22:22.538743Z",
+            "receivedItemId": "01a1baae-319c-7170-a561-b1245720fa46",
+            "receivedTurnId": "01a1baae-308d-7a83-9037-f6fe6625eb48",
+            "activationAttemptedAt": null,
+            "note": null,
+            "queuedSubmissionId": "01a1baae-308a-7f01-8d5d-85a1aacd302d",
+            "receipt": {
+              "id": "01a1baae-308a-7f01-8d5d-85a1aacd302d",
+              "clientUserMessageId": "26af57e1-6c0e-4ba6-a1aa-1850ec1186a5"
+            },
+            "error": null
+          }
+        ]
+      },
+      {
+        "id": "room-c25f8523bfe7-msg-0004",
+        "publicationId": "4c0dc3a2-5add-48a3-9b1b-3bbcaab88ecd",
+        "seq": 4,
+        "senderId": null,
+        "senderName": "控制台",
+        "content": "保留已有草稿，验证引用继承话题和 @。",
+        "topicIds": [
+          "topic-7fcb36e5fcaa"
+        ],
+        "mentionedMemberIds": [
+          "member-5772c06dc777"
+        ],
+        "recipientIds": [
+          "member-5772c06dc777"
+        ],
+        "replyToMessageId": "room-c25f8523bfe7-msg-0003",
+        "createdAt": "2026-11-08T10:25:54.676430Z",
+        "deliveries": [
+          {
+            "id": "room-c25f8523bfe7-msg-0004:member-5772c06dc777",
+            "targetMemberId": "member-5772c06dc777",
+            "targetSessionId": "01a1baa3-72f8-7bf2-baf6-269bbcfd49b6",
+            "clientMessageId": "17585b72-441a-4e42-832b-d7f99455b46b",
+            "status": "received",
+            "updatedAt": "2026-11-08T10:25:58.965628Z",
+            "queuedAt": "2026-11-08T10:25:55.840282Z",
+            "receivedAt": "2026-11-08T10:25:58.965628Z",
+            "receivedItemId": "01a1bab1-777a-7d40-9355-fb040b426ca2",
+            "receivedTurnId": "01a1bab1-766e-76b0-89bf-c37b051defc5",
+            "activationAttemptedAt": null,
+            "note": null,
+            "queuedSubmissionId": "01a1bab1-766d-7593-9e96-9c0cac017305",
+            "receipt": {
+              "id": "01a1bab1-766d-7593-9e96-9c0cac017305",
+              "clientUserMessageId": "17585b72-441a-4e42-832b-d7f99455b46b"
+            },
+            "error": null
+          }
+        ]
+      },
+      {
+        "id": "room-c25f8523bfe7-msg-0005",
+        "publicationId": "1ef44c7b-3eed-44fc-91a1-ff3aef1c3a8f",
+        "seq": 5,
+        "senderId": null,
+        "senderName": "控制台",
+        "content": "浏览器验收：编辑清空订阅后，仍可直接 @ 投递。",
+        "topicIds": [],
+        "mentionedMemberIds": [
+          "member-5772c06dc777"
+        ],
+        "recipientIds": [
+          "member-5772c06dc777"
+        ],
+        "replyToMessageId": null,
+        "createdAt": "2026-11-08T10:27:25.922770Z",
+        "deliveries": [
+          {
+            "id": "room-c25f8523bfe7-msg-0005:member-5772c06dc777",
+            "targetMemberId": "member-5772c06dc777",
+            "targetSessionId": "01a1baa3-72f8-7bf2-baf6-269bbcfd49b6",
+            "clientMessageId": "68d4c0d7-9d7d-4c3a-b89d-f4587e4bcca0",
+            "status": "received",
+            "updatedAt": "2026-11-08T10:27:29.613642Z",
+            "queuedAt": "2026-11-08T10:27:27.195921Z",
+            "receivedAt": "2026-11-08T10:27:29.613642Z",
+            "receivedItemId": "01a1bab2-dc94-79a3-a8c3-6d556f5320c1",
+            "receivedTurnId": "01a1bab2-db4e-77c0-9d05-e4a495ad66b6",
+            "activationAttemptedAt": null,
+            "note": null,
+            "queuedSubmissionId": "01a1bab2-db4d-70e1-9905-1ddcde464ca0",
+            "receipt": {
+              "id": "01a1bab2-db4d-70e1-9905-1ddcde464ca0",
+              "clientUserMessageId": "68d4c0d7-9d7d-4c3a-b89d-f4587e4bcca0"
+            },
+            "error": null
+          }
+        ]
+      }
+    ],
+    "hasMore": false,
+    "nextBeforeSeq": null,
+    "hasNewer": false,
+    "room": {
+      "id": "room-c25f8523bfe7",
+      "name": "浏览器验收主房间",
+      "projectPath": "c:/users/leon/appdata/local/temp/agent-relay-browser-1f1c6a2d",
+      "description": ""
+    },
+    "topics": [
+      {
+        "id": "topic-7fcb36e5fcaa",
+        "name": "验收话题",
+        "description": "",
+        "messageCount": 3,
+        "deletedAt": null
+      },
+      {
+        "id": "topic-7f4d6606adf3",
+        "name": "临时话题已编辑",
+        "description": "",
+        "messageCount": 0,
+        "deletedAt": "2026-11-08T10:29:04.629274Z"
+      }
+    ],
+    "members": [
+      {
+        "id": "member-5772c06dc777",
+        "sessionId": "01a1baa3-72f8-7bf2-baf6-269bbcfd49b6",
+        "name": "验收成员零订阅",
+        "initials": "验收",
+        "presence": "available",
+        "activity": "共享 Codex 会话空闲",
+        "activitySource": "codex",
+        "observedAt": "2026-11-08T10:29:20.721717Z",
+        "topicIds": [],
+        "deletedAt": null
+      },
+      {
+        "id": "member-c70b803e6146",
+        "sessionId": "01a1baa3-7389-7f31-b56b-69fd5e38c2d1",
+        "name": "[Relay browser acceptance 2]",
+        "initials": "[R",
+        "presence": "available",
+        "activity": "共享 Codex 会话空闲",
+        "activitySource": "codex",
+        "observedAt": "2026-11-08T10:29:54.734468Z",
+        "topicIds": [],
+        "deletedAt": "2026-11-08T10:30:56.275613Z"
+      }
+    ],
+    "sessions": [
+      {
+        "id": "01a1baa3-72f8-7bf2-baf6-269bbcfd49b6",
+        "name": "[Relay browser acceptance 1]",
+        "provider": "magpie",
+        "projectPath": "C:\\Users\\leon\\AppData\\Local\\Temp\\agent-relay-browser-1f1c6a2d",
+        "presence": "available",
+        "observedAt": "2026-11-08T10:29:20.721717Z"
+      },
+      {
+        "id": "01a1baa3-7389-7f31-b56b-69fd5e38c2d1",
+        "name": "[Relay browser acceptance 2]",
+        "provider": "magpie",
+        "projectPath": "C:\\Users\\leon\\AppData\\Local\\Temp\\agent-relay-browser-1f1c6a2d",
+        "presence": "available",
+        "observedAt": "2026-11-08T10:29:54.734468Z"
+      }
+    ],
+    "positions": [],
+    "summary": {
+      "totalMessages": 5,
+      "queuedCount": 0,
+      "receivedCount": 5,
+      "pendingCount": 0,
+      "submittingCount": 0,
+      "rejectedCount": 0,
+      "unknownCount": 0
+    },
+    "eventId": 47
+  },
+  "originalInputs": {
+    "01a1baa3-72f8-7bf2-baf6-269bbcfd49b6": [
+      {
+        "client_message_id": "0a35c022-6bcd-4d29-a417-0b17c49fb4c9",
+        "item_id": "01a1baab-99e0-7ce3-a9f8-2bedb47c281b",
+        "turn_id": "01a1baab-98bc-79c2-b11d-79ecf9e4a345"
+      },
+      {
+        "client_message_id": "17585b72-441a-4e42-832b-d7f99455b46b",
+        "item_id": "01a1bab1-777a-7d40-9355-fb040b426ca2",
+        "turn_id": "01a1bab1-766e-76b0-89bf-c37b051defc5"
+      },
+      {
+        "client_message_id": "26af57e1-6c0e-4ba6-a1aa-1850ec1186a5",
+        "item_id": "01a1baae-319c-7170-a561-b1245720fa46",
+        "turn_id": "01a1baae-308d-7a83-9037-f6fe6625eb48"
+      },
+      {
+        "client_message_id": "68d4c0d7-9d7d-4c3a-b89d-f4587e4bcca0",
+        "item_id": "01a1bab2-dc94-79a3-a8c3-6d556f5320c1",
+        "turn_id": "01a1bab2-db4e-77c0-9d05-e4a495ad66b6"
+      },
+      {
+        "client_message_id": "c7ed50d8-e66f-4e27-bf17-ffe65b7af3eb",
+        "item_id": "01a1baa9-ab05-74d1-943b-4abbf24fee6a",
+        "turn_id": "01a1baa9-a831-79f1-a629-1b745c4bff9c"
+      }
+    ],
+    "01a1baa3-7389-7f31-b56b-69fd5e38c2d1": [],
+    "01a1baa3-73dd-7250-827f-0fe3eb870dcb": [],
+    "01a1baa3-7430-7eb0-9d81-271ae8424ba1": [],
+    "01a1baa3-74cd-7770-b568-ce5ab4bbcfa8": []
+  },
+  "cleanup": {
+    "services": [
+      {
+        "baseUrl": "http://127.0.0.1:3953",
+        "pid": 85320,
+        "httpThreadStopped": true,
+        "dispatchThreadStopped": true,
+        "exitCode": 0,
+        "submitterLockReleased": true
+      }
+    ],
+    "sessions": [
+      {
+        "id": "01a1baa3-72f8-7bf2-baf6-269bbcfd49b6",
+        "archived": true,
+        "note": null
+      },
+      {
+        "id": "01a1baa3-7389-7f31-b56b-69fd5e38c2d1",
+        "archived": true,
+        "note": null
+      },
+      {
+        "id": "01a1baa3-73dd-7250-827f-0fe3eb870dcb",
+        "archived": true,
+        "note": null
+      },
+      {
+        "id": "01a1baa3-7430-7eb0-9d81-271ae8424ba1",
+        "archived": true,
+        "note": null
+      },
+      {
+        "id": "01a1baa3-74cd-7770-b568-ce5ab4bbcfa8",
+        "archived": true,
+        "note": null
+      },
+      {
+        "id": "01a1baa3-7556-7192-abad-d9e7aa4e2a21",
+        "archived": true,
+        "note": "Archived before acceptance to test disabled candidate; final read reported no rollout."
+      }
+    ],
+    "proxyExited": true,
+    "temporaryCollectorError": {
+      "type": "TypeError",
+      "message": "list indices must be integers or slices, not str"
+    },
+    "collectorErrorExplanation": "Temporary runner incorrectly expected a data wrapper from raw HTTP JSON during teardown; independent observations.json had already validated the complete snapshot and original inputs. Runner exited 1, service subprocess exited 0 and cleanup finally completed.",
+    "browserDoctorAfterClose": {
+      "connected": false,
+      "connection": "idle",
+      "sessions": []
+    },
+    "fixtureListenerClosed": true
+  },
+  "productFilesChanged": false,
+  "resolutionEvidence": "20261108-relay-receive.json"
+}

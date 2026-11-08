@@ -139,6 +139,17 @@ describe("RoomSetupDialog form", () => {
     ]);
   });
 
+  it("adds a member without subscriptions when the room has no topics", async () => {
+    const { rerender, emitted } = renderForm();
+    await rerender({ mode: "member", topics: [] });
+    await fireEvent.click(screen.getByRole("radio", { name: /^已有会话/ }));
+    await fireEvent.click(screen.getByRole("button", { name: "添加成员" }));
+
+    expect(emitted().createMember).toEqual([
+      [{ sessionId: "session-1", name: "已有会话", topicIds: [] }],
+    ]);
+  });
+
   it("distinguishes empty sessions from loading and request failure and can refresh", async () => {
     const { rerender, emitted } = renderForm();
     await rerender({ mode: "member", sessions: [], sessionsLoading: true });

@@ -1,3 +1,33 @@
+.app-dialog:has(> .setup-form) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.app-dialog:has(> .setup-form) > .dialog-heading {
+  flex-shrink: 0;
+}
+
+.app-dialog > .setup-form {
+  min-height: 0;
+  overflow: hidden;
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
+.setup-form-content {
+  display: grid;
+  gap: 18px;
+  min-height: 0;
+  padding: 2px;
+  margin: -2px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+.app-dialog > .setup-form > .dialog-actions {
+  margin-top: 0;
+}
+
 .setup-form .session-options {
   align-content: start;
   max-height: 456px;

@@ -5,7 +5,7 @@
     :aria-invalid="!!error"
     :aria-describedby="`${idPrefix}-topics-error`"
   >
-    <legend>订阅话题 <span class="required-mark">*</span></legend>
+    <legend>订阅话题（可选）</legend>
     <AppCheckboxGroup
       v-model="topicIds"
       class="setup-topics"

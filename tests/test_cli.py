@@ -107,14 +107,17 @@ def test_topic_create_edit_and_delete_share_metadata(cli: CliHarness) -> None:
         "topic", "create", ROOM, "--name", "接口协作", "--description", "约定 HTTP 行为"
     )
     topic_id = topic["id"]
+    assert topic.pop("metadata") == cli.run("room", "metadata", ROOM)
     assert topic in cli.run("topic", "list", ROOM)
     updated = cli.run(
         "topic", "update", ROOM, topic_id, "--name", "接口讨论", "--description", "更新说明"
     )
     assert updated["description"] == "更新说明"
+    assert updated.pop("metadata") == cli.run("room", "metadata", ROOM)
     assert updated in cli.run("room", "metadata", ROOM)["topics"]
     deleted = cli.run("topic", "delete", ROOM, topic_id)
     assert deleted["deletedAt"]
+    assert deleted.pop("metadata") == cli.run("room", "metadata", ROOM)
     assert deleted in cli.run("topic", "list", ROOM)
 
 
@@ -151,10 +154,35 @@ def test_member_discovery_binding_edit_and_delete_use_existing_sessions(cli: Cli
     )
     assert updated["sessionId"] == "candidate"
     assert updated["topicIds"] == ["backend"]
+    assert updated.pop("metadata") == cli.run("room", "metadata", ROOM)
     assert updated in cli.run("member", "list", ROOM)
     deleted = cli.run("member", "delete", ROOM, member_id)
     assert deleted["deletedAt"]
+    assert deleted.pop("metadata") == cli.run("room", "metadata", ROOM)
     assert deleted in cli.run("member", "list", ROOM)
+
+
+def test_member_can_join_and_clear_subscriptions_without_topic_arguments(cli: CliHarness) -> None:
+    created = cli.run("member", "add", ROOM, "--session-id", "candidate", "--name", "直接协作成员")
+    assert created["topicIds"] == []
+    member_id = created["id"]
+    cli.run("member", "update", ROOM, member_id, "--name", "协作成员", "--topic-id", "frontend")
+    updated = cli.run("member", "update", ROOM, member_id, "--name", "直接协作成员")
+    assert updated["topicIds"] == []
+    assert updated["metadata"] == cli.run("room", "metadata", ROOM)
+    message = cli.run(
+        "message",
+        "publish",
+        ROOM,
+        "--publication-id",
+        "cli-zero-subscriptions",
+        "--content",
+        "直接协作",
+        "--mention",
+        member_id,
+    )
+    assert message["recipientIds"] == [member_id]
+    assert message["deliveries"][0]["targetSessionId"] == "candidate"
 
 
 @pytest.mark.parametrize(

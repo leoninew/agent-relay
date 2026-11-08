@@ -37,6 +37,8 @@ def main() -> None:
         port=server.port,
         reload=server.reload,
         factory=True,
+        # Windows Proactor socket resets can prevent Server.wait_closed() from finishing.
+        loop="asyncio:SelectorEventLoop",
         access_log=False,
         log_config=None,
     )

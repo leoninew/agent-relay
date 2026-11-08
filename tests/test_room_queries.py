@@ -51,8 +51,8 @@ def client(service: DemoRoomService) -> Iterator[TestClient]:
 
 
 def seed_history(service: DemoRoomService) -> None:
-    with service._transaction(write=True):
-        state = service._rooms["agent-relay"]
+    with service.store.write() as connection:
+        state = RoomQueries(service.store).resources_in(connection, "agent-relay")
         for seq in range(7, 126):
             sender = "backend-worker" if seq % 2 else "frontend-worker"
             topics = (
@@ -62,8 +62,9 @@ def seed_history(service: DemoRoomService) -> None:
                 if seq % 3 == 1
                 else ["backend"]
             )
-            service._append_message(
+            message = service._build_message(
                 state,
+                seq=seq,
                 content=f"历史消息 {seq}",
                 topic_ids=topics,
                 mentioned_member_ids=[],
@@ -71,6 +72,7 @@ def seed_history(service: DemoRoomService) -> None:
                 sender_name=sender,
                 created_at=datetime.now(UTC),
             )
+            service.store.insert_message(connection, state.room.id, message)
 
 
 def test_keyset_history_keeps_three_pages_stable_during_new_publication(

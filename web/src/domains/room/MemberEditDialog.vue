@@ -6,50 +6,51 @@
     @close="$emit('close')"
   >
     <form class="setup-form" novalidate @submit.prevent="submit">
-      <div class="setup-field">
-        <label id="edit-member-session-label">关联会话</label>
-        <div class="session-options" role="group" aria-labelledby="edit-member-session-label">
-          <div class="session-option-row">
-            <div class="session-option linked-session-card">
-              <span class="session-option-label">
-                <strong :title="linkedSession?.name">
-                  {{ linkedSession?.name ?? "会话名称不可用" }}
-                </strong>
-                <span :title="member?.sessionId">{{ member?.sessionId }}</span>
+      <div class="setup-form-content">
+        <div class="setup-field">
+          <label id="edit-member-session-label">关联会话</label>
+          <div class="session-options" role="group" aria-labelledby="edit-member-session-label">
+            <div class="session-option-row">
+              <div class="session-option linked-session-card">
+                <span class="session-option-label">
+                  <strong :title="linkedSession?.name">
+                    {{ linkedSession?.name ?? "会话名称不可用" }}
+                  </strong>
+                  <span :title="member?.sessionId">{{ member?.sessionId }}</span>
+                </span>
+              </div>
+              <span v-if="member" class="session-option-meta">
+                {{ presenceLabel[member.presence] }}
               </span>
             </div>
-            <span v-if="member" class="session-option-meta">
-              {{ presenceLabel[member.presence] }}
-            </span>
           </div>
         </div>
-      </div>
-      <div class="setup-field">
-        <label for="edit-member-name">成员名称 <span class="required-mark">*</span></label>
-        <AppInput
-          id="edit-member-name"
-          v-model="name"
-          :maxlength="80"
+        <div class="setup-field">
+          <label for="edit-member-name">成员名称 <span class="required-mark">*</span></label>
+          <AppInput
+            id="edit-member-name"
+            v-model="name"
+            :maxlength="80"
+            :disabled="saving"
+            :invalid="!!errors.name"
+            clear-label="清空名称"
+            aria-describedby="edit-member-name-error"
+            autocomplete="off"
+          />
+          <p v-if="errors.name" id="edit-member-name-error" class="field-error">
+            {{ errors.name }}
+          </p>
+        </div>
+        <MemberTopicsField
+          v-model="topicIds"
+          v-model:busy="topicSaving"
+          id-prefix="edit-member"
+          :topics="topics"
+          :room-id="roomId"
           :disabled="saving"
-          :invalid="!!errors.name"
-          clear-label="清空名称"
-          aria-describedby="edit-member-name-error"
-          autocomplete="off"
         />
-        <p v-if="errors.name" id="edit-member-name-error" class="field-error">
-          {{ errors.name }}
-        </p>
+        <p v-if="error" class="field-error" role="alert">{{ error }}</p>
       </div>
-      <MemberTopicsField
-        v-model="topicIds"
-        v-model:busy="topicSaving"
-        id-prefix="edit-member"
-        :topics="topics"
-        :room-id="roomId"
-        :disabled="saving"
-        :error="errors.topics"
-      />
-      <p v-if="error" class="field-error" role="alert">{{ error }}</p>
       <footer class="dialog-actions">
         <AppButton variant="secondary" :disabled="saving || topicSaving" @click="$emit('close')">
           取消
@@ -108,15 +109,11 @@
   watch(name, (value) => {
     if (value.trim()) delete errors.value.name;
   });
-  watch(topicIds, (value) => {
-    if (value.length) delete errors.value.topics;
-  });
 
   function submit(): void {
     if (!props.member || props.saving || topicSaving.value) return;
     errors.value = {};
     if (!name.value.trim()) errors.value.name = "请输入名称";
-    if (!topicIds.value.length) errors.value.topics = "请至少选择一个订阅话题";
     if (Object.keys(errors.value).length) return;
     emit("save", props.member.id, { name: name.value.trim(), topicIds: [...topicIds.value] });
   }

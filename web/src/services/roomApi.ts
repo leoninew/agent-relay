@@ -142,6 +142,9 @@ export type SessionCandidate = Session & {
   unavailableReason: string | null;
 };
 export type CreateTopic = { name: string; description: string };
+export type ChangedMember = Member & { metadata: RoomMetadata };
+export type CreatedMember = ChangedMember & { session: Session };
+export type ChangedTopic = Topic & { metadata: RoomMetadata };
 
 export async function fetchRooms(): Promise<Room[]> {
   const { data } = await apiClient.get<Room[]>("/api/room");
@@ -242,11 +245,8 @@ export async function fetchPublication(
   return data;
 }
 
-export async function addRoomMember(
-  roomId: string,
-  request: CreateMember,
-): Promise<Member & { session: Session }> {
-  const { data } = await apiClient.post<Member & { session: Session }>(
+export async function addRoomMember(roomId: string, request: CreateMember): Promise<CreatedMember> {
+  const { data } = await apiClient.post<CreatedMember>(
     `/api/room/${encodeURIComponent(roomId)}/member`,
     request,
   );
@@ -264,16 +264,16 @@ export async function updateRoomMember(
   roomId: string,
   memberId: string,
   request: UpdateMember,
-): Promise<Member> {
-  const { data } = await apiClient.patch<Member>(
+): Promise<ChangedMember> {
+  const { data } = await apiClient.patch<ChangedMember>(
     `/api/room/${encodeURIComponent(roomId)}/member/${encodeURIComponent(memberId)}`,
     request,
   );
   return data;
 }
 
-export async function addRoomTopic(roomId: string, request: CreateTopic): Promise<Topic> {
-  const { data } = await apiClient.post<Topic>(
+export async function addRoomTopic(roomId: string, request: CreateTopic): Promise<ChangedTopic> {
+  const { data } = await apiClient.post<ChangedTopic>(
     `/api/room/${encodeURIComponent(roomId)}/topic`,
     request,
   );
@@ -284,23 +284,23 @@ export async function updateRoomTopic(
   roomId: string,
   topicId: string,
   request: CreateTopic,
-): Promise<Topic> {
-  const { data } = await apiClient.patch<Topic>(
+): Promise<ChangedTopic> {
+  const { data } = await apiClient.patch<ChangedTopic>(
     `/api/room/${encodeURIComponent(roomId)}/topic/${encodeURIComponent(topicId)}`,
     request,
   );
   return data;
 }
 
-export async function deleteRoomTopic(roomId: string, topicId: string): Promise<Topic> {
-  const { data } = await apiClient.delete<Topic>(
+export async function deleteRoomTopic(roomId: string, topicId: string): Promise<ChangedTopic> {
+  const { data } = await apiClient.delete<ChangedTopic>(
     `/api/room/${encodeURIComponent(roomId)}/topic/${encodeURIComponent(topicId)}`,
   );
   return data;
 }
 
-export async function deleteRoomMember(roomId: string, memberId: string): Promise<Member> {
-  const { data } = await apiClient.delete<Member>(
+export async function deleteRoomMember(roomId: string, memberId: string): Promise<ChangedMember> {
+  const { data } = await apiClient.delete<ChangedMember>(
     `/api/room/${encodeURIComponent(roomId)}/member/${encodeURIComponent(memberId)}`,
   );
   return data;

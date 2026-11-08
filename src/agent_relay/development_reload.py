@@ -63,6 +63,7 @@ def run_development(settings: ServerSettings, profile: str) -> None:
         host=settings.host,
         port=settings.port,
         factory=True,
+        loop="asyncio:SelectorEventLoop",
         access_log=False,
         log_config=None,
     )

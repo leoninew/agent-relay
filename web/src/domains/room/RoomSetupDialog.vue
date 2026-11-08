@@ -6,128 +6,129 @@
     @close="$emit('close')"
   >
     <form class="setup-form" novalidate @submit.prevent="submit">
-      <div v-if="mode === 'member'" class="setup-field">
-        <div class="setup-field-heading">
-          <label id="setup-session-label">选择会话 <span class="required-mark">*</span></label>
-          <AppButton
-            variant="plain"
-            class="session-reload"
-            :loading="sessionsLoading"
-            loading-label="刷新中…"
-            :disabled="saving || topicSaving"
-            @click="$emit('reloadSessions')"
-          >
-            刷新会话
-          </AppButton>
-        </div>
-        <AppLoading v-if="sessionsLoading" class="session-state">正在加载会话…</AppLoading>
-        <p v-else-if="sessionsError" class="field-error" role="alert">{{ sessionsError }}</p>
-        <template v-else>
-          <RadioGroupRoot
-            ref="sessionChoices"
-            v-model="sessionId"
-            class="session-options"
-            :disabled="saving"
-            aria-labelledby="setup-session-label"
-            :aria-invalid="!!errors.session"
-            aria-describedby="setup-session-error"
-          >
-            <div v-for="session in sessions" :key="session.id" class="session-option-row">
-              <RadioGroupItem
-                :value="session.id"
-                class="session-option"
-                :disabled="!!session.memberId || !session.usable"
-                :aria-invalid="!!errors.session"
-              >
-                <span class="session-option-label">
-                  <strong :title="session.name">{{ session.name }}</strong>
-                  <span :title="session.id">{{ session.id }}</span>
-                </span>
-              </RadioGroupItem>
-              <span class="session-option-meta">
-                <AppTooltip
-                  v-if="!session.usable && session.unavailableReason"
-                  :text="session.unavailableReason"
+      <div class="setup-form-content">
+        <div v-if="mode === 'member'" class="setup-field">
+          <div class="setup-field-heading">
+            <label id="setup-session-label">选择会话 <span class="required-mark">*</span></label>
+            <AppButton
+              variant="plain"
+              class="session-reload"
+              :loading="sessionsLoading"
+              loading-label="刷新中…"
+              :disabled="saving || topicSaving"
+              @click="$emit('reloadSessions')"
+            >
+              刷新会话
+            </AppButton>
+          </div>
+          <AppLoading v-if="sessionsLoading" class="session-state">正在加载会话…</AppLoading>
+          <p v-else-if="sessionsError" class="field-error" role="alert">{{ sessionsError }}</p>
+          <template v-else>
+            <RadioGroupRoot
+              ref="sessionChoices"
+              v-model="sessionId"
+              class="session-options"
+              :disabled="saving"
+              aria-labelledby="setup-session-label"
+              :aria-invalid="!!errors.session"
+              aria-describedby="setup-session-error"
+            >
+              <div v-for="session in sessions" :key="session.id" class="session-option-row">
+                <RadioGroupItem
+                  :value="session.id"
+                  class="session-option"
+                  :disabled="!!session.memberId || !session.usable"
+                  :aria-invalid="!!errors.session"
                 >
-                  <button
-                    type="button"
-                    class="session-option-help"
-                    :aria-label="`${session.name}不可用：${session.unavailableReason}`"
+                  <span class="session-option-label">
+                    <strong :title="session.name">{{ session.name }}</strong>
+                    <span :title="session.id">{{ session.id }}</span>
+                  </span>
+                </RadioGroupItem>
+                <span class="session-option-meta">
+                  <AppTooltip
+                    v-if="!session.usable && session.unavailableReason"
+                    :text="session.unavailableReason"
                   >
-                    {{ sessionStatus(session) }}<AppIcon name="info" />
-                  </button>
-                </AppTooltip>
-                <span v-else>{{ sessionStatus(session) }}</span>
-                <AppClearButton
-                  v-if="sessionId === session.id"
-                  label="清空所选会话"
-                  :disabled="saving"
-                  @clear="clearSession"
-                />
-              </span>
-            </div>
-          </RadioGroupRoot>
-          <p v-if="!sessions?.length" class="session-state">当前项目目录下暂无 Codex 会话</p>
-        </template>
-        <p v-if="errors.session" id="setup-session-error" class="field-error">
-          {{ errors.session }}
-        </p>
-      </div>
-      <div class="setup-field">
-        <label for="setup-name">
-          {{ mode === "room" ? "项目名称" : mode === "member" ? "成员名称" : "话题名称" }}
-          <span class="required-mark">*</span>
-        </label>
-        <AppInput
-          id="setup-name"
-          v-model="name"
-          :maxlength="mode === 'topic' ? 40 : 80"
+                    <button
+                      type="button"
+                      class="session-option-help"
+                      :aria-label="`${session.name}不可用：${session.unavailableReason}`"
+                    >
+                      {{ sessionStatus(session) }}<AppIcon name="info" />
+                    </button>
+                  </AppTooltip>
+                  <span v-else>{{ sessionStatus(session) }}</span>
+                  <AppClearButton
+                    v-if="sessionId === session.id"
+                    label="清空所选会话"
+                    :disabled="saving"
+                    @clear="clearSession"
+                  />
+                </span>
+              </div>
+            </RadioGroupRoot>
+            <p v-if="!sessions?.length" class="session-state">当前项目目录下暂无 Codex 会话</p>
+          </template>
+          <p v-if="errors.session" id="setup-session-error" class="field-error">
+            {{ errors.session }}
+          </p>
+        </div>
+        <div class="setup-field">
+          <label for="setup-name">
+            {{ mode === "room" ? "项目名称" : mode === "member" ? "成员名称" : "话题名称" }}
+            <span class="required-mark">*</span>
+          </label>
+          <AppInput
+            id="setup-name"
+            v-model="name"
+            :maxlength="mode === 'topic' ? 40 : 80"
+            :disabled="saving"
+            :invalid="!!errors.name"
+            clear-label="清空名称"
+            aria-describedby="setup-name-error"
+            autocomplete="off"
+          />
+          <p v-if="errors.name" id="setup-name-error" class="field-error">{{ errors.name }}</p>
+        </div>
+        <div v-if="mode === 'room'" class="setup-field">
+          <label for="setup-path">项目路径 <span class="required-mark">*</span></label>
+          <AppInput
+            id="setup-path"
+            v-model="projectPath"
+            maxlength="500"
+            :disabled="saving"
+            :invalid="!!errors.projectPath"
+            clear-label="清空项目路径"
+            aria-describedby="setup-path-error"
+            placeholder="D:/SourceCodes/mywork/project"
+            autocomplete="off"
+          />
+          <p v-if="errors.projectPath" id="setup-path-error" class="field-error">
+            {{ errors.projectPath }}
+          </p>
+        </div>
+        <MemberTopicsField
+          v-if="mode === 'member'"
+          v-model="topicIds"
+          v-model:busy="topicSaving"
+          id-prefix="setup-member"
+          :topics="topics"
+          :room-id="roomId"
           :disabled="saving"
-          :invalid="!!errors.name"
-          clear-label="清空名称"
-          aria-describedby="setup-name-error"
-          autocomplete="off"
         />
-        <p v-if="errors.name" id="setup-name-error" class="field-error">{{ errors.name }}</p>
+        <div v-if="mode === 'topic'" class="setup-field">
+          <label for="setup-description">话题说明</label>
+          <AppInput
+            id="setup-description"
+            v-model="description"
+            maxlength="300"
+            :disabled="saving"
+            clear-label="清空话题说明"
+          />
+        </div>
+        <p v-if="error" class="field-error" role="alert">{{ error }}</p>
       </div>
-      <div v-if="mode === 'room'" class="setup-field">
-        <label for="setup-path">项目路径 <span class="required-mark">*</span></label>
-        <AppInput
-          id="setup-path"
-          v-model="projectPath"
-          maxlength="500"
-          :disabled="saving"
-          :invalid="!!errors.projectPath"
-          clear-label="清空项目路径"
-          aria-describedby="setup-path-error"
-          placeholder="D:/SourceCodes/mywork/project"
-          autocomplete="off"
-        />
-        <p v-if="errors.projectPath" id="setup-path-error" class="field-error">
-          {{ errors.projectPath }}
-        </p>
-      </div>
-      <MemberTopicsField
-        v-if="mode === 'member'"
-        v-model="topicIds"
-        v-model:busy="topicSaving"
-        id-prefix="setup-member"
-        :topics="topics"
-        :room-id="roomId"
-        :disabled="saving"
-        :error="errors.topics"
-      />
-      <div v-if="mode === 'topic'" class="setup-field">
-        <label for="setup-description">话题说明</label>
-        <AppInput
-          id="setup-description"
-          v-model="description"
-          maxlength="300"
-          :disabled="saving"
-          clear-label="清空话题说明"
-        />
-      </div>
-      <p v-if="error" class="field-error" role="alert">{{ error }}</p>
       <footer class="dialog-actions">
         <AppButton variant="secondary" :disabled="saving || topicSaving" @click="$emit('close')">
           取消
@@ -247,9 +248,6 @@
   watch(projectPath, (value) => {
     if (value.trim()) delete errors.value.projectPath;
   });
-  watch(topicIds, (value) => {
-    if (value.length) delete errors.value.topics;
-  });
 
   async function clearSession(): Promise<void> {
     const element = sessionChoices.value?.$el as HTMLElement | undefined;
@@ -278,7 +276,6 @@
         )
       )
         errors.value.session = "请选择要加入的会话";
-      if (!topicIds.value.length) errors.value.topics = "请至少选择一个订阅话题";
     }
     if (Object.keys(errors.value).length) return;
     if (props.mode === "room")

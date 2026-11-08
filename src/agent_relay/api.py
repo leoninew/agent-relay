@@ -10,7 +10,7 @@ from agent_relay.delivery_service import DeliveryService, QueueDriver
 from agent_relay.drivers.codex import CodexDriver
 from agent_relay.exception_handlers import register_exception_handlers, unexpected_exception_handler
 from agent_relay.member_sessions import MemberSessions, SessionDriver
-from agent_relay.middleware import RequestLoggingMiddleware
+from agent_relay.middleware import RequestLoggingMiddleware, RequestTransactionMiddleware
 from agent_relay.migrations import run_migrations
 from agent_relay.room_service import RoomService
 from agent_relay.room_store import SQLiteRoomStore
@@ -39,6 +39,7 @@ def create_app(
 
     app = FastAPI(title="Agent Relay", lifespan=lifespan)
     configure_application_state(app, logger, settings, room_service, session_driver, queue_driver)
+    app.add_middleware(RequestTransactionMiddleware, store=app.state.room_service.store)
     app.add_middleware(RequestLoggingMiddleware, exception_handler=unexpected_exception_handler)
     register_exception_handlers(app)
     app.include_router(api_router)

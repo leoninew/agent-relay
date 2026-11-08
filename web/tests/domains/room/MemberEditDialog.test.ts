@@ -49,4 +49,13 @@ describe("MemberEditDialog form", () => {
     expect(screen.getByText("session-frontend")).toBeTruthy();
     expect(screen.getByText("忙碌")).toBeTruthy();
   });
+
+  it("saves a member after clearing all subscriptions", async () => {
+    const member = roomFixture().members[0];
+    const { emitted } = renderForm();
+    await fireEvent.click(screen.getByRole("button", { name: "清空订阅话题" }));
+    await fireEvent.click(screen.getByRole("button", { name: "保存成员" }));
+
+    expect(emitted().save).toEqual([[member.id, { name: member.name, topicIds: [] }]]);
+  });
 });

@@ -15,6 +15,7 @@ from agent_relay.room_models import (
     Session,
     Topic,
 )
+from agent_relay.room_state import RoomState
 from agent_relay.room_store import SQLiteRoomStore
 from agent_relay.topic_positions import read_topic_positions
 
@@ -24,7 +25,7 @@ class RoomQueries:
         self.store = store
 
     @staticmethod
-    def _room(connection: sqlite3.Connection, room_id: str) -> Room:
+    def room_in(connection: sqlite3.Connection, room_id: str) -> Room:
         row = connection.execute("SELECT payload FROM rooms WHERE id = ?", (room_id,)).fetchone()
         if row is None:
             raise RoomNotFoundError("聊天室不存在")
@@ -38,6 +39,56 @@ class RoomQueries:
             ]
 
     @staticmethod
+    def project_exists_in(connection: sqlite3.Connection, project_path: str) -> bool:
+        return (
+            connection.execute(
+                "SELECT 1 FROM rooms WHERE project_path = ?", (project_path,)
+            ).fetchone()
+            is not None
+        )
+
+    @staticmethod
+    def publisher_in(
+        connection: sqlite3.Connection, room_id: str, member_id: str | None
+    ) -> Member | None:
+        if member_id is None:
+            return None
+        row = connection.execute(
+            "SELECT payload FROM members WHERE room_id = ? AND id = ? AND deleted_at IS NULL",
+            (room_id, member_id),
+        ).fetchone()
+        if row is None:
+            raise RoomNotFoundError("聊天室成员不存在")
+        return Member.model_validate_json(row["payload"])
+
+    @staticmethod
+    def joined_members_in(connection: sqlite3.Connection, room_id: str) -> dict[str, str]:
+        return {
+            row["session_id"]: row["id"]
+            for row in connection.execute(
+                "SELECT id, session_id FROM members WHERE room_id = ? AND deleted_at IS NULL",
+                (room_id,),
+            )
+        }
+
+    @staticmethod
+    def message_exists_in(connection: sqlite3.Connection, room_id: str, message_id: str) -> bool:
+        return (
+            connection.execute(
+                "SELECT 1 FROM messages WHERE room_id = ? AND id = ?", (room_id, message_id)
+            ).fetchone()
+            is not None
+        )
+
+    @staticmethod
+    def next_message_seq_in(connection: sqlite3.Connection, room_id: str) -> int:
+        return int(
+            connection.execute(
+                "SELECT COALESCE(MAX(seq), 0) + 1 FROM messages WHERE room_id = ?", (room_id,)
+            ).fetchone()[0]
+        )
+
+    @staticmethod
     def _event_id(connection: sqlite3.Connection, room_id: str) -> int:
         return int(
             connection.execute(
@@ -45,19 +96,10 @@ class RoomQueries:
             ).fetchone()[0]
         )
 
-    def _metadata(self, connection: sqlite3.Connection, room_id: str) -> RoomMetadata:
-        room = self._room(connection, room_id)
-        counts = dict(
-            connection.execute(
-                "SELECT j.value, COUNT(*) FROM messages m, json_each(m.payload, '$.topic_ids') j "
-                "WHERE m.room_id = ? GROUP BY j.value",
-                (room_id,),
-            ).fetchall()
-        )
+    def resources_in(self, connection: sqlite3.Connection, room_id: str) -> RoomState:
+        room = self.room_in(connection, room_id)
         topics = [
-            Topic.model_validate_json(row["payload"]).model_copy(
-                update={"message_count": counts.get(row["id"], 0)}
-            )
+            Topic.model_validate_json(row["payload"])
             for row in connection.execute(
                 "SELECT id, payload FROM topics WHERE room_id = ? ORDER BY rowid", (room_id,)
             )
@@ -82,6 +124,17 @@ class RoomQueries:
                 "SELECT payload FROM sessions WHERE room_id = ? ORDER BY rowid", (room_id,)
             )
         ]
+        return RoomState(room=room, topics=topics, members=members, sessions=sessions)
+
+    def metadata_in(self, connection: sqlite3.Connection, room_id: str) -> RoomMetadata:
+        state = self.resources_in(connection, room_id)
+        counts = dict(
+            connection.execute(
+                "SELECT j.value, COUNT(*) FROM messages m, json_each(m.payload, '$.topic_ids') j "
+                "WHERE m.room_id = ? GROUP BY j.value",
+                (room_id,),
+            ).fetchall()
+        )
         statuses = dict(
             connection.execute(
                 "SELECT status, COUNT(*) FROM deliveries WHERE room_id = ? GROUP BY status",
@@ -92,10 +145,13 @@ class RoomQueries:
             "SELECT COUNT(*) FROM messages WHERE room_id = ?", (room_id,)
         ).fetchone()[0]
         return RoomMetadata(
-            room=room,
-            topics=topics,
-            members=members,
-            sessions=sessions,
+            room=state.room,
+            topics=[
+                topic.model_copy(update={"message_count": counts.get(topic.id, 0)})
+                for topic in state.topics
+            ],
+            members=state.members,
+            sessions=state.sessions,
             positions=read_topic_positions(connection, room_id),
             summary=RoomSummary(
                 total_messages=total,
@@ -192,7 +248,7 @@ class RoomQueries:
 
     def metadata(self, room_id: str) -> RoomMetadata:
         with self.store.read() as connection:
-            return self._metadata(connection, room_id)
+            return self.metadata_in(connection, room_id)
 
     def snapshot(
         self,
@@ -204,7 +260,7 @@ class RoomQueries:
         limit: int = 50,
     ) -> RoomSnapshot:
         with self.store.read() as connection:
-            metadata = self._metadata(connection, room_id)
+            metadata = self.metadata_in(connection, room_id)
             page = self._page(
                 connection,
                 room_id,
@@ -225,7 +281,7 @@ class RoomQueries:
         limit: int = 50,
     ) -> MessagePage:
         with self.store.read() as connection:
-            self._room(connection, room_id)
+            self.room_in(connection, room_id)
             return self._page(
                 connection,
                 room_id,
@@ -237,7 +293,7 @@ class RoomQueries:
 
     def message(self, room_id: str, message_id: str) -> Message:
         with self.store.read() as connection:
-            self._room(connection, room_id)
+            self.room_in(connection, room_id)
             rows = connection.execute(
                 "SELECT payload FROM messages WHERE room_id = ? AND id = ?", (room_id, message_id)
             ).fetchall()
@@ -245,9 +301,25 @@ class RoomQueries:
                 raise RoomNotFoundError("消息不存在")
             return self._messages(connection, room_id, rows)[0]
 
+    def publication_in(
+        self,
+        connection: sqlite3.Connection,
+        room_id: str,
+        publisher_id: str,
+        publication_id: str,
+    ) -> Message | None:
+        row = connection.execute(
+            "SELECT payload FROM messages "
+            "WHERE room_id = ? AND publisher_id = ? AND publication_id = ?",
+            (room_id, publisher_id, publication_id),
+        ).fetchone()
+        if row is None:
+            return None
+        return self._messages(connection, room_id, [row])[0]
+
     def events(self, room_id: str, after_event_id: int, limit: int = 200) -> RoomEventPage:
         with self.store.read() as connection:
-            self._room(connection, room_id)
+            self.room_in(connection, room_id)
             if (
                 after_event_id
                 and connection.execute(

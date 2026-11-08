@@ -5,6 +5,7 @@ import sqlite3
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
+from copy import deepcopy
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
@@ -19,6 +20,7 @@ from agent_relay.config import load_settings
 from agent_relay.migrations import run_migrations
 from agent_relay.room_errors import RoomConflictError
 from agent_relay.room_models import CreateMessage, CreateRoom, CreateTopic, UpdateMember
+from agent_relay.room_queries import RoomQueries
 from agent_relay.room_service import RoomService
 from agent_relay.room_store import SQLiteRoomStore
 
@@ -89,7 +91,8 @@ def test_existing_app_instances_read_each_others_commits() -> None:
         assert second.get("/api/room").json() == [room]
         one = first.post(f"{route}/topic", json={"name": "One"}).json()
         two = second.post(f"{route}/topic", json={"name": "Two"}).json()
-        assert first.get(route).json()["topics"] == [one, two]
+        assert first.get(route).json()["topics"] == two["metadata"]["topics"]
+        assert [topic["id"] for topic in two["metadata"]["topics"]] == [one["id"], two["id"]]
         assert second.get(route).json() == first.get(route).json()
 
 
@@ -143,13 +146,15 @@ def test_delivery_write_failure_rolls_back_message_and_resource_changes(tmp_path
     before = service.snapshot("agent-relay")
     with (
         pytest.raises(sqlite3.IntegrityError, match="FOREIGN KEY"),
-        store.transaction(write=True) as rooms,
+        store.write() as connection,
     ):
-        state = rooms["agent-relay"]
+        state = RoomQueries(store).resources_in(connection, "agent-relay")
+        original = deepcopy(state)
         state.room.name = "must roll back"
         state.members[0].topic_ids = ["backend"]
-        message = service._append_message(
+        message = service._build_message(
             state,
+            seq=RoomQueries.next_message_seq_in(connection, state.room.id),
             content="must roll back",
             topic_ids=["backend"],
             mentioned_member_ids=[],
@@ -159,6 +164,8 @@ def test_delivery_write_failure_rolls_back_message_and_resource_changes(tmp_path
         )
         # This fails after the room, subscriptions, and message have been written.
         message.deliveries[-1].target_member_id = "missing"
+        store.save_resources(connection, state, original)
+        store.insert_message(connection, state.room.id, message)
     reopened = RoomService(SQLiteRoomStore(path))
     assert reopened.snapshot("agent-relay") == before
     message = reopened.post_message(
@@ -175,18 +182,12 @@ def test_cross_room_subscription_is_rejected_by_database(tmp_path: Path) -> None
     before = service.snapshot("agent-relay")
     with (
         pytest.raises(sqlite3.IntegrityError, match="FOREIGN KEY"),
-        store.transaction(write=True) as rooms,
+        store.write() as connection,
     ):
-        rooms["agent-relay"].members[0].topic_ids = [foreign_topic.id]
-    assert service.snapshot("agent-relay") == before
-
-
-def test_read_transaction_does_not_persist_mutations(tmp_path: Path) -> None:
-    store = create_room_store(tmp_path / "rooms.sqlite3")
-    service = DemoRoomService(store)
-    before = service.snapshot("agent-relay")
-    with store.transaction(write=False) as rooms:
-        rooms["agent-relay"].room.name = "transient"
+        state = RoomQueries(store).resources_in(connection, "agent-relay")
+        original = deepcopy(state)
+        state.members[0].topic_ids = [foreign_topic.id]
+        store.save_resources(connection, state, original)
     assert service.snapshot("agent-relay") == before
 
 

@@ -1,11 +1,13 @@
 from collections.abc import Callable
+from copy import deepcopy
 from datetime import UTC, datetime
 from typing import Protocol, TypeVar
 from uuid import uuid4
 
 from agent_relay.drivers.codex import SessionInfo
-from agent_relay.room_errors import RoomConflictError, RoomInputError, RoomNotFoundError
+from agent_relay.room_errors import RoomConflictError, RoomInputError
 from agent_relay.room_models import CreatedMember, CreateMember, Member, Session, SessionCandidate
+from agent_relay.room_queries import RoomQueries
 from agent_relay.room_service import RoomService
 from agent_relay.room_state import RoomState
 from agent_relay.room_store import SQLiteRoomStore
@@ -29,12 +31,6 @@ class MemberSessions:
         self.driver = driver
 
     @staticmethod
-    def _room(rooms: dict[str, RoomState], room_id: str) -> RoomState:
-        if room_id not in rooms:
-            raise RoomNotFoundError("聊天室不存在")
-        return rooms[room_id]
-
-    @staticmethod
     def _metadata(read: Callable[[], T]) -> T:
         try:
             return read()
@@ -42,16 +38,14 @@ class MemberSessions:
             raise SessionUnavailableError("无法读取 Codex 会话，请刷新后重试") from exc
 
     def candidates(self, room_id: str) -> list[SessionCandidate]:
-        with self.store.transaction(write=False) as rooms:
-            cwd = self._room(rooms, room_id).room.project_path
+        queries = RoomQueries(self.store)
+        with self.store.read() as connection:
+            cwd = queries.room_in(connection, room_id).project_path
         sessions = self._metadata(self.driver.list_sessions)
         observed_at = datetime.now(UTC)
         self.record_observations(room_id, sessions, observed_at)
-        with self.store.transaction(write=False) as rooms:
-            state = self._room(rooms, room_id)
-            joined = {
-                member.session_id: member.id for member in state.members if not member.deleted_at
-            }
+        with self.store.read() as connection:
+            joined = queries.joined_members_in(connection, room_id)
         result: list[SessionCandidate] = []
         for info in sessions:
             if RoomService._normalize_project_path(info.cwd) != cwd:
@@ -77,34 +71,26 @@ class MemberSessions:
     ) -> None:
         """Update observation fields only; never overwrite names or subscriptions."""
         by_id = {info.id: info for info in sessions}
+        queries = RoomQueries(self.store)
         with self.store.write() as connection:
-            rows = connection.execute(
-                "SELECT m.id, m.session_id, r.project_path FROM members m "
-                "JOIN rooms r ON r.id = m.room_id WHERE m.room_id = ? AND m.deleted_at IS NULL",
-                (room_id,),
-            ).fetchall()
-            for row in rows:
-                info = by_id.get(row["session_id"])
-                valid = (
-                    info is not None
-                    and RoomService._normalize_project_path(info.cwd) == row["project_path"]
-                )
+            cwd = queries.room_in(connection, room_id).project_path
+            for session_id, member_id in queries.joined_members_in(connection, room_id).items():
+                info = by_id.get(session_id)
+                valid = info is not None and RoomService._normalize_project_path(info.cwd) == cwd
                 presence = info.presence if valid and info is not None else "unknown"
                 activity = (
                     self.activity(info)
                     if valid and info is not None
                     else "未能核验原会话的当前接入状态；请使用共享 daemon 打开后刷新"
                 )
-                connection.execute(
-                    "UPDATE members SET payload = json_set(payload, '$.presence', ?, "
-                    "'$.activity', ?, '$.activity_source', 'codex', '$.observed_at', ?) "
-                    "WHERE room_id = ? AND id = ? AND deleted_at IS NULL",
-                    (presence, activity, observed_at.isoformat(), room_id, row["id"]),
-                )
-                connection.execute(
-                    "UPDATE sessions SET payload = json_set(payload, '$.presence', ?, "
-                    "'$.observed_at', ?) WHERE room_id = ? AND id = ?",
-                    (presence, observed_at.isoformat(), room_id, row["session_id"]),
+                self.store.save_observation(
+                    connection,
+                    room_id,
+                    member_id,
+                    session_id,
+                    presence,
+                    activity,
+                    observed_at,
                 )
 
     @staticmethod
@@ -127,8 +113,9 @@ class MemberSessions:
             raise RoomConflictError("该会话已加入聊天室")
 
     def add(self, room_id: str, request: CreateMember) -> CreatedMember:
-        with self.store.transaction(write=False) as rooms:
-            state = self._room(rooms, room_id)
+        queries = RoomQueries(self.store)
+        with self.store.read() as connection:
+            state = queries.resources_in(connection, room_id)
             self._validate_add(state, request)
             cwd = state.room.project_path
         # External metadata reads never hold a SQLite transaction or resume a thread.
@@ -139,9 +126,10 @@ class MemberSessions:
             raise RoomInputError("所选 Codex 会话不属于当前聊天室项目目录")
         if not info.usable:
             raise RoomConflictError(info.unavailable_reason or "所选 Codex 会话当前不可用")
-        with self.store.transaction(write=True) as rooms:
-            state = self._room(rooms, room_id)
+        with self.store.write() as connection:
+            state = queries.resources_in(connection, room_id)
             self._validate_add(state, request)
+            original = deepcopy(state)
             now = datetime.now(UTC)
             session = Session(
                 id=info.id,
@@ -166,4 +154,9 @@ class MemberSessions:
                 topic_ids=list(dict.fromkeys(request.topic_ids)),
             )
             state.members.append(member)
-            return CreatedMember(**member.model_dump(), session=session.model_copy(deep=True))
+            self.store.save_resources(connection, state, original)
+            return CreatedMember(
+                **member.model_dump(),
+                session=session.model_copy(deep=True),
+                metadata=queries.metadata_in(connection, room_id),
+            )

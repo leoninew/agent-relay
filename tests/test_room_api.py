@@ -386,6 +386,74 @@ def test_member_edit_updates_subscriptions_used_by_message_routing(client: TestC
     assert client.get("/api/room/housekeeper").json()["members"] == []
 
 
+def test_zero_and_multiple_subscriptions_keep_direct_mentions_and_saved_metadata(
+    client: TestClient,
+) -> None:
+    room = client.post("/api/room", json={"name": "Acme", "projectPath": "D:/work/acme"}).json()
+    route = f"/api/room/{room['id']}"
+    joined = client.post(
+        f"{route}/member",
+        json={"sessionId": "acme-1", "name": "协作成员", "topicIds": []},
+    )
+    assert joined.status_code == 201
+    member = joined.json()
+    member_id = member["id"]
+    assert member["topicIds"] == []
+    assert member["metadata"] == client.get(f"{route}/metadata").json()
+    assert member["metadata"]["topics"] == member["metadata"]["positions"] == []
+    assert member["metadata"]["sessions"] == [member["session"]]
+    message = client.post(
+        f"{route}/message",
+        json={
+            "publicationId": str(uuid4()),
+            "content": "直接协作",
+            "mentionedMemberIds": [member_id],
+        },
+    )
+    assert message.status_code == 201
+    assert message.json()["recipientIds"] == [member_id]
+
+    topics = [
+        client.post(f"{route}/topic", json={"name": name}).json() for name in ["实现", "联调"]
+    ]
+    subscribed = client.patch(
+        f"{route}/member/{member_id}",
+        json={"name": "协作成员", "topicIds": [topic["id"] for topic in topics]},
+    )
+    assert subscribed.status_code == 200
+    assert subscribed.json()["metadata"] == client.get(f"{route}/metadata").json()
+    assert [position["topicId"] for position in subscribed.json()["metadata"]["positions"]] == [
+        topic["id"] for topic in topics
+    ]
+    for topic in topics:
+        removed = client.delete(f"{route}/topic/{topic['id']}")
+        assert removed.status_code == 200
+        assert removed.json()["metadata"] == client.get(f"{route}/metadata").json()
+    metadata = removed.json()["metadata"]
+    assert metadata["members"][0]["topicIds"] == metadata["positions"] == []
+    assert metadata["summary"]["totalMessages"] == 1
+    assert metadata["summary"]["pendingCount"] == 1
+    assert client.get(f"{route}/message/{message.json()['id']}").json() == message.json()
+
+    renamed = client.patch(
+        f"{route}/member/{member_id}", json={"name": "直接协作成员", "topicIds": []}
+    )
+    assert renamed.status_code == 200
+    assert renamed.json()["metadata"]["members"][0]["name"] == "直接协作成员"
+    assert renamed.json()["metadata"] == client.get(f"{route}/metadata").json()
+    mentioned = client.post(
+        f"{route}/message",
+        json={
+            "publicationId": str(uuid4()),
+            "content": "继续直接协作",
+            "mentionedMemberIds": [member_id],
+        },
+    )
+    assert mentioned.status_code == 201
+    assert mentioned.json()["recipientIds"] == [member_id]
+    assert mentioned.json()["deliveries"][0]["targetSessionId"] == "acme-1"
+
+
 def test_member_creation_rejects_foreign_topic_and_duplicate_name(client: TestClient) -> None:
     topic = client.post("/api/room/housekeeper/topic", json={"name": "foreign"}).json()
     invalid = client.post(
@@ -456,12 +524,14 @@ def test_edit_and_delete_nodes_preserve_history_and_release_names_and_bindings(
     assert edited.status_code == 200
     assert edited.json()["name"] == "界面"
     assert edited.json()["description"] == "界面交互讨论"
+    assert edited.json()["metadata"] == client.get(f"{ROOM_ROUTE}/metadata").json()
 
     deleted_topic = client.delete(f"{ROOM_ROUTE}/topic/frontend")
     deleted_member = client.delete(f"{ROOM_ROUTE}/member/frontend-worker")
     assert deleted_topic.status_code == deleted_member.status_code == 200
     assert deleted_topic.json()["deletedAt"]
     assert deleted_member.json()["deletedAt"]
+    assert deleted_member.json()["metadata"] == client.get(f"{ROOM_ROUTE}/metadata").json()
     snapshot = client.get(ROOM_ROUTE).json()
     assert snapshot["messages"] == original["messages"]
     assert all("frontend" not in member["topicIds"] for member in snapshot["members"])

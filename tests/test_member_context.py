@@ -58,11 +58,12 @@ def positions(result: ContextResult) -> dict[str, TopicPosition]:
 
 
 def seed_history(context: ContextEnvironment) -> None:
-    with context.service._transaction(write=True):
-        state = context.service._rooms["agent-relay"]
+    with context.service.store.write() as connection:
+        state = RoomQueries(context.service.store).resources_in(connection, "agent-relay")
         for seq in range(7, 91):
-            context.service._append_message(
+            message = context.service._build_message(
                 state,
+                seq=seq,
                 content=f"Context%_ marker {seq}",
                 topic_ids=["frontend", "backend"] if seq % 10 == 0 else ["frontend"],
                 mentioned_member_ids=[],
@@ -70,6 +71,7 @@ def seed_history(context: ContextEnvironment) -> None:
                 sender_name="主会话",
                 created_at=datetime.now(UTC),
             )
+            context.service.store.insert_message(connection, state.room.id, message)
 
 
 def test_catalog_and_position_queries_return_lightweight_routing_context(

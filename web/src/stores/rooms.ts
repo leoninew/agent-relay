@@ -1,7 +1,7 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
 
-import { addRoomTopic, createRoom, fetchRoomMetadata, fetchRooms } from "@/services/roomApi";
+import { addRoomTopic, createRoom, fetchRooms } from "@/services/roomApi";
 import type {
   CreateRoom,
   CreateTopic,
@@ -93,7 +93,7 @@ export const useRoomsStore = defineStore("rooms", () => {
 
   async function createTopic(roomId: string, request: CreateTopic): Promise<Topic> {
     const topic = await addRoomTopic(roomId, request);
-    syncMetadata(await fetchRoomMetadata(roomId));
+    syncMetadata(topic.metadata);
     return topic;
   }
 

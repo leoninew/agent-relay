@@ -8,12 +8,13 @@ from agent_relay.dependencies import (
     RoomServiceDependency,
 )
 from agent_relay.room_models import (
+    ChangedMember,
+    ChangedTopic,
     CreatedMember,
     CreateMember,
     CreateMessage,
     CreateRoom,
     CreateTopic,
-    Member,
     Message,
     MessagePage,
     Room,
@@ -21,7 +22,6 @@ from agent_relay.room_models import (
     RoomMetadata,
     RoomSnapshot,
     SessionCandidate,
-    Topic,
     UpdateMember,
 )
 
@@ -111,27 +111,27 @@ def add_member(
 @router.patch("/{room_id}/member/{member_id}")
 def update_member(
     room_id: str, member_id: str, request: UpdateMember, service: RoomServiceDependency
-) -> Member:
+) -> ChangedMember:
     return service.update_member(room_id, member_id, request)
 
 
 @router.post("/{room_id}/topic", status_code=201)
-def add_topic(room_id: str, request: CreateTopic, service: RoomServiceDependency) -> Topic:
+def add_topic(room_id: str, request: CreateTopic, service: RoomServiceDependency) -> ChangedTopic:
     return service.add_topic(room_id, request)
 
 
 @router.patch("/{room_id}/topic/{topic_id}")
 def update_topic(
     room_id: str, topic_id: str, request: CreateTopic, service: RoomServiceDependency
-) -> Topic:
+) -> ChangedTopic:
     return service.update_topic(room_id, topic_id, request)
 
 
 @router.delete("/{room_id}/topic/{topic_id}")
-def delete_topic(room_id: str, topic_id: str, service: RoomServiceDependency) -> Topic:
+def delete_topic(room_id: str, topic_id: str, service: RoomServiceDependency) -> ChangedTopic:
     return service.delete_topic(room_id, topic_id)
 
 
 @router.delete("/{room_id}/member/{member_id}")
-def delete_member(room_id: str, member_id: str, service: RoomServiceDependency) -> Member:
+def delete_member(room_id: str, member_id: str, service: RoomServiceDependency) -> ChangedMember:
     return service.delete_member(room_id, member_id)

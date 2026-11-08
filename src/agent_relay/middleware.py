@@ -4,11 +4,38 @@ from collections.abc import Awaitable, Callable
 
 from fastapi import Request
 from fastapi.responses import Response
+from starlette.concurrency import run_in_threadpool
 from starlette.datastructures import MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from agent_relay.dependencies import application_settings, get_logger
 from agent_relay.errors import INTERNAL_ERROR_CODE, REQUEST_ID_HEADER, ensure_request_id
+from agent_relay.room_store import SQLiteRoomStore
+
+
+class RequestTransactionMiddleware:
+    """Own the request's writes and finish them before sending its response."""
+
+    def __init__(self, app: ASGIApp, *, store: SQLiteRoomStore) -> None:
+        self.app = app
+        self.store = store
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        transaction = self.store.request_transaction()
+        scope.setdefault("state", {})["database_transaction"] = transaction
+
+        async def send_response(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                await run_in_threadpool(transaction.finish, commit=message["status"] < 400)
+            await send(message)
+
+        try:
+            await self.app(scope, receive, send_response)
+        finally:
+            await run_in_threadpool(transaction.finish, commit=False)
 
 
 class RequestLoggingMiddleware:
