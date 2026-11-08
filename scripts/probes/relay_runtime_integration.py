@@ -35,7 +35,7 @@ from codex_capabilities import Client
 from websockets.sync.client import connect
 
 from agent_relay.api import create_app
-from agent_relay.cli import RelayHttpClient
+from agent_relay.client import RelayClient
 from agent_relay.config import Settings, load_settings
 from agent_relay.delivery_service import SubmitterLock
 from agent_relay.drivers.codex import CodexDriver, _launch_command
@@ -99,7 +99,7 @@ def running_relay(settings: Settings, lifecycle: list[dict[str, Any]]) -> Iterat
     isolated = settings.model_copy(
         update={
             "server": settings.server.model_copy(
-                update={"host": "127.0.0.1", "port": port, "public_url": base_url, "reload": False}
+                update={"host": "127.0.0.1", "port": port, "reload": False}
             )
         }
     )
@@ -140,8 +140,12 @@ def running_relay(settings: Settings, lifecycle: list[dict[str, Any]]) -> Iterat
 
 
 def cli(base_url: str, *args: str) -> Any:
+    environment = dict(os.environ)
+    environment.pop("CODEX_THREAD_ID", None)
+    environment.pop("AGENT_RELAY_SESSION_ID", None)
     completed = subprocess.run(
         [sys.executable, "-m", "agent_relay.cli", "--base-url", base_url, *args],
+        env=environment,
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -251,7 +255,7 @@ def exercise(settings: Settings, thread_id: str, evidence: dict[str, Any]) -> li
             assert (
                 cli(base_url, "delivery", "get", room_id, message["id"], delivery["id"]) == delivery
             )
-        http = RelayHttpClient(base_url, 10)
+        http = RelayClient(base_url, 10)
         context = http.request(
             "POST",
             f"/api/room/{room_id}/member/{member_id}/context",

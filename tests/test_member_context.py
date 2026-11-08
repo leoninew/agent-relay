@@ -83,6 +83,8 @@ def test_catalog_and_position_queries_return_lightweight_routing_context(
     assert response.status_code == 200
     catalog = MemberCatalog.model_validate(response.json())
     assert catalog.room_id == "agent-relay" and catalog.member_id == "frontend-worker"
+    assert catalog.room_description == "聊天室界面与消息路由开发"
+    assert catalog.project_path == "d:/sourcecodes/mywork/agent-relay"
     assert {topic.id for topic in catalog.topics if topic.subscribed} == {"frontend", "summary"}
     assert {topic.id for topic in catalog.topics} == {"frontend", "backend", "summary"}
     assert {member.id for member in catalog.members} == set(context.member_urls)
@@ -296,7 +298,7 @@ def test_concurrent_context_queries_keep_the_maximum_provided_sequence(
     )
 
 
-def test_delivery_envelope_exposes_member_scoped_context_calls_without_credentials(
+def test_delivery_context_identifies_member_for_catalog_messages_and_positions(
     context: ContextEnvironment,
 ) -> None:
     driver = FakeQueueDriver()
@@ -307,20 +309,50 @@ def test_delivery_envelope_exposes_member_scoped_context_calls_without_credentia
         driver,
         logging.getLogger("tests.context.envelope"),
         1,
-        "http://testserver",
     ).submit(work)
-    envelope = json.loads(driver.calls[0][2].split("\n", 1)[1])
-    assert envelope["context"]["headers"] == {"Content-Type": "application/json"}
-    catalog = context.client.get(envelope["context"]["catalogUrl"])
+    assert f"roomId: {work.room_id}\n" in driver.calls[0][2]
+    member_url = f"/api/room/{work.room_id}/member/{work.delivery.target_member_id}"
+    catalog = context.client.get(f"{member_url}/catalog")
     assert catalog.status_code == 200
     assert catalog.json()["memberId"] == work.delivery.target_member_id
     response = context.client.post(
-        envelope["context"]["queryUrl"],
-        headers=envelope["context"]["headers"],
+        f"{member_url}/context",
         json={"messageId": work.message.id},
     )
     assert response.status_code == 200
     assert response.json()["messages"][0]["id"] == work.message.id
-    positions_response = context.client.get(envelope["context"]["positionsUrl"])
+    positions_response = context.client.get(f"{member_url}/position")
     assert positions_response.status_code == 200
     assert any(position["seq"] == work.message.seq for position in positions_response.json())
+
+
+def test_recent_member_context_includes_own_publications_and_direct_collaboration(
+    context: ContextEnvironment,
+) -> None:
+    member_id = "frontend-worker"
+    context.service.update_member(
+        "agent-relay", member_id, UpdateMember(name="Frontend", topic_ids=[])
+    )
+    claim = context.service.post_message(
+        "agent-relay",
+        CreateMessage(
+            publication_id=uuid4().hex,
+            content="我认领接口联调，稍后同步结果",
+            mentioned_member_ids=["backend-worker"],
+        ),
+        member_id=member_id,
+    )
+    progress = context.service.post_message(
+        "agent-relay",
+        CreateMessage(
+            publication_id=uuid4().hex,
+            content="后端已准备好，请开始联调",
+            mentioned_member_ids=[member_id],
+            reply_to_message_id=claim.id,
+        ),
+        member_id="backend-worker",
+    )
+    recent = context.query({"limit": 2})
+    assert [message.id for message in recent.messages] == [claim.id, progress.id]
+    assert recent.query_id and recent.positions == []
+    assert context.query({"messageId": claim.id}).messages[0].sender_id == member_id

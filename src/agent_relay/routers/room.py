@@ -15,6 +15,7 @@ from agent_relay.room_models import (
     CreateMessage,
     CreateRoom,
     CreateTopic,
+    Member,
     Message,
     MessagePage,
     Room,
@@ -99,6 +100,11 @@ def get_publication(room_id: str, publication_id: str, service: RoomServiceDepen
 @router.get("/{room_id}/session")
 def list_sessions(room_id: str, service: MemberSessionsDependency) -> list[SessionCandidate]:
     return service.candidates(room_id)
+
+
+@router.get("/{room_id}/session/{session_id}/member")
+def get_session_member(room_id: str, session_id: str, queries: RoomQueriesDependency) -> Member:
+    return queries.member_for_session(room_id, session_id)
 
 
 @router.post("/{room_id}/member", status_code=201)

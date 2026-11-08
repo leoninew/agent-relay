@@ -1,4 +1,3 @@
-import json
 import logging
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -39,15 +38,13 @@ def members(tmp_path: Path) -> Iterator[MemberEnvironment]:
     service = DemoRoomService(create_room_store(tmp_path / "room.sqlite3"))
     driver = EchoQueueDriver()
     logger = logging.getLogger("tests.member_publish")
-    submitter = DeliveryService(service.store, driver, logger, 2, "http://testserver")
+    submitter = DeliveryService(service.store, driver, logger, 2)
     while work := service.store.claim_delivery():
         submitter.submit(work)
-    member_urls = {}
-    for _, _, text in driver.calls:
-        envelope = json.loads(text.split("\n", 1)[1])
-        member_urls[envelope["targetMemberId"]] = envelope["publish"]["url"].removesuffix(
-            "/message"
-        )
+    member_urls = {
+        member.id: f"/api/room/agent-relay/member/{member.id}"
+        for member in service.snapshot("agent-relay").members
+    }
     with TestClient(
         create_app(
             logger,
@@ -146,7 +143,7 @@ def test_member_publication_replay_preserves_original_targets_and_sender_name(
     assert replay.json()["recipientIds"] == ["coordinator", "test-worker"]
 
 
-def test_member_publish_queue_receipts_and_explicit_member_path_survive_restart(
+def test_member_publish_queue_receipts_and_member_identity_survive_restart(
     members: MemberEnvironment,
 ) -> None:
     member_url = members.member_urls["frontend-worker"]
@@ -171,16 +168,14 @@ def test_member_publish_queue_receipts_and_explicit_member_path_survive_restart(
         "id": delivery["queuedSubmissionId"],
         "clientUserMessageId": delivery["clientMessageId"],
     }
-    envelope = next(
-        json.loads(text.split("\n", 1)[1])
+    delivered = next(
+        text
         for _, client_id, text in members.driver.calls
         if client_id == delivery["clientMessageId"]
     )
-    assert envelope["senderId"] == "frontend-worker"
-    assert envelope["publish"]["url"].endswith(
-        "/api/room/agent-relay/member/backend-worker/message"
+    assert delivered == (
+        "roomId: agent-relay\n发送者: 前端 Worker（frontend-worker）\n\n成员消息投递到原会话"
     )
-    assert envelope["publish"]["headers"] == {"Content-Type": "application/json"}
     store = SQLiteRoomStore(members.service.store.path)
     restored = RoomService(store).publication(
         "agent-relay", publication_id, member_id="frontend-worker"

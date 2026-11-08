@@ -4,7 +4,7 @@ from pathlib import Path
 
 from dotenv import dotenv_values
 from dynaconf import Dynaconf
-from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class RequestLogMessages(BaseModel):
@@ -60,16 +60,8 @@ class ServerSettings(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
     host: str = Field(min_length=1)
     port: int = Field(ge=0, le=65535)
-    public_url: AnyHttpUrl
     reload: bool
     reload_paths: list[str] = Field(min_length=1)
-
-    @field_validator("public_url")
-    @classmethod
-    def validate_public_url(cls, value: AnyHttpUrl) -> AnyHttpUrl:
-        if value.username or value.password or value.query or value.fragment:
-            raise ValueError("Public URL must not contain credentials, a query or a fragment")
-        return value
 
     @field_validator("reload_paths")
     @classmethod

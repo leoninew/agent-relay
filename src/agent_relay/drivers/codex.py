@@ -353,13 +353,31 @@ class CodexDriver:
 
     def enqueue(self, thread_id: str, client_message_id: str, text: str) -> dict[str, object]:
         with ProxyRpc(self.command, self.timeout) as rpc:
+            metadata = rpc.call("thread/read", {"threadId": thread_id, "includeTurns": False})
+            session = self._session(metadata.get("thread"))
+            catalog = rpc.call("skills/list", {"cwds": [session.cwd], "forceReload": True})
+            skills = [
+                skill
+                for entry in catalog["data"]
+                if entry["cwd"] == session.cwd
+                for skill in entry["skills"]
+                if skill.get("name") == "agent-relay:agent-relay"
+                and skill.get("pluginId") == "agent-relay@agent-relay-local"
+                and skill.get("enabled") is True
+            ]
+            if len(skills) != 1:
+                raise RpcDisconnected("Agent Relay skill unavailable; run make install for Codex")
+            skill = skills[0]
             try:
                 result = rpc.call(
                     "thread/queue/add",
                     {
                         "threadId": thread_id,
                         "clientUserMessageId": client_message_id,
-                        "input": [{"type": "text", "text": text}],
+                        "input": [
+                            {"type": "text", "text": text},
+                            {"type": "skill", "name": skill["name"], "path": skill["path"]},
+                        ],
                     },
                 )
             except RpcRejected as exc:

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import logging
 import sys
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -62,13 +61,11 @@ class DeliveryService:
         driver: QueueDriver,
         logger: logging.Logger,
         concurrency: int,
-        public_url: str,
     ) -> None:
         self.store = store
         self.driver = driver
         self.logger = logger
         self.concurrency = concurrency
-        self.public_url = public_url.rstrip("/")
         self.stop = Event()
         self.thread = Thread(target=self._run, name="relay-dispatch", daemon=True)
         self.history_cursors: dict[str, str | None] = {}
@@ -160,66 +157,17 @@ class DeliveryService:
 
     def _submit(self, work: ClaimedDelivery) -> None:
         delivery = work.delivery.model_copy(deep=True)
-        envelope: dict[str, object] = {
-            "roomId": work.room_id,
-            "roomName": work.room.name,
-            "messageId": work.message.id,
-            "seq": work.message.seq,
-            "senderId": work.message.sender_id,
-            "senderName": work.message.sender_name,
-            "senderKind": "member" if work.message.sender_id is not None else "user",
-            "topicIds": work.message.topic_ids,
-            "mentionedMemberIds": work.message.mentioned_member_ids,
-            "targetMemberId": delivery.target_member_id,
-            "replyToMessageId": work.message.reply_to_message_id,
-            "content": work.message.content,
-        }
-        envelope["deliveryInstructions"] = (
-            "这是发送者向当前目标会话投递的消息；targetMemberId 是接收者，不是发送者。"
-            "senderKind=user 时消息来自聊天室用户，即使话题只有当前成员也应接收。"
-            "下面的成员发布规则只适用于你决定另发一条聊天室消息，不影响接收本条消息。"
+        sender = (
+            f"{work.message.sender_name}（{work.message.sender_id}）"
+            if work.message.sender_id is not None
+            else f"聊天室用户：{work.message.sender_name}"
         )
-        member_url = f"{self.public_url}/api/room/{work.room_id}/member/{delivery.target_member_id}"
-        envelope["publish"] = {
-            "method": "POST",
-            "url": f"{member_url}/message",
-            "lookupUrl": f"{member_url}/publication/{{publicationId}}",
-            "headers": {"Content-Type": "application/json"},
-            "instructions": (
-                "如需在聊天室发言，用现有 HTTP 工具向 url 提交 JSON："
-                "publicationId（为这次发布生成并保留唯一编号）、content、topicIds、"
-                "mentionedMemberIds，以及可选 replyToMessageId。"
-                "必须明确指定话题或 @ 成员；可从 context.catalogUrl 查询目标 ID。"
-                "服务按 URL 中的聊天室和成员记录发送者，并排除自己。"
-                "引用不会继承目标；引用当前消息需显式填本条 messageId。"
-                "响应不确定时用原 publicationId 查询 lookupUrl，"
-                "查无记录再用原编号和相同请求补交。"
-                "只在决定发布时调用；普通过程输出和最终答复不会自动进入聊天室。"
-            ),
-        }
-        envelope["context"] = {
-            "catalogUrl": f"{member_url}/catalog",
-            "queryUrl": f"{member_url}/context",
-            "positionsUrl": f"{member_url}/position",
-            "headers": {"Content-Type": "application/json"},
-            "instructions": (
-                "仅在需要背景时用现有 HTTP 工具查阅。"
-                "GET catalogUrl 获取活动话题/成员 ID 及路径所指成员的订阅标记；"
-                "向 queryUrl POST JSON（Content-Type: application/json）："
-                "{messageId} 查单条，{topicId} 查订阅话题，"
-                "或 {keyword, topicId?} 按正文区分大小写的字面子串搜索。"
-                "列表可选 limit（默认50，最多200）、beforeSeq 或 afterSeq（二者互斥）；"
-                "响应按 seq 正序，hasMore 时沿用筛选并使用 nextBeforeSeq/nextAfterSeq 翻页。"
-                "只可查订阅话题，或逐条查该成员实际收到的消息；引用不扩大范围。"
-                "响应仅含本次选取消息；queryId 记录服务提供事实，positions 是相关查阅位置。"
-                "GET positionsUrl 只查看位置和位置后新增数；位置允许跳读与回查，"
-                "不代表已读或任务完成，也不要求补读。"
-            ),
-        }
-        text = "聊天室消息\n" + json.dumps(envelope, ensure_ascii=False)
+        text = f"roomId: {work.room_id}\n发送者: {sender}\n\n{work.message.content}"
         try:
             receipt = self.driver.enqueue(
-                delivery.target_session_id, delivery.client_message_id, text
+                delivery.target_session_id,
+                delivery.client_message_id,
+                text,
             )
             delivery.status = "queued"
             delivery.queued_at = datetime.now(UTC)

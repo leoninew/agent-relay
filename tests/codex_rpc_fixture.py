@@ -5,6 +5,7 @@ import os
 import socket
 import sys
 from contextlib import suppress
+from pathlib import Path
 from threading import Event, Thread
 from types import SimpleNamespace
 from typing import Any, cast
@@ -135,12 +136,35 @@ try:
             }
         elif method == "thread/queue/add":
             assert params["threadId"] == "original-id"
-            assert params["input"] == [{"type": "text", "text": "hello from Relay"}]
+            text, skill = params["input"]
+            assert text == {"type": "text", "text": "hello from Relay"}
+            assert skill["type"] == "skill" and skill["name"] == "agent-relay:agent-relay"
+            assert Path(skill["path"]).is_absolute() and Path(skill["path"]).is_file()
             result = {
                 "queuedSubmission": {
                     "id": "queued-original",
                     "clientUserMessageId": params["clientUserMessageId"],
                 }
+            }
+        elif method == "skills/list":
+            assert params == {"cwds": ["D:/project"], "forceReload": True}
+            result = {
+                "data": [
+                    {
+                        "cwd": "D:/project",
+                        "skills": [
+                            {
+                                "name": "agent-relay:agent-relay",
+                                "pluginId": "agent-relay@agent-relay-local",
+                                "enabled": True,
+                                "path": str(
+                                    Path(__file__).resolve().parents[1]
+                                    / "plugins/agent-relay/skills/agent-relay/SKILL.md"
+                                ),
+                            }
+                        ],
+                    }
+                ],
             }
         else:
             raise AssertionError("Unexpected operation: " + str(method))

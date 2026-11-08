@@ -80,6 +80,8 @@ class MemberContext:
             return MemberCatalog(
                 room_id=room.id,
                 room_name=room.name,
+                room_description=room.description,
+                project_path=room.project_path,
                 member_id=member_id,
                 topics=topics,
                 members=members,
@@ -103,7 +105,8 @@ class MemberContext:
         clauses = [
             "m.room_id = ?",
             (
-                "(EXISTS (SELECT 1 FROM deliveries d WHERE d.room_id = m.room_id "
+                "(m.publisher_id = ? OR EXISTS "
+                "(SELECT 1 FROM deliveries d WHERE d.room_id = m.room_id "
                 "AND d.message_id = m.id AND d.target_member_id = ?) OR EXISTS "
                 "(SELECT 1 FROM json_each(m.payload, '$.topic_ids') j JOIN member_topics mt "
                 "ON mt.room_id = m.room_id AND mt.topic_id = j.value "
@@ -111,7 +114,7 @@ class MemberContext:
                 "AND t.deleted_at IS NULL WHERE mt.member_id = ?))"
             ),
         ]
-        args: list[str | int] = [room_id, member_id, member_id]
+        args: list[str | int] = [room_id, member_id, member_id, member_id]
         if request.message_id is not None:
             clauses.append("m.id = ?")
             args.append(request.message_id)

@@ -77,7 +77,6 @@ def configure_application_state(
         queue_driver if queue_driver is not None else CodexDriver(codex.command, codex.rpc_timeout),
         logger,
         codex.queue_concurrency,
-        str(app.state.settings.server.public_url),
     )
 
 

@@ -1,15 +1,15 @@
 # Task / 子任务 T10：Relay HTTP CLI 客户端
-最后修改时间: 2026-11-08 16:25:58
+最后修改时间: 2026-11-08 22:41:18
 
 ## Review status / 审查状态
 
-Accepted，方案修订 22。用户明确“cli 用 click”，入口 `agent-relay` 改用 Click 声明命令，HTTP 仍使用标准库 urllib；命令成功/失败结果输出稳定 JSON，`--help` 使用普通帮助文本。Click 列为直接依赖，复用锁内已有版本。
+Accepted，当前修订 27、编号 T10-20261108-N8。既有 Click、零订阅与资源响应交付保留；补齐成员发布/找回、目录/上下文/位置命令、CLI/MCP 共用 HTTP 客户端、自动会话身份及 make install 安装入口。
 
 成员入口沿用项目目录会话发现、选择和持久绑定；没有 operationId 创建/结果查询协议。Relay CLI 只调用本机 HTTP 服务，不直连数据库或 Codex，不自动新建、恢复或关闭成员宿主。
 
 ## Parent and authority / 父任务与权威记录
 
-- [总意图](../../intent/20261107-backend-from-web.md)、[权威总计划](../../plan/20261107-backend-from-web.md)。任务 ID：T10；当前 T10-20261108-N6，修订 22 Click 与零订阅交付 Accepted；修订 13 既有 CLI 交付保留。
+- [总意图](../../intent/20261107-backend-from-web.md)、[权威总计划](../../plan/20261107-backend-from-web.md)。任务 ID：T10；当前 T10-20261108-N8，既有交付保留。
 - 协调根：`D:/SourceCodes/mywork/agent-relay`；任务定义及执行登记见总计划。
 
 ## Goal and acceptance / 目标与验收
@@ -18,17 +18,19 @@ G15，对应 A03、A15：CLI 与 Web 共享 Relay 的持久事实，覆盖资源
 
 ## 本批与后续交付
 
+N8 基线为 `e40d313`：message publish/publication 新增 `--as-member`，复用 T05 的成员路径；member 新增 catalog/context/positions，复用 T07。共 23 个业务命令，另有 `mcp` 启动入口。HTTP 地址、请求/响应、错误与不重试规则集中在 client.py，CLI 只负责 Click 参数和输出；旧客户端内部实现直接迁出，不保留兼容别名。成员身份只用于业务路径，控制台默认身份保持。
+
 修订 21 N6 与修订 22 Click 技术修正已交付：member add/update 的 --topic-id 可省略，不传时请求明确带 topicIds=[]；重复传入仍表示多个订阅。同步 T02 资源响应、服务端规则、帮助和正常流程检查；此前命令及客户端职责不变。
 
-交付完整 HTTP 客户端。资源管理覆盖现有 API 的创建/读取/编辑/删除，发布、找回、历史页、单条、事件和投递查询复用 T02/T03/T08。成员命令与服务端使用同一规则，N6 同步已接受的零订阅契约。CLI 控制台发布身份为控制台，不等于 T05 的路径指定成员发布。
+资源管理、发布、找回、消息/事件和投递查询复用现有 API；N8 以 `--as-member` 显式选择 T05 成员发布，省略时为控制台。成员上下文与位置使用 T07 的查询及记录规则。
 
 ## Scope and files / 范围与文件
 
-`cli.py`、`pyproject.toml` console entry/Click 依赖、锁文件、README/帮助说明和 CLI 测试。使用标准库 HTTP 客户端；不直接写数据库、不直连 Codex 队列、不创建另一套后台调度器。
+`cli.py`、`client.py`、console entry/依赖、README/帮助说明和 CLI 测试。client.py 使用标准库 HTTP；CLI/MCP 共享请求映射，不直接访问数据库或 Codex 队列。
 
 ## Inputs / 输入
 
-见总计划 T10：T02 资源 API、T03 发布幂等、T08 查询/事件契约。本批使用控制台身份；成员自主创建话题/订阅的 D10 取舍不在本批。
+见总计划 T10：T02 资源 API、T03 发布幂等、T05 成员发布、T07 查阅/位置、T08 查询/事件契约。成员自主治理 D10 的产品取舍不由新增客户端入口改变。
 
 ## Technical decisions / 局部技术设计
 
@@ -37,8 +39,9 @@ G15，对应 A03、A15：CLI 与 Web 共享 Relay 的持久事实，覆盖资源
 - 成功输出 `{requestId, data}`；失败输出 `{requestId, error:{code,message,httpStatus?,outcome?}}`。命令结果在 stdout 输出 JSON，失败输出到 stderr；帮助单独输出文本。
 - 退出码：0 成功；2 参数/配置错误；3 Relay 4xx 或本地记录未找到；4 Relay 5xx/重定向/响应格式不符；5 网络/超时；130 HTTP 请求被用户中断。
 - 对写请求遇到 5xx、网络中断或用户中断时，`outcome` 为 `unknown`；4xx 为 `rejected`。CLI 不自动重试写请求、不跟随重定向；发布网络结果未知时用原 publicationId 只读找回。
-- 命令表：`room list|create|get|metadata|events`；`topic list|create|update|delete`；`member list|sessions|add|update|delete`；`message list|get|publish|publication`；`delivery list|get`。列表/分页参数沿用 API；资源参数使用现有 DTO；发布必须传稳定 `--publication-id`，话题和 @ 分别允许重复传入。
+- 命令表：`room list|create|get|metadata|events`；`topic list|create|update|delete`；`member list|sessions|add|update|delete|catalog|context|positions`；`message list|get|publish|publication`；`delivery list|get`；`mcp`。CLI 从 `CODEX_THREAD_ID` 解析当前会话，按房间查询自身成员，发布/找回及自身查阅不必传成员 ID；全局 `--session-id` 可显式配置会话，普通终端仍可使用 `--as-member`。查阅支持单条/话题/字面关键词及单方向游标，位置不表示已读。
 - 成员会话列表/加入/编辑/删除走现有 HTTP API；加入使用明确 sessionId/name/topicIds，不创建成员宿主。N6 按 D04 允许零个或多个订阅，跟随服务端响应更新，无需额外写请求。
+- `make install` 先预检 Codex 插件，再 editable 安装 CLI、检查帮助，最后通过原生 CLI 刷新 `agent-relay@agent-relay-local`。MCP/skill 共用一份插件源码；不另建独立 skill 镜像。
 
 ## Implementation outline / 实施安排
 
@@ -68,6 +71,10 @@ G15，对应 A03、A15：CLI 与 Web 共享 Relay 的持久事实，覆盖资源
 2026-11-08 10:19:28 实现和开发检查完成，交付当前工作区版本。真实安装入口与正常 API 写/读流程均已核对；未新增负向或迁移功能测试。
 
 ## Delivery and review / 交付与审查
+
+### N8 成员命令及共用客户端交付
+
+完成成员身份发布/找回、目录/上下文/位置命令及 HTTP 客户端提取，并更新原运行探测的 import。13 项 CLI 正常检查通过；联合 MCP/成员发布/上下文共 33 项通过，Mypy（src/tests/受影响探测）、Ruff/格式及离线锁检查通过。真实 stdio MCP 写入后，独立 CLI 子进程经临时 HTTP 服务找回同一发布。HTTP/stdio 均已关闭；测试使用 fake 队列，不操作工作会话或开发服务器。
 
 ### N6 Click 与零订阅交付
 

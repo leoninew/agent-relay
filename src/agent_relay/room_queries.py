@@ -38,6 +38,18 @@ class RoomQueries:
                 for row in connection.execute("SELECT payload FROM rooms ORDER BY rowid")
             ]
 
+    def member_for_session(self, room_id: str, session_id: str) -> Member:
+        with self.store.read() as connection:
+            self.room_in(connection, room_id)
+            row = connection.execute(
+                "SELECT payload FROM members WHERE room_id = ? AND session_id = ? "
+                "AND deleted_at IS NULL",
+                (room_id, session_id),
+            ).fetchone()
+            if row is None:
+                raise RoomNotFoundError("该 Codex 会话尚未加入此聊天室")
+            return Member.model_validate_json(row["payload"])
+
     @staticmethod
     def project_exists_in(connection: sqlite3.Connection, project_path: str) -> bool:
         return (

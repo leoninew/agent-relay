@@ -181,7 +181,7 @@ def test_persistent_event_catchup_covers_resources_subscriptions_and_queue_resul
         },
     ).json()
     submitter = DeliveryService(
-        service.store, FakeQueueDriver(), logging.getLogger("tests.events"), 1, "http://testserver"
+        service.store, FakeQueueDriver(), logging.getLogger("tests.events"), 1
     )
     while work := service.store.claim_delivery():
         submitter.submit(work)

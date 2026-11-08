@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "agent-relay": {
+      "command": "agent-relay",
+      "args": ["mcp"],
+      "env_vars": ["AGENT_RELAY_URL", "AGENT_RELAY_HTTP_TIMEOUT"]
+    }
+  }
+}

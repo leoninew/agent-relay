@@ -13,13 +13,20 @@ from room_fixtures import DemoRoomService, create_room_store
 from session_fixtures import FakeQueueDriver, FakeSessionDriver
 
 from agent_relay.api import create_app
-from agent_relay.cli import HttpResponse, RelayHttpClient, main
+from agent_relay.cli import main
+from agent_relay.client import HttpResponse, RelayClient
 from agent_relay.delivery_service import DeliveryService
 from agent_relay.drivers.codex import SessionInfo
 from agent_relay.room_queries import RoomQueries
 from agent_relay.room_store import SQLiteRoomStore
 
 ROOM = "agent-relay"
+
+
+@pytest.fixture(autouse=True)
+def operator_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("CODEX_THREAD_ID", raising=False)
+    monkeypatch.delenv("AGENT_RELAY_SESSION_ID", raising=False)
 
 
 @dataclass
@@ -278,7 +285,6 @@ def test_delivery_queries_read_current_queued_receipts(cli: CliHarness) -> None:
         FakeQueueDriver(),
         logging.getLogger("tests.cli.queue"),
         1,
-        "http://testserver",
     )
     while work := cli.service.store.claim_delivery():
         submitter.submit(work)
@@ -327,9 +333,108 @@ def test_client_encodes_base_path_and_query_values() -> None:
         assert timeout == 4
         return BufferedResponse(200, {"x-request-id": "request-encoding"}, b"[]")
 
-    client = RelayHttpClient("http://localhost/relay/", 4, opener=open_request)
+    client = RelayClient("http://localhost/relay/", 4, opener=open_request)
     result = client.request("GET", "/api/room", params={"topic_id": "话题 +&", "limit": 10})
     url = urlsplit(calls[0].full_url)
     assert url.path == "/relay/api/room"
     assert parse_qs(url.query) == {"topic_id": ["话题 +&"], "limit": ["10"]}
     assert result.request_id == "request-encoding"
+
+
+def test_member_publication_preserves_identity_targets_and_lookup(cli: CliHarness) -> None:
+    published = cli.run(
+        "message",
+        "publish",
+        ROOM,
+        "--as-member",
+        "coordinator",
+        "--publication-id",
+        "member-cli",
+        "--content",
+        "成员通过 CLI 协作",
+        "--topic-id",
+        "frontend",
+        "--mention",
+        "backend-worker",
+        "--reply-to",
+        "agent-relay-msg-0004",
+    )
+    assert published["senderId"] == "coordinator"
+    assert published["recipientIds"] == ["frontend-worker", "backend-worker", "test-worker"]
+    assert published["replyToMessageId"] == "agent-relay-msg-0004"
+    assert cli.run("message", "publication", ROOM, "member-cli", "--as-member", "coordinator") == (
+        published
+    )
+    assert cli.calls[-1][0].full_url.endswith("/member/coordinator/publication/member-cli")
+
+
+def test_member_catalog_context_and_positions_use_the_member_scope(cli: CliHarness) -> None:
+    member_id = "frontend-worker"
+    catalog = cli.run("member", "catalog", ROOM, member_id)
+    assert catalog["memberId"] == member_id
+    assert {topic["id"] for topic in catalog["topics"] if topic["subscribed"]} == {
+        "frontend",
+        "summary",
+    }
+    initial = cli.run("member", "positions", ROOM, member_id)
+    assert all(row["seq"] == 0 for row in initial)
+    page = cli.run(
+        "member",
+        "context",
+        ROOM,
+        member_id,
+        "--topic-id",
+        "frontend",
+        "--after-seq",
+        "0",
+        "--limit",
+        "2",
+    )
+    assert page["queryId"] and page["hasMore"]
+    assert len(page["messages"]) == 2
+    following = cli.run(
+        "member",
+        "context",
+        ROOM,
+        member_id,
+        "--topic-id",
+        "frontend",
+        "--after-seq",
+        str(page["nextAfterSeq"]),
+        "--limit",
+        "2",
+    )
+    assert not following["hasMore"]
+    assert following["messages"][0]["seq"] > page["messages"][-1]["seq"]
+    current = cli.run("member", "positions", ROOM, member_id)
+    assert (
+        next(row["seq"] for row in current if row["topicId"] == "frontend")
+        == (following["messages"][-1]["seq"])
+    )
+    single = cli.run("member", "context", ROOM, member_id, "--message-id", "agent-relay-msg-0002")
+    assert [row["id"] for row in single["messages"]] == ["agent-relay-msg-0002"]
+    recent = cli.run("member", "context", ROOM, member_id, "--limit", "2")
+    assert recent["queryId"] and len(recent["messages"]) == 2
+
+
+def test_cli_uses_current_codex_session_for_member_collaboration(
+    cli: CliHarness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("CODEX_THREAD_ID", "agent-relay-frontend")
+    assert cli.run("member", "catalog", ROOM)["memberId"] == "frontend-worker"
+    claim = cli.run(
+        "message",
+        "publish",
+        ROOM,
+        "--publication-id",
+        "bound-claim",
+        "--content",
+        "我认领联调",
+        "--mention",
+        "backend-worker",
+    )
+    assert claim["senderId"] == "frontend-worker"
+    assert cli.run("message", "publication", ROOM, "bound-claim") == claim
+    recent = cli.run("member", "context", ROOM, "--limit", "1")
+    assert recent["messages"][0]["id"] == claim["id"]
+    assert cli.run("member", "positions", ROOM)

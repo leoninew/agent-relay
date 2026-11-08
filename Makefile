@@ -6,11 +6,12 @@ profile ?= dev
 RUFF_CHECK_ARGS := $(if $(filter 1,$(fix)),--fix,)
 RUFF_FORMAT_ARGS := $(if $(filter 1,$(fix)),.,--check .)
 
-.PHONY: help deps check test web migrate webapi
+.PHONY: help deps install check test web migrate webapi
 
 help:
 	@printf "Available targets:\n"
 	@printf "  make deps             Install locked backend and frontend dependencies\n"
+	@printf "  make install          Install CLI and publish MCP/skill to Codex\n"
 	@printf "  make check            Check backend and frontend types, lint, and format\n"
 	@printf "  make check fix=1      Apply backend and frontend lint and format fixes\n"
 	@printf "  make test             Run backend and frontend unit tests\n"
@@ -22,6 +23,13 @@ help:
 deps:
 	uv sync --all-groups --locked
 	cd web && corepack yarn install --immutable
+
+install:
+	uv run --locked python scripts/install.py plugin check --codex
+	uv tool install --editable . --force
+	agent-relay --help
+	uv run --locked python scripts/install.py plugin apply --codex
+	@printf "Restart Codex sessions to load the installed MCP and skill.\n"
 
 check:
 	uv run --locked mypy src tests

@@ -1,0 +1,11 @@
+{
+  "name": "agent-relay",
+  "version": "0.1.0",
+  "description": "Use Agent Relay rooms, topics and member messages to collaborate across Codex sessions.",
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Agent Relay",
+    "shortDescription": "Coordinate work and communicate through Agent Relay."
+  }
+}

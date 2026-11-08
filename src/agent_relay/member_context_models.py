@@ -22,6 +22,8 @@ class CatalogMember(RoomModel):
 class MemberCatalog(RoomModel):
     room_id: str
     room_name: str
+    room_description: str
+    project_path: str
     member_id: str
     topics: list[CatalogTopic]
     members: list[CatalogMember]
@@ -49,19 +51,16 @@ class ContextQuery(RoomModel):
 
     @model_validator(mode="after")
     def validate_selection(self) -> Self:
-        if self.message_id is not None:
-            if any(
-                value is not None
-                for value in (
-                    self.topic_id,
-                    self.keyword,
-                    self.before_seq,
-                    self.after_seq,
-                )
-            ):
-                raise ValueError("Single message lookup cannot include filters or cursors")
-        elif self.topic_id is None and self.keyword is None:
-            raise ValueError("Choose a message, topic or keyword")
+        if self.message_id is not None and any(
+            value is not None
+            for value in (
+                self.topic_id,
+                self.keyword,
+                self.before_seq,
+                self.after_seq,
+            )
+        ):
+            raise ValueError("Single message lookup cannot include filters or cursors")
         if self.before_seq is not None and self.after_seq is not None:
             raise ValueError("Choose one pagination direction")
         return self

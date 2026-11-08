@@ -1,4 +1,3 @@
-import json
 import logging
 from pathlib import Path
 from time import monotonic, sleep
@@ -58,7 +57,7 @@ def test_web_publications_reach_original_sessions_and_results_survive_restart(
     driver = FakeQueueDriver()
     logger = logging.getLogger("tests.queue")
     # Drain existing fixture messages using the same durable claiming path.
-    submitter = DeliveryService(store, driver, logger, 2, "http://testserver")
+    submitter = DeliveryService(store, driver, logger, 2)
     while work := store.claim_delivery():
         submitter.submit(work)
     driver.calls.clear()
@@ -107,13 +106,11 @@ def test_web_publications_reach_original_sessions_and_results_survive_restart(
             }
     assert len(driver.calls) == sum(len(m["deliveries"]) for m in results)
     for session_id, client_id, text in driver.calls:
-        envelope = json.loads(text.split("\n", 1)[1])
         delivery = next(
             d for m in results for d in m["deliveries"] if d["clientMessageId"] == client_id
         )
         assert session_id == delivery["targetSessionId"]
-        assert envelope["targetMemberId"] == delivery["targetMemberId"]
-        assert envelope["senderKind"] == "user" and envelope["senderId"] is None
+        assert text == ("roomId: agent-relay\n发送者: 聊天室用户：控制台\n\n仅验证投递")
 
 
 def test_human_message_to_the_only_topic_member_reaches_its_original_session(
@@ -138,7 +135,7 @@ def test_human_message_to_the_only_topic_member_reaches_its_original_session(
             return receipt
 
     driver = ConsumingDriver()
-    submitter = DeliveryService(store, driver, logging.getLogger("tests.receive"), 2, "http://test")
+    submitter = DeliveryService(store, driver, logging.getLogger("tests.receive"), 2)
     published = service.post_message(
         room.id,
         CreateMessage(
@@ -192,7 +189,7 @@ def test_older_original_input_is_confirmed_across_history_pages(tmp_path: Path) 
             return InputPage((ReceivedInput(client_id, "original-item", "original-turn"),), None)
 
     driver = HistoryDriver()
-    submitter = DeliveryService(store, driver, logging.getLogger("tests.history"), 2, "http://test")
+    submitter = DeliveryService(store, driver, logging.getLogger("tests.history"), 2)
     work = store.claim_delivery()
     assert work is not None
     submitter.submit(work)

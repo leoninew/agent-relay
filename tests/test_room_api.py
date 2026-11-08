@@ -21,9 +21,7 @@ ROOM_ROUTE = "/api/room/agent-relay"
 def client(tmp_path: Path) -> Iterator[TestClient]:
     service = DemoRoomService(create_room_store(tmp_path / "room.sqlite3"))
     queue = FakeQueueDriver()
-    submitter = DeliveryService(
-        service.store, queue, logging.getLogger("tests.queue.seed"), 1, "http://testserver"
-    )
+    submitter = DeliveryService(service.store, queue, logging.getLogger("tests.queue.seed"), 1)
     while work := service.store.claim_delivery():
         submitter.submit(work)
     # API contract checks read committed fixtures without racing the dispatcher.
