@@ -279,11 +279,15 @@ class CodexDriver:
         name = thread.get("name")
         if name is not None and not isinstance(name, str):
             raise RpcDisconnected("Invalid Codex thread name")
+        name = (name or "").strip()
+        preview = thread.get("preview")
+        if not name and isinstance(preview, str):
+            name = " ".join(preview.split())
         return SessionInfo(
             id=cast(str, values[0]),
             cwd=cast(str, values[1]),
             provider=cast(str, values[2]),
-            name=name or cast(str, values[0]),
+            name=name or "未命名会话",
             status=status,
             archived=archived,
         )

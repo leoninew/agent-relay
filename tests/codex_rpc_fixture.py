@@ -54,7 +54,8 @@ def row(thread_id: str) -> dict[str, Any]:
         "id": thread_id,
         "cwd": "D:/project",
         "modelProvider": "test-provider",
-        "name": "Worker " + thread_id,
+        "name": None if thread_id == "two" else "Worker " + thread_id,
+        "preview": "First message " + thread_id,
         "status": {
             "type": "idle"
             if mode == "delivery"

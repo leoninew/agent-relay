@@ -83,6 +83,11 @@ def driver(mode: str = "normal") -> CodexDriver:
 def test_metadata_queries_cover_all_pages_providers_sources_and_archives() -> None:
     sessions = driver().list_sessions()
     assert [info.id for info in sessions] == ["one", "two", "archived"]
+    assert [info.name for info in sessions] == [
+        "Worker one",
+        "First message two",
+        "Worker archived",
+    ]
     assert sessions[0].presence == "busy"
     assert sessions[1].presence == "unknown"
     assert sessions[0].usable and not sessions[1].usable
@@ -91,6 +96,33 @@ def test_metadata_queries_cover_all_pages_providers_sources_and_archives() -> No
     assert info.id == "original-id"
     assert info.cwd == "D:/project"
     assert info.name == "Worker original-id"
+
+
+@pytest.mark.parametrize(
+    ("name", "preview", "expected"),
+    [
+        ("会话名称", "首条消息", "会话名称"),
+        (None, "  首条消息\n的预览  ", "首条消息 的预览"),
+        ("  ", "首条消息", "首条消息"),
+        ("", "", "未命名会话"),
+        (None, None, "未命名会话"),
+    ],
+)
+def test_session_display_name_uses_preview_before_an_unnamed_label(
+    name: str | None, preview: str | None, expected: str
+) -> None:
+    info = CodexDriver._session(
+        {
+            "id": "original-id",
+            "cwd": "D:/project",
+            "modelProvider": "test-provider",
+            "status": {"type": "idle"},
+            "name": name,
+            "preview": preview,
+        }
+    )
+    assert info.name == expected
+    assert info.id == "original-id"
 
 
 def test_queue_submits_to_original_thread_and_preserves_receipt() -> None:

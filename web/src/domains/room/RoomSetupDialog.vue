@@ -27,48 +27,115 @@
             <RadioGroupRoot
               ref="sessionChoices"
               v-model="sessionId"
-              class="session-options"
+              class="grid gap-3 rounded-lg border border-transparent p-0.5 aria-[invalid=true]:border-destructive"
               :disabled="saving"
               aria-labelledby="setup-session-label"
               :aria-invalid="!!errors.session"
               aria-describedby="setup-session-error"
             >
-              <div v-for="session in sessions" :key="session.id" class="session-option-row">
-                <RadioGroupItem
-                  :value="session.id"
-                  class="session-option"
-                  :disabled="!!session.memberId || !session.usable"
-                  :aria-invalid="!!errors.session"
-                >
-                  <span class="session-option-label">
-                    <strong :title="session.name">{{ session.name }}</strong>
-                    <span :title="session.id">{{ session.id }}</span>
-                  </span>
-                </RadioGroupItem>
-                <span class="session-option-meta">
-                  <AppTooltip
-                    v-if="!session.usable && session.unavailableReason"
-                    :text="session.unavailableReason"
-                  >
-                    <button
-                      type="button"
-                      class="session-option-help"
-                      :aria-label="`${session.name}不可用：${session.unavailableReason}`"
+              <template v-if="availableSessions.length">
+                <p class="text-xs text-muted-foreground">
+                  可加入会话 <span class="ml-1 tabular-nums">{{ availableSessions.length }}</span>
+                </p>
+                <div class="grid max-h-64 gap-2 overflow-y-auto rounded-lg p-0.5">
+                  <div v-for="session in availableSessions" :key="session.id" class="relative">
+                    <RadioGroupItem
+                      :value="session.id"
+                      class="group flex w-full items-start gap-3 rounded-lg border border-border bg-card p-3 text-start outline-none transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset disabled:opacity-60 data-[state=checked]:border-primary/60 data-[state=checked]:bg-primary/5 motion-reduce:transition-none"
+                      :aria-invalid="!!errors.session"
                     >
-                      {{ sessionStatus(session) }}<AppIcon name="info" />
-                    </button>
-                  </AppTooltip>
-                  <span v-else>{{ sessionStatus(session) }}</span>
-                  <AppClearButton
-                    v-if="sessionId === session.id"
-                    label="清空所选会话"
-                    :disabled="saving"
-                    @clear="clearSession"
-                  />
-                </span>
+                      <span
+                        class="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border border-input group-data-[state=checked]:border-primary group-data-[state=checked]:bg-primary"
+                      >
+                        <RadioGroupIndicator class="flex">
+                          <AppIcon name="check" class="size-3 text-primary-foreground" />
+                        </RadioGroupIndicator>
+                      </span>
+                      <span class="grid min-w-0 flex-1 gap-1">
+                        <span class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+                          <span class="min-w-0 flex-1 truncate font-medium" :title="session.name">
+                            {{ session.name }}
+                          </span>
+                          <span class="shrink-0 text-xs text-muted-foreground">
+                            {{ sessionStatus(session) }}
+                          </span>
+                        </span>
+                        <span
+                          class="truncate pr-7 text-xs text-muted-foreground"
+                          :title="session.id"
+                        >
+                          {{ session.id }}
+                        </span>
+                      </span>
+                    </RadioGroupItem>
+                    <AppClearButton
+                      v-if="sessionId === session.id"
+                      class="absolute right-2 bottom-2"
+                      label="清空所选会话"
+                      :disabled="saving"
+                      @clear="clearSession"
+                    />
+                  </div>
+                </div>
+              </template>
+              <div
+                v-else
+                class="rounded-lg border border-dashed border-border bg-muted/30 px-4 py-5 text-center"
+              >
+                <p class="text-muted-foreground">
+                  {{ sessions?.length ? "暂无可加入的会话" : "当前项目目录下暂无 Codex 会话" }}
+                </p>
+                <p class="mt-1 text-xs text-muted-foreground">
+                  {{
+                    sessions?.length
+                      ? "可刷新会话，或展开下方列表查看原因。"
+                      : "打开此项目的 Codex 会话后刷新列表。"
+                  }}
+                </p>
               </div>
+              <CollapsibleRoot
+                v-if="unavailableSessions.length"
+                v-model:open="unavailableOpen"
+                :disabled="saving"
+                class="border-t border-border pt-2"
+              >
+                <CollapsibleTrigger
+                  class="group flex w-full items-center gap-2 rounded-md px-2 py-2 text-start text-xs text-muted-foreground hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                >
+                  <AppIcon
+                    name="chevron"
+                    class="size-3.5 shrink-0 transition-transform group-data-[state=open]:rotate-90 motion-reduce:transition-none"
+                  />
+                  <span>不可用会话</span>
+                  <span class="ml-auto rounded bg-muted px-1.5 py-0.5 tabular-nums">
+                    {{ unavailableSessions.length }}
+                  </span>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <ul
+                    aria-label="不可用会话"
+                    class="mt-2 grid max-h-48 gap-2 overflow-y-auto rounded-lg"
+                  >
+                    <li
+                      v-for="session in unavailableSessions"
+                      :key="session.id"
+                      class="grid min-w-0 gap-1 rounded-md bg-muted/40 p-3 text-muted-foreground"
+                    >
+                      <div class="flex min-w-0 items-center gap-3">
+                        <span class="min-w-0 flex-1 truncate font-medium" :title="session.name">
+                          {{ session.name }}
+                        </span>
+                        <span class="shrink-0 text-xs">{{ sessionStatus(session) }}</span>
+                      </div>
+                      <span class="truncate text-xs" :title="session.id">{{ session.id }}</span>
+                      <p class="text-xs break-words">
+                        {{ unavailableReason(session) }}
+                      </p>
+                    </li>
+                  </ul>
+                </CollapsibleContent>
+              </CollapsibleRoot>
             </RadioGroupRoot>
-            <p v-if="!sessions?.length" class="session-state">当前项目目录下暂无 Codex 会话</p>
           </template>
           <p v-if="errors.session" id="setup-session-error" class="field-error">
             {{ errors.session }}
@@ -147,7 +214,14 @@
 </template>
 
 <script setup lang="ts">
-  import { RadioGroupItem, RadioGroupRoot } from "reka-ui";
+  import {
+    CollapsibleContent,
+    CollapsibleRoot,
+    CollapsibleTrigger,
+    RadioGroupIndicator,
+    RadioGroupItem,
+    RadioGroupRoot,
+  } from "reka-ui";
   import { computed, nextTick, ref, watch } from "vue";
 
   import AppButton from "@/components/AppButton.vue";
@@ -156,7 +230,6 @@
   import AppIcon from "@/components/AppIcon.vue";
   import AppInput from "@/components/AppInput.vue";
   import AppLoading from "@/components/AppLoading.vue";
-  import AppTooltip from "@/components/AppTooltip.vue";
   import MemberTopicsField from "@/domains/room/MemberTopicsField.vue";
   import type {
     CreateMember,
@@ -191,11 +264,18 @@
   const name = ref("");
   const sessionId = ref("");
   const sessionChoices = ref<InstanceType<typeof RadioGroupRoot>>();
+  const unavailableOpen = ref(false);
   const projectPath = ref("");
   const description = ref("");
   const topicIds = ref<string[]>([]);
   const topicSaving = ref(false);
   const errors = ref<Record<string, string>>({});
+  const availableSessions = computed(() =>
+    (props.sessions ?? []).filter((session) => session.usable && !session.memberId),
+  );
+  const unavailableSessions = computed(() =>
+    (props.sessions ?? []).filter((session) => !session.usable || session.memberId),
+  );
   const title = computed(() =>
     props.mode === "room"
       ? "新建聊天室"
@@ -210,12 +290,18 @@
     if (session.memberId) return "已加入";
     if (session.archived) return "已归档";
     if (!session.usable) return "不可用";
-    return session.presence === "busy" ? "忙碌，可排队" : "可用";
+    return session.presence === "busy" ? "忙碌" : "空闲";
+  }
+
+  function unavailableReason(session: SessionCandidate): string {
+    if (session.unavailableReason) return session.unavailableReason;
+    return session.memberId ? "此会话已加入当前聊天室。" : "此会话暂不可加入，请刷新后重试。";
   }
 
   watch([() => props.mode, () => props.topic?.id, () => props.roomId], () => {
     name.value = props.topic?.name ?? "";
     sessionId.value = "";
+    unavailableOpen.value = false;
     projectPath.value = "";
     description.value = props.topic?.description ?? "";
     topicIds.value = [];
@@ -294,28 +380,3 @@
     }
   }
 </script>
-
-<style scoped>
-  .session-option-help {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 0;
-    border: 0;
-    border-radius: 4px;
-    color: inherit;
-    font: inherit;
-    background: transparent;
-    cursor: help;
-  }
-
-  .session-option-help:hover,
-  .session-option-help:focus-visible {
-    color: hsl(var(--foreground));
-  }
-
-  .session-option-help svg {
-    width: 14px;
-    height: 14px;
-  }
-</style>
