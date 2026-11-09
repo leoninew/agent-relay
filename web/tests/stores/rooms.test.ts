@@ -80,7 +80,7 @@ describe("room state", () => {
     expect(snapshot.summary.totalMessages).toBe(2);
   });
 
-  it("applies delivery updates and appends new messages matching topic and sender", () => {
+  it("applies delivery updates and appends new messages matching topic and member", () => {
     const store = useRoomsStore();
     const initial = roomFixture();
     store.sync(initial);
@@ -109,20 +109,49 @@ describe("room state", () => {
     ]);
   });
 
-  it("keeps messages addressed to the user visible during topic filtering", () => {
+  it.each([
+    { query: {}, expected: [3, 4, 5, 6, 7] },
+    { query: { topicId: "backend" }, expected: [3, 4] },
+    { query: { memberId: "backend-worker" }, expected: [3, 4, 5, 6] },
+    { query: { memberId: "user" }, expected: [5, 7] },
+    { query: { topicId: "backend", memberId: "backend-worker" }, expected: [3, 4] },
+    { query: { topicId: "frontend", memberId: "backend-worker" }, expected: [5] },
+    { query: { topicId: "frontend", memberId: "user" }, expected: [5] },
+    { query: { topicId: "backend", memberId: "user" }, expected: [] },
+  ])("matches topic and member filters: $query", ({ query, expected }) => {
     const store = useRoomsStore();
     const initial = roomFixture();
-    store.sync(initial);
-    const message = {
-      ...initial.messages[1],
-      id: "msg-0003",
-      seq: 3,
-      topicIds: [],
+    const sent = { ...initial.messages[1], id: "sent", seq: 3 };
+    const received = {
+      ...sent,
+      id: "received",
+      seq: 4,
+      senderId: "frontend-worker",
+      mentionedMemberIds: [],
+      recipientIds: ["backend-worker", "test-worker"],
+    };
+    const otherTopic = {
+      ...sent,
+      id: "other-topic",
+      seq: 5,
+      topicIds: ["frontend"],
       mentionedMemberIds: ["user"],
       recipientIds: ["user"],
+    };
+    const direct = { ...received, id: "direct", seq: 6, topicIds: [] };
+    const userOnly = {
+      ...otherTopic,
+      id: "user-only",
+      seq: 7,
+      senderId: "frontend-worker",
+      topicIds: [],
       deliveries: [],
     };
-    store.applyMessages(initial.room.id, [message], { topicId: "frontend" });
-    expect(store.snapshots[initial.room.id].messages.at(-1)).toEqual(message);
+    store.sync({ ...initial, messages: [] });
+    store.applyMessages(initial.room.id, [sent, received, otherTopic, direct, userOnly], query);
+
+    expect(store.snapshots[initial.room.id].messages.map((message) => message.seq)).toEqual(
+      expected,
+    );
   });
 });

@@ -80,16 +80,15 @@ export const useRoomsStore = defineStore("rooms", () => {
     const snapshot = snapshots.value[roomId];
     const included = new Set(snapshot.messages.map((message) => message.id));
     const newestSeq = snapshot.messages.at(-1)?.seq ?? 0;
-    const userId = snapshot.members.find((member) => member.kind === "human")?.id;
     const updates = messages.filter(
       (message) =>
         included.has(message.id) ||
         (!snapshot.hasNewer &&
           message.seq > newestSeq &&
-          (!query.topicId ||
-            message.topicIds.includes(query.topicId) ||
-            (userId !== undefined && message.recipientIds.includes(userId))) &&
-          (!query.memberId || message.senderId === query.memberId)),
+          (!query.topicId || message.topicIds.includes(query.topicId)) &&
+          (!query.memberId ||
+            message.senderId === query.memberId ||
+            message.recipientIds.includes(query.memberId))),
     );
     snapshot.messages = orderedMessages([...snapshot.messages, ...updates]);
   }

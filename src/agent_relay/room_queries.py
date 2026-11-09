@@ -218,10 +218,9 @@ class RoomQueries:
             ):
                 raise RoomNotFoundError("话题不存在")
             clauses.append(
-                "(EXISTS (SELECT 1 FROM json_each(m.payload, '$.topic_ids') WHERE value = ?) "
-                "OR EXISTS (SELECT 1 FROM json_each(m.payload, '$.recipient_ids') WHERE value = ?))"
+                "EXISTS (SELECT 1 FROM json_each(m.payload, '$.topic_ids') WHERE value = ?)"
             )
-            args.extend([topic_id, USER_MEMBER_ID])
+            args.append(topic_id)
         if member_id is not None:
             if (
                 connection.execute(
@@ -230,8 +229,11 @@ class RoomQueries:
                 is None
             ):
                 raise RoomNotFoundError("成员不存在")
-            clauses.append("m.publisher_id = ?")
-            args.append(member_id)
+            clauses.append(
+                "(m.publisher_id = ? OR EXISTS "
+                "(SELECT 1 FROM json_each(m.payload, '$.recipient_ids') WHERE value = ?))"
+            )
+            args.extend([member_id, member_id])
         where = " AND ".join(clauses)
         newer = (
             before_seq is not None

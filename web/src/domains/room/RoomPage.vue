@@ -85,8 +85,8 @@
       <RoomComposer
         :key="snapshot.room.id"
         ref="composer"
+        v-model:draft="drafts[snapshot.room.id]"
         :room-id="snapshot.room.id"
-        :draft="drafts[snapshot.room.id]"
         :topics="activeTopics"
         :members="activeMembers"
         :reply-to="replyTo"
@@ -94,7 +94,6 @@
         :locked="Boolean(pendingPublication)"
         :error="sendError"
         @send="sendMessage"
-        @draft="saveDraft"
         @cancel-reply="replyTo = undefined"
       />
       <div v-if="pendingPublication && !sending" class="room-alert" role="status">
@@ -433,13 +432,22 @@
     else await initialize();
   }
 
-  function saveDraft(roomId: string, draft: MessageDraft): void {
-    drafts.value[roomId] = draft;
+  function syncDraftRouting(): void {
+    const roomId = currentRoomId.value;
+    if (!roomId || pendingPublication.value) return;
+    const draft = drafts.value[roomId] ?? { content: "", topicIds: [], mentionedMemberIds: [] };
+    const member = activeMembers.value.find((member) => member.id === selectedMemberId.value);
+    drafts.value[roomId] = {
+      ...draft,
+      topicIds: selectedTopicId.value ? [selectedTopicId.value] : [],
+      mentionedMemberIds: member?.kind === "agent" ? [member.id] : [],
+    };
   }
 
   async function selectTopic(topicId?: string): Promise<void> {
     selectedTopicId.value = topicId;
     if (!topicId) selectedMemberId.value = undefined;
+    syncDraftRouting();
     await loadRoom();
     await nextTick();
     timeline.value?.scrollToEnd();
@@ -447,6 +455,7 @@
 
   async function selectMember(memberId: string): Promise<void> {
     selectedMemberId.value = selectedMemberId.value === memberId ? undefined : memberId;
+    syncDraftRouting();
     await loadRoom();
     await nextTick();
     timeline.value?.scrollToEnd();

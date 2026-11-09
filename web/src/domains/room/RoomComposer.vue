@@ -117,7 +117,6 @@
 
   const props = defineProps<{
     roomId: string;
-    draft?: MessageDraft;
     topics: Topic[];
     members: Member[];
     replyTo?: RoomMessage;
@@ -128,12 +127,29 @@
   const emit = defineEmits<{
     send: [message: MessageDraft];
     cancelReply: [];
-    draft: [roomId: string, draft: MessageDraft];
   }>();
 
-  const content = ref(props.draft?.content ?? "");
-  const topicIds = ref<string[]>(props.draft?.topicIds ?? []);
-  const mentionedMemberIds = ref<string[]>(props.draft?.mentionedMemberIds ?? []);
+  const draft = defineModel<MessageDraft>("draft", {
+    default: () => ({ content: "", topicIds: [], mentionedMemberIds: [] }),
+  });
+  const content = computed({
+    get: () => draft.value.content,
+    set: (content) => {
+      draft.value = { ...draft.value, content };
+    },
+  });
+  const topicIds = computed({
+    get: () => draft.value.topicIds,
+    set: (topicIds) => {
+      draft.value = { ...draft.value, topicIds };
+    },
+  });
+  const mentionedMemberIds = computed({
+    get: () => draft.value.mentionedMemberIds,
+    set: (mentionedMemberIds) => {
+      draft.value = { ...draft.value, mentionedMemberIds };
+    },
+  });
   const attempted = ref(false);
   const textarea = ref<InstanceType<typeof AppInput>>();
   const showContentError = computed(() => attempted.value && !content.value.trim());
@@ -155,36 +171,28 @@
   watch(
     [() => props.topics, () => props.members],
     () => {
-      topicIds.value = topicIds.value.filter((id) => props.topics.some((topic) => topic.id === id));
-      mentionedMemberIds.value = mentionedMemberIds.value.filter((id) =>
-        agentMembers.value.some((member) => member.id === id),
-      );
+      draft.value = {
+        ...draft.value,
+        topicIds: topicIds.value.filter((id) => props.topics.some((topic) => topic.id === id)),
+        mentionedMemberIds: mentionedMemberIds.value.filter((id) =>
+          agentMembers.value.some((member) => member.id === id),
+        ),
+      };
     },
     { immediate: true },
-  );
-
-  watch(
-    [content, topicIds, mentionedMemberIds],
-    () => {
-      emit("draft", props.roomId, {
-        content: content.value,
-        topicIds: [...topicIds.value],
-        mentionedMemberIds: [...mentionedMemberIds.value],
-      });
-    },
-    { deep: true },
   );
 
   watch(
     () => props.replyTo,
     async (message) => {
       if (message) {
-        topicIds.value = message.topicIds.filter((id) =>
-          props.topics.some((topic) => topic.id === id),
-        );
-        mentionedMemberIds.value = message.mentionedMemberIds.filter((id) =>
-          agentMembers.value.some((member) => member.id === id),
-        );
+        draft.value = {
+          ...draft.value,
+          topicIds: message.topicIds.filter((id) => props.topics.some((topic) => topic.id === id)),
+          mentionedMemberIds: message.mentionedMemberIds.filter((id) =>
+            agentMembers.value.some((member) => member.id === id),
+          ),
+        };
         await nextTick();
         textarea.value?.focus();
       }
@@ -212,8 +220,7 @@
   }
 
   function reset(): void {
-    content.value = "";
-    mentionedMemberIds.value = [];
+    draft.value = { ...draft.value, content: "", mentionedMemberIds: [] };
     attempted.value = false;
     textarea.value?.focus();
   }

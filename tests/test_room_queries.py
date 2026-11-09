@@ -12,7 +12,7 @@ from session_fixtures import FakeQueueDriver, FakeSessionDriver
 from agent_relay.api import create_app
 from agent_relay.delivery_service import DeliveryService
 from agent_relay.drivers.codex import SessionInfo
-from agent_relay.room_models import RoomEvent
+from agent_relay.room_models import CreateMessage, RoomEvent
 from agent_relay.room_queries import RoomQueries
 from agent_relay.room_service import RoomService
 from agent_relay.room_store import SQLiteRoomStore
@@ -107,7 +107,7 @@ def test_keyset_history_keeps_three_pages_stable_during_new_publication(
     assert client.get(f"{ROOM}/metadata").json()["summary"]["totalMessages"] == 126
 
 
-def test_topic_and_sender_filter_before_pagination_keep_whole_room_statistics(
+def test_topic_and_member_filter_before_pagination_keep_whole_room_statistics(
     service: DemoRoomService,
     client: TestClient,
 ) -> None:
@@ -127,14 +127,62 @@ def test_topic_and_sender_filter_before_pagination_keep_whole_room_statistics(
         pages.append(client.get(f"{ROOM}/message", params=params).json())
     messages = [message for page in reversed(pages) for message in page["messages"]]
     assert len(pages) > 2
-    assert [message["seq"] for message in messages] == [
-        seq for seq in range(7, 126) if seq % 2 == 0 and seq % 3 != 2
+    assert [message["seq"] for message in messages] == [4, 5, 6] + [
+        seq for seq in range(7, 126) if seq % 3 != 2
     ]
     assert all(
-        message["senderId"] == "frontend-worker" and "frontend" in message["topicIds"]
+        "frontend" in message["topicIds"]
+        and (
+            message["senderId"] == "frontend-worker" or "frontend-worker" in message["recipientIds"]
+        )
         for message in messages
     )
     assert client.get(f"{ROOM}/metadata").json() == full
+
+
+def test_topic_and_member_filters_use_explicit_topics_and_resolved_recipients(
+    service: DemoRoomService, client: TestClient
+) -> None:
+    publications = [
+        ("frontend-worker", ["frontend"], ["user"]),
+        ("backend-worker", ["frontend"], []),
+        ("backend-worker", [], ["frontend-worker"]),
+        ("backend-worker", [], ["user"]),
+        ("backend-worker", ["backend"], ["user"]),
+        ("backend-worker", [], ["test-worker"]),
+        (None, [], ["frontend-worker"]),
+    ]
+    for index, (sender_id, topic_ids, mentioned_member_ids) in enumerate(publications):
+        service.post_message(
+            "agent-relay",
+            CreateMessage(
+                publication_id=f"filter-{index}",
+                content=f"筛选消息 {index}",
+                topic_ids=topic_ids,
+                mentioned_member_ids=mentioned_member_ids,
+            ),
+            member_id=sender_id,
+        )
+    cases = [
+        ({}, list(range(1, 14))),
+        ({"topic_id": "frontend"}, [4, 5, 6, 7, 8]),
+        ({"member_id": "frontend-worker"}, [1, 2, 4, 5, 6, 7, 8, 9, 13]),
+        ({"member_id": "user"}, [7, 10, 11, 13]),
+        ({"topic_id": "frontend", "member_id": "frontend-worker"}, [4, 5, 6, 7, 8]),
+        ({"topic_id": "frontend", "member_id": "user"}, [7]),
+        ({"topic_id": "backend", "member_id": "user"}, [11]),
+        ({"topic_id": "summary", "member_id": "user"}, []),
+    ]
+    for filters, expected in cases:
+        snapshot = client.get(ROOM, params=filters).json()
+        assert [message["seq"] for message in snapshot["messages"]] == expected
+        page = client.get(f"{ROOM}/message", params={**filters, "before_seq": 10}).json()
+        assert [message["seq"] for message in page["messages"]] == [
+            seq for seq in expected if seq < 10
+        ]
+        assert page["hasNewer"] == any(seq >= 10 for seq in expected)
+        assert not page["hasMore"]
+        assert snapshot["summary"]["totalMessages"] == 13
 
 
 def test_exact_reference_loads_a_page_ending_at_the_target_and_preserves_delivery_details(
