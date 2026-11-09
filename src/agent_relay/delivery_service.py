@@ -157,11 +157,7 @@ class DeliveryService:
 
     def _submit(self, work: ClaimedDelivery) -> None:
         delivery = work.delivery.model_copy(deep=True)
-        sender = (
-            f"{work.message.sender_name}（{work.message.sender_id}）"
-            if work.message.sender_id is not None
-            else f"聊天室用户：{work.message.sender_name}"
-        )
+        sender = f"{work.message.sender_name}（{work.message.sender_id}）"
         text = f"roomId: {work.room_id}\n发送者: {sender}\n\n{work.message.content}"
         try:
             receipt = self.driver.enqueue(

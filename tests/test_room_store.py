@@ -39,7 +39,11 @@ def test_production_starts_empty_and_does_not_invent_sessions() -> None:
     with TestClient(create_app(logging.getLogger("tests.room.restarted"))) as client:
         assert client.get("/api/room").json() == [created.json()]
         snapshot = client.get(f"/api/room/{room_id}").json()
-        assert snapshot["members"] == snapshot["messages"] == snapshot["topics"] == []
+        assert snapshot["messages"] == snapshot["topics"] == []
+        assert len(snapshot["members"]) == 1
+        assert snapshot["members"][0]["kind"] == "human"
+        assert snapshot["members"][0]["name"] == "你"
+        assert snapshot["members"][0]["sessionId"] is None
 
 
 def test_resources_and_historical_routing_survive_a_new_process(tmp_path: Path) -> None:
@@ -158,8 +162,8 @@ def test_delivery_write_failure_rolls_back_message_and_resource_changes(tmp_path
             content="must roll back",
             topic_ids=["backend"],
             mentioned_member_ids=[],
-            sender_id=None,
-            sender_name="控制台",
+            sender_id="user",
+            sender_name="你",
             created_at=datetime.now(UTC),
         )
         # This fails after the room, subscriptions, and message have been written.

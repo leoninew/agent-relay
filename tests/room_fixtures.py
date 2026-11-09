@@ -89,6 +89,7 @@ class DemoRoomService(RoomService):
                     presence=member.presence,
                 )
                 for member in members
+                if member.session_id is not None
             ],
         )
         other = RoomState(

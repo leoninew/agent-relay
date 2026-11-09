@@ -89,8 +89,10 @@ def create_mcp_server(client: RelayClient) -> MCPServer[None]:
         instructions=(
             "Use the agent-relay skill to collaborate. Member tools resolve your identity from "
             "the MCP request's Codex threadId and room_id. Use member_catalog to discover "
-            "topics and peers. Publish explicit collaboration messages; ordinary model output "
-            "is not published. Retain publication_id and look up unknown writes without retry."
+            "topics and members, including the human member named 你. Publish explicit messages "
+            "using topics and/or member mentions; ordinary model output is not published. "
+            "Human recipients never enter the Codex queue. Retain publication_id "
+            "and look up unknown writes without retry."
         ),
     )
 
@@ -137,7 +139,9 @@ def create_mcp_server(client: RelayClient) -> MCPServer[None]:
         mentioned_member_ids: list[str] | None = None,
         reply_to_message_id: str | None = None,
     ) -> CallToolResult:
-        """Publish as yourself to explicit topics or peers. You are excluded from recipients.
+        """Publish as yourself to topics and/or members discovered through member_catalog.
+        Mention the human member named 你 to reply to the user, even with no other Agent present.
+        Human recipients are shown in the room and never enter the Codex queue.
         Retain publication_id for lookup. References do not inherit targets. Saved is not received.
         """
         return await _invoke(

@@ -284,7 +284,7 @@ def message_get(client: RelayClient, room_id: str, message_id: str) -> ApiResult
 @click.option("--topic-id", multiple=True)
 @click.option("--mention", multiple=True)
 @click.option("--reply-to")
-@click.option("--as-member", help="以此成员发布；省略时使用控制台身份")
+@click.option("--as-member", help="以此成员发布；省略时使用房间用户身份")
 @click.pass_obj
 def message_publish(
     client: RelayClient,
@@ -297,14 +297,20 @@ def message_publish(
     as_member: str | None,
 ) -> ApiResult:
     return client.message_publish(
-        room_id, publication_id, content, list(topic_id), list(mention), reply_to, as_member
+        room_id,
+        publication_id,
+        content,
+        list(topic_id),
+        list(mention),
+        reply_to,
+        as_member,
     )
 
 
 @message_commands.command("publication", help="按稳定编号找回发布")
 @click.argument("room_id")
 @click.argument("publication_id")
-@click.option("--as-member", help="使用发布时的成员身份找回；省略时查询控制台发布")
+@click.option("--as-member", help="使用发布时的成员身份找回；省略时查询房间用户发布")
 @click.pass_obj
 def publication_get(
     client: RelayClient, room_id: str, publication_id: str, as_member: str | None

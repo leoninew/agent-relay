@@ -5,7 +5,7 @@ from pathlib import Path
 from alembic import command
 from alembic.config import Config
 
-MIGRATION_HEAD = "member_api"
+MIGRATION_HEAD = "user_member"
 
 
 def _configuration(path: Path) -> Config:

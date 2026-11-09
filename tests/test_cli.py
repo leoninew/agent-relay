@@ -220,13 +220,34 @@ def test_publication_routes_explicit_targets_and_is_recoverable_without_new_deli
     ]
     published = cli.run(*args)
     assert published["recipientIds"] == recipients
-    assert published["senderId"] is None
+    assert published["senderId"] == "user"
     assert published["replyToMessageId"] == "agent-relay-msg-0004"
     assert cli.run("message", "publication", ROOM, "cli-publication-1") == published
     assert cli.calls[-1][0].get_method() == "GET"
     assert cli.run(*args) == published
     assert cli.run("message", "get", ROOM, published["id"]) == published
     assert cli.run("room", "metadata", ROOM)["summary"]["totalMessages"] == 7
+
+
+def test_cli_can_mention_the_user_without_agent_targets(cli: CliHarness) -> None:
+    message = cli.run(
+        "message",
+        "publish",
+        ROOM,
+        "--publication-id",
+        "cli-console-only",
+        "--content",
+        "流程测试已就绪",
+        "--mention",
+        "user",
+        "--as-member",
+        "coordinator",
+    )
+
+    assert message["senderId"] == "coordinator"
+    assert message["mentionedMemberIds"] == ["user"]
+    assert message["recipientIds"] == ["user"]
+    assert message["deliveries"] == []
 
 
 def test_message_history_and_event_cursors_read_same_persistent_facts(cli: CliHarness) -> None:

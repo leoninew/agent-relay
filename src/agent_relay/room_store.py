@@ -8,14 +8,16 @@ from pathlib import Path
 
 from agent_relay.drivers.codex import QueueHead, ReceivedInput
 from agent_relay.room_models import (
+    USER_MEMBER_ID,
     Delivery,
+    Member,
     Message,
     Room,
 )
 from agent_relay.room_state import RoomState
 from agent_relay.sqlite_transaction import SQLiteTransaction
 
-_MIGRATION_HEAD = "member_api"
+_MIGRATION_HEAD = "user_member"
 
 
 @dataclass(frozen=True)
@@ -188,6 +190,22 @@ class SQLiteRoomStore:
             "INSERT INTO rooms (id, project_path, payload) VALUES (?, ?, ?)",
             (room.id, room.project_path, room.model_dump_json()),
         )
+        user = Member(
+            id=USER_MEMBER_ID,
+            kind="human",
+            session_id=None,
+            name="你",
+            initials="你",
+            presence="available",
+            activity="",
+            activity_source="user",
+            topic_ids=[],
+        )
+        connection.execute(
+            "INSERT INTO members (room_id, id, name, session_id, payload) "
+            "VALUES (?, ?, ?, NULL, ?)",
+            (room.id, user.id, user.name, user.model_dump_json()),
+        )
 
     @staticmethod
     def insert_message(connection: sqlite3.Connection, room_id: str, message: Message) -> None:
@@ -200,7 +218,7 @@ class SQLiteRoomStore:
                 message.id,
                 message.seq,
                 message.model_copy(update={"deliveries": []}).model_dump_json(),
-                message.sender_id or "",
+                message.sender_id,
                 message.publication_id,
             ),
         )
@@ -250,6 +268,9 @@ class SQLiteRoomStore:
                 "SELECT d.room_id, d.payload, m.payload AS message, r.payload AS room "
                 "FROM deliveries d JOIN messages m ON m.room_id = d.room_id "
                 "AND m.id = d.message_id JOIN rooms r ON r.id = d.room_id "
+                "JOIN members target ON target.room_id = d.room_id "
+                "AND target.id = d.target_member_id AND target.session_id = d.target_session_id "
+                "AND json_extract(target.payload, '$.kind') = 'agent' "
                 "WHERE d.status = 'pending' AND NOT EXISTS (SELECT 1 FROM deliveries active "
                 "WHERE active.target_session_id = d.target_session_id "
                 "AND active.status = 'submitting') ORDER BY d.rowid LIMIT 1"

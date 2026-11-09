@@ -68,11 +68,12 @@ class MemberContext:
             members = [
                 CatalogMember(
                     id=row["id"],
+                    kind=json.loads(row["payload"])["kind"],
                     name=row["name"],
                     topic_ids=member_topics.get(row["id"], []),
                 )
                 for row in connection.execute(
-                    "SELECT id, name FROM members WHERE room_id = ? "
+                    "SELECT id, name, payload FROM members WHERE room_id = ? "
                     "AND deleted_at IS NULL ORDER BY rowid",
                     (room_id,),
                 )

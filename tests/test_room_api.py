@@ -104,8 +104,8 @@ def test_post_message_deduplicates_topics_recipients_and_deliveries(client: Test
 
     assert response.status_code == 201
     message = response.json()
-    assert message["senderId"] is None
-    assert message["senderName"] == "控制台"
+    assert message["senderId"] == "user"
+    assert message["senderName"] == "你"
     assert message["content"] == "请核对跨话题消息契约"
     assert message["topicIds"] == ["frontend", "backend"]
     assert message["mentionedMemberIds"] == ["test-worker", "frontend-worker"]
@@ -381,7 +381,9 @@ def test_member_edit_updates_subscriptions_used_by_message_routing(client: TestC
         if message["id"] == previous["id"]
     )
     assert stored_previous == previous
-    assert client.get("/api/room/housekeeper").json()["members"] == []
+    assert [member["id"] for member in client.get("/api/room/housekeeper").json()["members"]] == [
+        "user"
+    ]
 
 
 def test_zero_and_multiple_subscriptions_keep_direct_mentions_and_saved_metadata(
@@ -480,7 +482,7 @@ def test_member_creation_rejects_foreign_topic_and_duplicate_name(client: TestCl
     )
     assert invalid.status_code == old_request.status_code == 422
     assert duplicate.status_code == 409
-    assert len(client.get(ROOM_ROUTE).json()["members"]) == 4
+    assert len(client.get(ROOM_ROUTE).json()["members"]) == 5
 
 
 def test_project_path_is_unique_across_slashes_and_case(client: TestClient) -> None:

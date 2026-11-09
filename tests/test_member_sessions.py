@@ -48,7 +48,7 @@ def test_directory_discovery_and_join_bind_the_original_session(tmp_path: Path) 
     candidates = members.candidates(room_id)
     assert [info.id for info in candidates] == ["one", "two"]
     assert candidates[1].archived and candidates[1].presence == "unknown"
-    assert rooms.snapshot(room_id).members == []
+    assert [member.id for member in rooms.snapshot(room_id).members] == ["user"]
     member = members.add(room_id, request(topic_id))
     assert member.session_id == "one"
     assert member.topic_ids == [topic_id]
@@ -77,7 +77,7 @@ def test_empty_list_and_failure_do_not_create_candidates_or_members(tmp_path: Pa
         members.candidates(room_id)
     with pytest.raises(SessionUnavailableError):
         members.add(room_id, request(topic_id))
-    assert rooms.snapshot(room_id).members == []
+    assert [member.id for member in rooms.snapshot(room_id).members] == ["user"]
 
 
 def test_posix_paths_remain_case_sensitive(tmp_path: Path) -> None:
@@ -122,7 +122,7 @@ def test_join_revalidates_directory_id_topics_and_does_not_write_on_failure(tmp_
         members.add(room_id, request(topic_id))
     with pytest.raises(RoomInputError, match="话题不存在"):
         members.add(room_id, request("missing"))
-    assert rooms.snapshot(room_id).members == []
+    assert [member.id for member in rooms.snapshot(room_id).members] == ["user"]
 
 
 def test_concurrent_join_has_one_persistent_binding(tmp_path: Path) -> None:
@@ -139,7 +139,7 @@ def test_concurrent_join_has_one_persistent_binding(tmp_path: Path) -> None:
     with ThreadPoolExecutor(max_workers=4) as pool:
         results = list(pool.map(join, range(8)))
     assert results.count("joined") == 1 and results.count("conflict") == 7
-    assert len(rooms.snapshot(room_id).members) == 1
+    assert len(rooms.snapshot(room_id).members) == 2
 
 
 def test_failed_local_commit_rolls_back_session_and_member(
@@ -156,7 +156,7 @@ def test_failed_local_commit_rolls_back_session_and_member(
     monkeypatch.setattr(members.store, "save_resources", fail)
     with pytest.raises(sqlite3.OperationalError):
         members.add(room_id, request(topic_id))
-    assert rooms.snapshot(room_id).members == []
+    assert [member.id for member in rooms.snapshot(room_id).members] == ["user"]
     assert RoomQueries(rooms.store).metadata(room_id).sessions == []
 
 
@@ -185,7 +185,9 @@ def test_api_preserves_bindings_on_restart_and_hides_upstream_errors(tmp_path: P
             logger, room_service=restored, queue_driver=FakeQueueDriver(), session_driver=driver
         )
     ) as client:
-        assert client.get(route).json()["members"] == [member]
+        assert [
+            item for item in client.get(route).json()["members"] if item["kind"] == "agent"
+        ] == [member]
         assert client.get(route).json()["sessions"][0]["name"] == "Existing"
         assert driver.listed == 0 and driver.inspected == []
         driver.error = OSError("secret path and token")
@@ -194,4 +196,6 @@ def test_api_preserves_bindings_on_restart_and_hides_upstream_errors(tmp_path: P
         assert failed.json()["code"] == "service_unavailable"
         assert failed.json()["requestId"] == "req_session"
         assert "secret" not in failed.text
-        assert client.get(route).json()["members"] == [member]
+        assert [
+            item for item in client.get(route).json()["members"] if item["kind"] == "agent"
+        ] == [member]

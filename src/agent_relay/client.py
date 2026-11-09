@@ -387,9 +387,9 @@ class RelayClient:
         reply_to_message_id: str | None = None,
         as_member: str | None = None,
     ) -> ApiResult:
-        """Publish with explicit topics or mentions; at least one recipient must result.
+        """Publish with explicit topics and/or member mentions, including the human user.
         as_member selects an active member publisher (excluded from recipients); otherwise
-        publish as the console user. Retain publication_id for lookup if the outcome is unknown.
+        publish as the room user. Retain publication_id for lookup if the outcome is unknown.
         References do not inherit targets. A saved message does not confirm queue reception.
         """
         publisher = self._member_id(room_id, as_member) if self.session_id else as_member

@@ -2,6 +2,7 @@ import sqlite3
 
 from agent_relay.room_errors import RoomNotFoundError
 from agent_relay.room_models import (
+    USER_MEMBER_ID,
     Delivery,
     Member,
     Message,
@@ -60,14 +61,10 @@ class RoomQueries:
         )
 
     @staticmethod
-    def publisher_in(
-        connection: sqlite3.Connection, room_id: str, member_id: str | None
-    ) -> Member | None:
-        if member_id is None:
-            return None
+    def publisher_in(connection: sqlite3.Connection, room_id: str, member_id: str | None) -> Member:
         row = connection.execute(
             "SELECT payload FROM members WHERE room_id = ? AND id = ? AND deleted_at IS NULL",
-            (room_id, member_id),
+            (room_id, member_id if member_id is not None else USER_MEMBER_ID),
         ).fetchone()
         if row is None:
             raise RoomNotFoundError("聊天室成员不存在")
@@ -78,7 +75,8 @@ class RoomQueries:
         return {
             row["session_id"]: row["id"]
             for row in connection.execute(
-                "SELECT id, session_id FROM members WHERE room_id = ? AND deleted_at IS NULL",
+                "SELECT id, session_id FROM members WHERE room_id = ? AND deleted_at IS NULL "
+                "AND session_id IS NOT NULL AND json_extract(payload, '$.kind') = 'agent'",
                 (room_id,),
             )
         }
@@ -124,7 +122,8 @@ class RoomQueries:
             subscriptions.setdefault(row["member_id"], []).append(row["topic_id"])
         members = []
         for row in connection.execute(
-            "SELECT id, payload FROM members WHERE room_id = ? ORDER BY rowid", (room_id,)
+            "SELECT id, payload FROM members WHERE room_id = ? ORDER BY session_id IS NULL, rowid",
+            (room_id,),
         ):
             member = Member.model_validate_json(row["payload"]).model_copy(
                 update={"topic_ids": subscriptions.get(row["id"], [])}
@@ -219,9 +218,10 @@ class RoomQueries:
             ):
                 raise RoomNotFoundError("话题不存在")
             clauses.append(
-                "EXISTS (SELECT 1 FROM json_each(m.payload, '$.topic_ids') WHERE value = ?)"
+                "(EXISTS (SELECT 1 FROM json_each(m.payload, '$.topic_ids') WHERE value = ?) "
+                "OR EXISTS (SELECT 1 FROM json_each(m.payload, '$.recipient_ids') WHERE value = ?))"
             )
-            args.append(topic_id)
+            args.extend([topic_id, USER_MEMBER_ID])
         if member_id is not None:
             if (
                 connection.execute(

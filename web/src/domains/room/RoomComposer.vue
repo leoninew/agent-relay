@@ -49,7 +49,7 @@
             :described-by="showRecipientError ? 'routing-error' : undefined"
           >
             <AppCheckbox
-              v-for="member in members"
+              v-for="member in agentMembers"
               :key="member.id"
               class="recipient-choice"
               :title="member.activity"
@@ -137,8 +137,9 @@
   const attempted = ref(false);
   const textarea = ref<InstanceType<typeof AppInput>>();
   const showContentError = computed(() => attempted.value && !content.value.trim());
+  const agentMembers = computed(() => props.members.filter((member) => member.kind === "agent"));
   const recipients = computed(() =>
-    props.members.filter(
+    agentMembers.value.filter(
       (member) =>
         mentionedMemberIds.value.includes(member.id) ||
         member.topicIds.some((topicId) => topicIds.value.includes(topicId)),
@@ -156,7 +157,7 @@
     () => {
       topicIds.value = topicIds.value.filter((id) => props.topics.some((topic) => topic.id === id));
       mentionedMemberIds.value = mentionedMemberIds.value.filter((id) =>
-        props.members.some((member) => member.id === id),
+        agentMembers.value.some((member) => member.id === id),
       );
     },
     { immediate: true },
@@ -182,7 +183,7 @@
           props.topics.some((topic) => topic.id === id),
         );
         mentionedMemberIds.value = message.mentionedMemberIds.filter((id) =>
-          props.members.some((member) => member.id === id),
+          agentMembers.value.some((member) => member.id === id),
         );
         await nextTick();
         textarea.value?.focus();

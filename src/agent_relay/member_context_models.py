@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
@@ -15,6 +15,7 @@ class CatalogTopic(RoomModel):
 
 class CatalogMember(RoomModel):
     id: str
+    kind: Literal["human", "agent"]
     name: str
     topic_ids: list[str]
 
@@ -69,7 +70,7 @@ class ContextQuery(RoomModel):
 class ContextMessage(RoomModel):
     id: str
     seq: int
-    sender_id: str | None
+    sender_id: str
     sender_name: str
     content: str
     topic_ids: list[str]

@@ -33,4 +33,30 @@ describe("MessageTimeline history", () => {
     expect(emitted().latest).toEqual([[]]);
     expect(emitted().reference).toEqual([["off-page-message"]]);
   });
+
+  it("identifies messages addressed to the room user", () => {
+    const snapshot = roomFixture();
+    snapshot.messages[1].mentionedMemberIds = ["user"];
+    snapshot.messages[1].recipientIds = ["user"];
+    snapshot.messages[1].deliveries = [];
+    snapshot.messages[1].replyToMessageId = snapshot.messages[0].id;
+    render(MessageTimeline, {
+      props: {
+        messages: snapshot.messages,
+        members: snapshot.members,
+        topics: snapshot.topics,
+        hasMore: false,
+        hasNewer: false,
+        loadingOlder: false,
+        loading: false,
+        unavailable: false,
+        detailsOpen: false,
+      },
+    });
+
+    expect(screen.getByText("@ 你")).toBeTruthy();
+    expect(screen.getByRole("article", { name: "你的消息" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "引用 #1 · 你" })).toBeTruthy();
+    expect(screen.queryByText("YOU")).toBeNull();
+  });
 });

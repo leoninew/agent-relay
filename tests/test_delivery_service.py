@@ -110,7 +110,7 @@ def test_web_publications_reach_original_sessions_and_results_survive_restart(
             d for m in results for d in m["deliveries"] if d["clientMessageId"] == client_id
         )
         assert session_id == delivery["targetSessionId"]
-        assert text == ("roomId: agent-relay\n发送者: 聊天室用户：控制台\n\n仅验证投递")
+        assert text == ("roomId: agent-relay\n发送者: 你（user）\n\n仅验证投递")
 
 
 def test_human_message_to_the_only_topic_member_reaches_its_original_session(
@@ -145,7 +145,7 @@ def test_human_message_to_the_only_topic_member_reaches_its_original_session(
             mentioned_member_ids=[member.id],
         ),
     )
-    assert published.sender_id is None and published.recipient_ids == [member.id]
+    assert published.sender_id == "user" and published.recipient_ids == [member.id]
     work = store.claim_delivery()
     assert work is not None
     submitter.submit(work)

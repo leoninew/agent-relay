@@ -4,7 +4,8 @@ from pathlib import Path
 import pytest
 from room_fixtures import DemoRoomService, create_room_store
 
-from agent_relay.room_errors import RoomInputError
+from agent_relay.room_errors import RoomConflictError, RoomInputError
+from agent_relay.room_models import CreateMessage
 from agent_relay.room_service import RoomService
 from agent_relay.room_state import RoomState
 
@@ -74,6 +75,83 @@ def test_publication_with_no_other_recipient_is_rejected(
             sender_id="coordinator",
             sender_name="主会话",
             created_at=datetime.now(UTC),
+        )
+
+
+def test_member_can_mention_the_user_without_agent_recipients(
+    member_room: tuple[RoomService, RoomState],
+) -> None:
+    service, state = member_room
+
+    message = service._build_message(
+        state,
+        seq=1,
+        content="流程测试已就绪",
+        topic_ids=[],
+        mentioned_member_ids=["user"],
+        sender_id="coordinator",
+        sender_name="主会话",
+        created_at=datetime.now(UTC),
+    )
+
+    assert message.mentioned_member_ids == ["user"]
+    assert message.recipient_ids == ["user"]
+    assert message.deliveries == []
+
+
+def test_member_can_address_the_user_and_topic_members_together(
+    member_room: tuple[RoomService, RoomState],
+) -> None:
+    service, state = member_room
+
+    message = service._build_message(
+        state,
+        seq=1,
+        content="同步给用户与团队",
+        topic_ids=["frontend"],
+        mentioned_member_ids=["user"],
+        sender_id="coordinator",
+        sender_name="主会话",
+        created_at=datetime.now(UTC),
+    )
+
+    assert message.recipient_ids == ["frontend-worker", "test-worker", "user"]
+    assert [delivery.target_member_id for delivery in message.deliveries] == [
+        "frontend-worker",
+        "test-worker",
+    ]
+
+
+def test_user_publisher_cannot_address_itself(
+    member_room: tuple[RoomService, RoomState],
+) -> None:
+    service, _ = member_room
+    request = CreateMessage(
+        publication_id="user-self",
+        content="不能发给自己",
+        mentioned_member_ids=["user"],
+    )
+
+    with pytest.raises(RoomInputError, match="不能将消息发送给自己"):
+        service.post_message("agent-relay", request)
+
+
+def test_publication_replay_cannot_change_its_audience(
+    member_room: tuple[RoomService, RoomState],
+) -> None:
+    service, _ = member_room
+    request = CreateMessage(
+        publication_id="stable-audience",
+        content="固定接收对象",
+        topic_ids=["frontend"],
+    )
+    service.post_message("agent-relay", request, member_id="coordinator")
+
+    with pytest.raises(RoomConflictError, match="发布编号已用于另一条消息"):
+        service.post_message(
+            "agent-relay",
+            request.model_copy(update={"mentioned_member_ids": ["user"]}),
+            member_id="coordinator",
         )
 
 

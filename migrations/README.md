@@ -13,7 +13,7 @@ migrations/
 
 新增 revision 通过 `down_revision` 连接当前 head，并显式列出 SQL 文件，不从模型生成 DDL。只支持升级；在线迁移和离线 SQL 均启用事务与外键。
 
-当前 head 为 `member_api`：在 `member_context` 后移除成员发布凭证表。成员按需查阅记录与成员×话题位置仍由 `member_context` 保存。
+当前 head 为 `user_member`：在 `member_api` 后引入不绑定会话的固定用户成员，并将历史用户消息转换为成员引用。
 
 ## 执行
 

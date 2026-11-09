@@ -29,11 +29,15 @@
           @click="$emit('select', member.id)"
         >
           <MemberIdentity :member="member" />
-          <span class="sidebar-member-status" :data-presence="member.presence">
+          <span
+            v-if="member.kind === 'agent'"
+            class="sidebar-member-status"
+            :data-presence="member.presence"
+          >
             {{ presenceLabel[member.presence] }}
           </span>
         </button>
-        <div class="sidebar-node-actions">
+        <div v-if="member.kind === 'agent'" class="sidebar-node-actions">
           <button
             type="button"
             :aria-label="`编辑成员：${member.name}`"
@@ -51,14 +55,17 @@
             删除
           </button>
         </div>
-        <p v-if="member.presence === 'unknown'" class="sidebar-member-observation">
+        <p
+          v-if="member.kind === 'agent' && member.presence === 'unknown'"
+          class="sidebar-member-observation"
+        >
           {{ member.activity }}
         </p>
       </div>
       <p v-if="!members.length" class="sidebar-members-empty">暂无成员</p>
     </div>
     <MemberTopicPositions
-      v-if="selectedMember"
+      v-if="selectedMember?.kind === 'agent'"
       :member="selectedMember"
       :topics="snapshot.topics"
       :positions="snapshot.positions.filter((position) => position.memberId === selectedMemberId)"
@@ -86,7 +93,11 @@
     deleteMember: [member: Member];
   }>();
 
-  const members = computed(() => props.snapshot.members.filter((member) => !member.deletedAt));
+  const members = computed(() =>
+    props.snapshot.members
+      .filter((member) => !member.deletedAt)
+      .toSorted((left, right) => Number(right.kind === "human") - Number(left.kind === "human")),
+  );
   const selectedMember = computed(() =>
     members.value.find((member) => member.id === props.selectedMemberId),
   );

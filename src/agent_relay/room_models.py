@@ -6,6 +6,8 @@ from typing import Literal, Self
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic.alias_generators import to_camel
 
+USER_MEMBER_ID = "user"
+
 
 class RoomModel(BaseModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
@@ -28,7 +30,8 @@ class Topic(RoomModel):
 
 class Member(RoomModel):
     id: str
-    session_id: str
+    kind: Literal["human", "agent"] = "agent"
+    session_id: str | None
     name: str
     initials: str
     presence: Literal["available", "busy", "offline", "unknown"]
@@ -37,6 +40,14 @@ class Member(RoomModel):
     observed_at: datetime | None = None
     topic_ids: list[str]
     deleted_at: datetime | None = None
+
+    @model_validator(mode="after")
+    def validate_session(self) -> Self:
+        if self.kind == "agent" and not self.session_id:
+            raise ValueError("Agent members require a session")
+        if self.kind == "human" and self.session_id is not None:
+            raise ValueError("Human members cannot bind a session")
+        return self
 
 
 class Session(RoomModel):
@@ -78,7 +89,7 @@ class Message(RoomModel):
     id: str
     publication_id: str | None = None
     seq: int
-    sender_id: str | None
+    sender_id: str
     sender_name: str
     content: str
     topic_ids: list[str]

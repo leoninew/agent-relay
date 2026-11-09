@@ -123,6 +123,7 @@ def test_tool_catalog_exposes_typed_collaboration_and_management(mcp: McpHarness
     publish = tools["message_publish"]
     assert set(publish.input_schema["required"]) == {"room_id", "publication_id", "content"}
     assert {"topic_ids", "mentioned_member_ids"} <= set(publish.input_schema["properties"])
+    assert "to_console" not in publish.input_schema["properties"]
     assert "as_member" not in publish.input_schema["properties"]
     assert "member_id" not in tools["member_catalog"].input_schema["properties"]
     assert publish.annotations and publish.annotations.idempotent_hint
@@ -195,6 +196,36 @@ def test_mcp_publication_and_lookup_share_the_http_facts(mcp: McpHarness) -> Non
         mcp.call("delivery_get", room_id=ROOM, message_id=message["id"], delivery_id=delivery["id"])
         == delivery
     )
+
+
+def test_mcp_can_publish_a_user_only_message_and_topic_filters_keep_it_visible(
+    mcp: McpHarness,
+) -> None:
+    message = mcp.call(
+        "message_publish",
+        _session="agent-relay-frontend",
+        room_id=ROOM,
+        publication_id="mcp-console-only",
+        content="流程测试已就绪",
+        mentioned_member_ids=["user"],
+    )
+
+    assert message["senderId"] == "frontend-worker"
+    assert message["mentionedMemberIds"] == ["user"]
+    assert message["recipientIds"] == ["user"]
+    assert message["deliveries"] == []
+    assert mcp.call("message_get", room_id=ROOM, message_id=message["id"]) == message
+    page = mcp.http.message_list(ROOM, topic_id="backend", limit=50).data
+    assert isinstance(page, dict)
+    page_messages = page.get("messages")
+    assert isinstance(page_messages, list) and message in page_messages
+    private_context = mcp.call(
+        "member_context",
+        _session="agent-relay-backend",
+        room_id=ROOM,
+        keyword="流程测试已就绪",
+    )
+    assert private_context["messages"] == []
 
 
 def test_mcp_member_context_returns_messages_and_persists_positions(mcp: McpHarness) -> None:

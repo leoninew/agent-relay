@@ -10,7 +10,8 @@ export type Topic = {
 
 export type Member = {
   id: string;
-  sessionId: string;
+  kind: "human" | "agent";
+  sessionId: string | null;
   name: string;
   initials: string;
   presence: "available" | "busy" | "offline" | "unknown";
@@ -43,7 +44,7 @@ export type RoomMessage = {
   id: string;
   publicationId: string | null;
   seq: number;
-  senderId: string | null;
+  senderId: string;
   senderName: string;
   content: string;
   topicIds: string[];

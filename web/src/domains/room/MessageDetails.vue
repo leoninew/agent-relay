@@ -29,7 +29,7 @@
           </li>
         </ul>
       </section>
-      <section class="message-detail-section dispatch-details">
+      <section v-if="dispatchRows.length" class="message-detail-section dispatch-details">
         <h3>分发状态</h3>
         <table v-if="dispatchRows.length" class="dispatch-table">
           <thead>
@@ -94,7 +94,6 @@
             </tr>
           </tbody>
         </table>
-        <p v-else>暂无分发</p>
       </section>
     </div>
     <p v-else class="message-details-empty">选择一条消息查看详情</p>
@@ -122,7 +121,14 @@
   const mentionedMembers = computed(
     () => props.message?.mentionedMemberIds.map(resolveMember) ?? [],
   );
-  const recipients = computed(() => props.message?.recipientIds.map(resolveMember) ?? []);
+  const recipients = computed(
+    () =>
+      props.message?.recipientIds
+        .filter(
+          (id) => !props.members.some((member) => member.id === id && member.kind === "human"),
+        )
+        .map(resolveMember) ?? [],
+  );
   const dispatchRows = computed(() =>
     recipients.value.map((member) => {
       const delivery = props.message?.deliveries.find(

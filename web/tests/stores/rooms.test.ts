@@ -108,4 +108,21 @@ describe("room state", () => {
       1, 2, 3,
     ]);
   });
+
+  it("keeps messages addressed to the user visible during topic filtering", () => {
+    const store = useRoomsStore();
+    const initial = roomFixture();
+    store.sync(initial);
+    const message = {
+      ...initial.messages[1],
+      id: "msg-0003",
+      seq: 3,
+      topicIds: [],
+      mentionedMemberIds: ["user"],
+      recipientIds: ["user"],
+      deliveries: [],
+    };
+    store.applyMessages(initial.room.id, [message], { topicId: "frontend" });
+    expect(store.snapshots[initial.room.id].messages.at(-1)).toEqual(message);
+  });
 });

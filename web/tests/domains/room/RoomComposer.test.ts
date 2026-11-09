@@ -25,6 +25,7 @@ describe("RoomComposer", () => {
 
   it("sends to topics without requiring a member selection", async () => {
     const { emitted } = renderComposer();
+    expect(screen.queryByRole("checkbox", { name: "@ 你" })).toBeNull();
     await fireEvent.click(screen.getByRole("checkbox", { name: "消息话题：前端" }));
     await fireEvent.click(screen.getByRole("checkbox", { name: "消息话题：后端" }));
     await fireEvent.update(screen.getByRole("textbox", { name: "消息内容" }), " 一起核对接口 ");
@@ -39,6 +40,22 @@ describe("RoomComposer", () => {
         },
       ],
     ]);
+  });
+
+  it("names the user consistently when quoting their message", () => {
+    const room = roomFixture();
+    render(RoomComposer, {
+      props: {
+        roomId: room.room.id,
+        topics: room.topics,
+        members: room.members,
+        replyTo: room.messages[0],
+        sending: false,
+        error: null,
+      },
+    });
+    expect(screen.getByText("你", { selector: "strong" })).toBeTruthy();
+    expect(screen.queryByText("YOU")).toBeNull();
   });
 
   it("sends to a mentioned member without a topic, including in a room with no topics", async () => {

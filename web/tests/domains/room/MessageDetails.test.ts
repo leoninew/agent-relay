@@ -93,4 +93,21 @@ describe("MessageDetails", () => {
     const time = screen.getByText(/\d{2}:\d{2}:\d{2}/);
     expect(time.getAttribute("datetime")).toBe(delivery.updatedAt);
   });
+
+  it("shows the user as a member without inventing an agent delivery", () => {
+    const room = roomFixture();
+    const message: RoomMessage = {
+      ...room.messages[1],
+      topicIds: [],
+      mentionedMemberIds: ["user"],
+      recipientIds: ["user"],
+      deliveries: [],
+    };
+    render(MessageDetails, { props: { message, topics: room.topics, members: room.members } });
+
+    expect(within(screen.getByRole("list", { name: "@ 成员" })).getAllByText("你")).toHaveLength(2);
+    expect(screen.queryByText("分发状态")).toBeNull();
+    expect(screen.queryByText("暂无分发")).toBeNull();
+    expect(screen.getByText("未选择话题")).toBeTruthy();
+  });
 });

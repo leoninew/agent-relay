@@ -9,6 +9,7 @@ from agent_relay.room_errors import (
     RoomNotFoundError,
 )
 from agent_relay.room_models import (
+    USER_MEMBER_ID,
     ChangedMember,
     ChangedTopic,
     CreateMessage,
@@ -66,6 +67,8 @@ class RoomService:
             )
             if member is None:
                 raise RoomNotFoundError("成员不存在")
+            if member.kind == "human":
+                raise RoomInputError("不能编辑固定用户成员")
             self._validate_member(state, request, member_id)
             member.name = request.name
             member.initials = request.name[:2].upper()
@@ -166,6 +169,8 @@ class RoomService:
             )
             if member is None:
                 raise RoomNotFoundError("成员不存在")
+            if member.kind == "human":
+                raise RoomInputError("不能删除固定用户成员")
             member.deleted_at = datetime.now(UTC)
             member.topic_ids = []
             self._store.save_resources(connection, state, original)
@@ -195,11 +200,13 @@ class RoomService:
         with self._store.write() as connection:
             queries.room_in(connection, room_id)
             sender = queries.publisher_in(connection, room_id, member_id)
-            sender_id = sender.id if sender is not None else None
+            sender_id = sender.id
+            if sender.kind == "human" and USER_MEMBER_ID in request.mentioned_member_ids:
+                raise RoomInputError("不能将消息发送给自己")
             topic_ids = list(dict.fromkeys(request.topic_ids))
             mentioned_member_ids = list(dict.fromkeys(request.mentioned_member_ids))
             existing = queries.publication_in(
-                connection, room_id, sender_id or "", request.publication_id
+                connection, room_id, sender_id, request.publication_id
             )
             if existing is not None:
                 if (
@@ -221,7 +228,7 @@ class RoomService:
                 topic_ids=topic_ids,
                 mentioned_member_ids=mentioned_member_ids,
                 sender_id=sender_id,
-                sender_name=sender.name if sender is not None else "控制台",
+                sender_name=sender.name,
                 created_at=datetime.now(UTC),
                 reply_to_message_id=request.reply_to_message_id,
                 publication_id=request.publication_id,
@@ -237,9 +244,7 @@ class RoomService:
         with self._store.read() as connection:
             queries.room_in(connection, room_id)
             sender = queries.publisher_in(connection, room_id, member_id)
-            message = queries.publication_in(
-                connection, room_id, sender.id if sender is not None else "", publication_id
-            )
+            message = queries.publication_in(connection, room_id, sender.id, publication_id)
             if message is None:
                 raise RoomNotFoundError("发布记录不存在")
             return message.model_copy(deep=True)
@@ -250,7 +255,7 @@ class RoomService:
         topic_ids: list[str],
         mentioned_member_ids: list[str],
         *,
-        sender_id: str | None,
+        sender_id: str,
     ) -> list[str]:
         topics = set(topic_ids)
         mentions = set(mentioned_member_ids)
@@ -266,7 +271,7 @@ class RoomService:
             and (member.id in mentions or topics.intersection(member.topic_ids))
         ]
         if not recipient_ids:
-            if sender_id is not None:
+            if sender_id != USER_MEMBER_ID:
                 raise RoomInputError("排除发布成员后没有实际接收人，请选择其他话题或 @ 其他成员")
             raise RoomInputError("所选话题暂无成员，请选择其他话题或 @ 成员")
         return recipient_ids
@@ -278,7 +283,7 @@ class RoomService:
         content: str,
         topic_ids: list[str],
         mentioned_member_ids: list[str],
-        sender_id: str | None,
+        sender_id: str,
         sender_name: str,
         created_at: datetime,
         seq: int,
@@ -286,7 +291,10 @@ class RoomService:
         publication_id: str | None = None,
     ) -> Message:
         recipient_ids = self._resolve_recipient_ids(
-            state, topic_ids, mentioned_member_ids, sender_id=sender_id
+            state,
+            topic_ids,
+            mentioned_member_ids,
+            sender_id=sender_id,
         )
         message_id = f"{state.room.id}-msg-{seq:04d}"
         message = Message(
@@ -305,14 +313,16 @@ class RoomService:
                 Delivery(
                     id=f"{message_id}:{recipient_id}",
                     target_member_id=recipient_id,
-                    target_session_id=next(
-                        m.session_id for m in state.members if m.id == recipient_id
-                    ),
+                    target_session_id=member.session_id,
                     client_message_id=str(uuid4()),
                     status="pending",
                     updated_at=created_at,
                 )
                 for recipient_id in recipient_ids
+                for member in state.members
+                if member.id == recipient_id
+                and member.kind == "agent"
+                and member.session_id is not None
             ],
         )
         return message

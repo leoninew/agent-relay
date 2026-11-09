@@ -1,9 +1,5 @@
 <template>
-  <span
-    class="member-avatar member-color"
-    :data-member="member?.id ?? 'console'"
-    aria-hidden="true"
-  >
+  <span class="member-avatar member-color" :data-member="member?.id" aria-hidden="true">
     {{ initials }}
   </span>
 </template>
@@ -16,6 +12,6 @@
   const props = defineProps<{ member?: Pick<Member, "id" | "name"> }>();
   const initials = computed(() => {
     const name = props.member?.name.trim();
-    return name ? Array.from(name)[0].toLocaleUpperCase() : "YOU";
+    return name ? Array.from(name)[0].toLocaleUpperCase() : "?";
   });
 </script>

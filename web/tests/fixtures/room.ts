@@ -26,6 +26,7 @@ export function roomFixture(): RoomSnapshot {
     members: [
       {
         id: "frontend-worker",
+        kind: "agent",
         sessionId: "session-frontend",
         name: "前端 Worker",
         initials: "FE",
@@ -38,6 +39,7 @@ export function roomFixture(): RoomSnapshot {
       },
       {
         id: "backend-worker",
+        kind: "agent",
         sessionId: "session-backend",
         name: "后端 Worker",
         initials: "BE",
@@ -50,6 +52,7 @@ export function roomFixture(): RoomSnapshot {
       },
       {
         id: "test-worker",
+        kind: "agent",
         sessionId: "session-test",
         name: "测试 Worker",
         initials: "QA",
@@ -59,6 +62,19 @@ export function roomFixture(): RoomSnapshot {
         observedAt: null,
         deletedAt: null,
         topicIds: ["frontend", "backend"],
+      },
+      {
+        id: "user",
+        kind: "human",
+        sessionId: null,
+        name: "你",
+        initials: "你",
+        presence: "available",
+        activity: "",
+        activitySource: "user",
+        observedAt: null,
+        deletedAt: null,
+        topicIds: [],
       },
     ],
     sessions: [
@@ -76,8 +92,8 @@ export function roomFixture(): RoomSnapshot {
         id: "msg-0001",
         publicationId: "pub-1",
         seq: 1,
-        senderId: null,
-        senderName: "控制台",
+        senderId: "user",
+        senderName: "你",
         content: "前端讨论内容",
         topicIds: ["frontend"],
         mentionedMemberIds: [],
