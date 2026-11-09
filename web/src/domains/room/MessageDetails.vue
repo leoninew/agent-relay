@@ -15,6 +15,9 @@
       <div class="detail-object-summary">
         <div class="detail-summary-heading">
           <h3># {{ topic.name }}</h3>
+          <time v-if="topic.createdAt" :datetime="topic.createdAt">
+            {{ formatDateTime(topic.createdAt) }}
+          </time>
         </div>
         <p v-if="topic.description" class="detail-description">{{ topic.description }}</p>
       </div>

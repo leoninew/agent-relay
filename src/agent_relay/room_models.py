@@ -24,6 +24,7 @@ class Topic(RoomModel):
     id: str
     name: str
     description: str
+    created_at: datetime | None = None
     message_count: int = 0
     deleted_at: datetime | None = None
 

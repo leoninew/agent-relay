@@ -1,5 +1,6 @@
 import logging
 from collections.abc import Iterator
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
@@ -346,6 +347,37 @@ def test_create_room_add_topic_and_invite_member(client: TestClient) -> None:
     assert len(client.get(ROOM_ROUTE).json()["messages"]) == 6
 
 
+def test_topic_creation_time_is_preserved_in_metadata_updates_and_deletion(
+    client: TestClient,
+) -> None:
+    started_at = datetime.now(UTC)
+    response = client.post(f"{ROOM_ROUTE}/topic", json={"name": "有创建时间的话题"})
+    assert response.status_code == 201
+    topic = response.json()
+    created_at = topic["createdAt"]
+    assert started_at <= datetime.fromisoformat(created_at) <= datetime.now(UTC)
+
+    for route in (ROOM_ROUTE, f"{ROOM_ROUTE}/metadata"):
+        saved = next(
+            item for item in client.get(route).json()["topics"] if item["id"] == topic["id"]
+        )
+        assert saved["createdAt"] == created_at
+
+    updated = client.patch(f"{ROOM_ROUTE}/topic/{topic['id']}", json={"name": "已改名的话题"})
+    assert updated.status_code == 200
+    assert updated.json()["createdAt"] == created_at
+    deleted = client.delete(f"{ROOM_ROUTE}/topic/{topic['id']}")
+    assert deleted.status_code == 200
+    assert deleted.json()["createdAt"] == created_at
+    assert deleted.json()["deletedAt"]
+    saved = next(
+        item
+        for item in client.get(f"{ROOM_ROUTE}/metadata").json()["topics"]
+        if item["id"] == topic["id"]
+    )
+    assert saved["createdAt"] == created_at
+
+
 def test_member_edit_updates_subscriptions_used_by_message_routing(client: TestClient) -> None:
     previous = client.post(
         f"{ROOM_ROUTE}/message",
@@ -518,18 +550,21 @@ def test_edit_and_delete_nodes_preserve_history_and_release_names_and_bindings(
     client: TestClient,
 ) -> None:
     original = client.get(ROOM_ROUTE).json()
+    assert all(topic["createdAt"] is None for topic in original["topics"])
     edited = client.patch(
         f"{ROOM_ROUTE}/topic/frontend", json={"name": "界面", "description": "界面交互讨论"}
     )
     assert edited.status_code == 200
     assert edited.json()["name"] == "界面"
     assert edited.json()["description"] == "界面交互讨论"
+    assert edited.json()["createdAt"] is None
     assert edited.json()["metadata"] == client.get(f"{ROOM_ROUTE}/metadata").json()
 
     deleted_topic = client.delete(f"{ROOM_ROUTE}/topic/frontend")
     deleted_member = client.delete(f"{ROOM_ROUTE}/member/frontend-worker")
     assert deleted_topic.status_code == deleted_member.status_code == 200
     assert deleted_topic.json()["deletedAt"]
+    assert deleted_topic.json()["createdAt"] is None
     assert deleted_member.json()["deletedAt"]
     assert deleted_member.json()["metadata"] == client.get(f"{ROOM_ROUTE}/metadata").json()
     snapshot = client.get(ROOM_ROUTE).json()

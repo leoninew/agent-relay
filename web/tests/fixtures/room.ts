@@ -19,9 +19,30 @@ export function roomFixture(): RoomSnapshot {
       description: "项目讨论",
     },
     topics: [
-      { id: "summary", name: "汇总", description: "协作约定", messageCount: 0, deletedAt: null },
-      { id: "frontend", name: "前端", description: "聊天室界面", messageCount: 1, deletedAt: null },
-      { id: "backend", name: "后端", description: "接口契约", messageCount: 1, deletedAt: null },
+      {
+        id: "summary",
+        name: "汇总",
+        description: "协作约定",
+        messageCount: 0,
+        createdAt: null,
+        deletedAt: null,
+      },
+      {
+        id: "frontend",
+        name: "前端",
+        description: "聊天室界面",
+        messageCount: 1,
+        createdAt: "2026-11-06T09:00:00Z",
+        deletedAt: null,
+      },
+      {
+        id: "backend",
+        name: "后端",
+        description: "接口契约",
+        messageCount: 1,
+        createdAt: "2026-11-06T09:00:00Z",
+        deletedAt: null,
+      },
     ],
     members: [
       {

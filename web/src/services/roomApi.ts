@@ -5,6 +5,7 @@ export type Topic = {
   name: string;
   description: string;
   messageCount: number;
+  createdAt: string | null;
   deletedAt: string | null;
 };
 

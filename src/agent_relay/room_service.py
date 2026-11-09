@@ -103,6 +103,7 @@ class RoomService:
                 id=f"topic-{uuid4().hex[:12]}",
                 name=request.name,
                 description=request.description.strip(),
+                created_at=datetime.now(UTC),
             )
             state.topics.append(topic)
             self._store.save_resources(connection, state, original)

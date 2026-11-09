@@ -29,7 +29,14 @@ describe("room state", () => {
     };
     store.sync(first);
     store.sync(second);
-    const topic = { id: "review", name: "审查", description: "", messageCount: 0, deletedAt: null };
+    const topic = {
+      id: "review",
+      name: "审查",
+      description: "",
+      messageCount: 0,
+      createdAt: "2026-11-06T10:00:00Z",
+      deletedAt: null,
+    };
     vi.mocked(addRoomTopic).mockResolvedValue({
       ...topic,
       metadata: {
