@@ -18,7 +18,6 @@ describe("MemberPanel", () => {
     expect(user.textContent).not.toContain("空闲");
     expect(screen.queryByRole("button", { name: "编辑成员：你" })).toBeNull();
     expect(screen.queryByRole("button", { name: "删除成员：你" })).toBeNull();
-    expect(screen.queryByRole("region", { name: "你的查阅位置" })).toBeNull();
     expect(screen.queryByText("管理员")).toBeNull();
     await fireEvent.click(user);
     expect(emitted().select).toEqual([["user"]]);
@@ -28,7 +27,6 @@ describe("MemberPanel", () => {
     const snapshot = roomFixture();
     snapshot.members[2].topicIds = [];
     snapshot.members[0].presence = "unknown";
-    snapshot.members[0].activity = "当前 Codex daemon 未加载会话；宿主运行状态未知";
     const { emitted } = render(MemberPanel, { props: { snapshot, busy: false } });
     expect(screen.getByRole("button", { name: "筛选成员：前端 Worker" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "筛选成员：测试 Worker" })).toBeTruthy();

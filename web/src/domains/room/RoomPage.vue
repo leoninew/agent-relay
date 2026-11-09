@@ -40,12 +40,9 @@
     </TopicSidebar>
 
     <section class="conversation-panel" aria-label="聊天室">
-      <header class="conversation-heading">
+      <header class="room-panel-heading conversation-heading">
         <div class="conversation-title">
-          <h2>聊天室</h2>
-        </div>
-        <div class="conversation-tools">
-          <span class="room-sync-state" role="status">{{ syncLabel }}</span>
+          <h2 class="room-panel-title">聊天室</h2>
           <AppButton
             variant="plain"
             class="conversation-refresh"
@@ -54,8 +51,7 @@
             :disabled="sending"
             @click="refreshRoom()"
           >
-            <template #icon><AppIcon name="refresh" /></template>
-            刷新聊天室
+            刷新
           </AppButton>
         </div>
       </header>
@@ -72,14 +68,14 @@
         :unavailable="loadError !== null"
         :members="snapshot.members"
         :topics="snapshot.topics"
-        :selected-message-id="selectedMessage?.id"
+        :selected-message-id="detailMessage?.id"
         :details-open="detailsOpen"
         :loading="loading"
         @load-older="loadOlder"
         @latest="loadLatest"
         @reply="replyTo = $event"
         @reference="showReference"
-        @select="selectedMessageId = $event"
+        @select="selectMessage"
         @show-details="detailsOpen = true"
       />
       <RoomComposer
@@ -104,7 +100,9 @@
 
     <MessageDetails
       v-if="detailsOpen"
-      :message="selectedMessage"
+      :message="detailMessage"
+      :topic="detailTopic"
+      :member="detailMember"
       :topics="snapshot.topics"
       :members="snapshot.members"
       @close="detailsOpen = false"
@@ -192,11 +190,13 @@
     UpdateMember,
   } from "@/services/roomApi";
   import { subscribeRoomEvents } from "@/services/roomEvents";
-  import type { SyncState } from "@/services/roomEvents";
   import { useRoomsStore } from "@/stores/rooms";
   import { useToastsStore } from "@/stores/toasts";
 
   import "./room.css";
+
+  type DetailTarget =
+    { kind: "message" } | { kind: "topic"; id: string } | { kind: "member"; id: string };
 
   const props = defineProps<{ roomId?: string }>();
   const router = useRouter();
@@ -220,19 +220,26 @@
     const messages = visibleMessages.value;
     return messages.find((message) => message.id === selectedMessageId.value) ?? messages.at(-1);
   });
+  const detailTarget = ref<DetailTarget>({ kind: "message" });
+  const detailMessage = computed(() =>
+    detailTarget.value.kind === "message" ? selectedMessage.value : undefined,
+  );
+  const detailTopic = computed(() => {
+    const target = detailTarget.value;
+    return target.kind === "topic"
+      ? activeTopics.value.find((topic) => topic.id === target.id)
+      : undefined;
+  });
+  const detailMember = computed(() => {
+    const target = detailTarget.value;
+    return target.kind === "member"
+      ? activeMembers.value.find((member) => member.id === target.id)
+      : undefined;
+  });
   const detailsOpen = ref(true);
   const loading = ref(true);
   const refreshingSessions = ref(false);
   const loadingOlder = ref(false);
-  const syncState = ref<SyncState>("connecting");
-  const syncLabel = computed(
-    () =>
-      ({
-        connecting: "正在同步…",
-        connected: "已同步",
-        reconnecting: "同步重连中…",
-      })[syncState.value],
-  );
   const sending = ref(false);
   const loadError = ref<string | null>(null);
   const sendError = ref<string | null>(null);
@@ -272,44 +279,46 @@
   function startEvents(roomId: string, version: number): void {
     const current = roomsStore.snapshots[roomId];
     if (!current || version !== loadVersion) return;
-    stopEvents = subscribeRoomEvents(
-      roomId,
-      current.eventId,
-      async (page: RoomEventPage) => {
-        if (version !== loadVersion) return;
-        if (page.resyncRequired) {
-          await loadRoom();
-          return;
-        }
-        const events = page.events.filter((event) => event.eventId > current.eventId);
-        if (!events.length) return;
-        const signal = queryController?.signal;
-        const ids = [
-          ...new Set(
-            events.map((event) => event.messageId).filter((id): id is string => Boolean(id)),
-          ),
-        ];
-        const [metadata, messages] = await Promise.all([
-          fetchRoomMetadata(roomId, signal),
-          Promise.all(ids.map((id) => fetchRoomMessage(roomId, id, signal))),
-        ]);
-        if (version !== loadVersion) return;
-        roomsStore.syncMetadata(metadata);
-        if (clearDeletedFilters()) {
-          await loadRoom();
-          return;
-        }
-        roomsStore.applyMessages(roomId, messages, filters());
-        current.eventId = page.nextEventId;
-      },
-      (state) => {
-        if (version === loadVersion) syncState.value = state;
-      },
-    );
+    stopEvents = subscribeRoomEvents(roomId, current.eventId, async (page: RoomEventPage) => {
+      if (version !== loadVersion) return;
+      if (page.resyncRequired) {
+        await loadRoom();
+        return;
+      }
+      const events = page.events.filter((event) => event.eventId > current.eventId);
+      if (!events.length) return;
+      const signal = queryController?.signal;
+      const ids = [
+        ...new Set(
+          events.map((event) => event.messageId).filter((id): id is string => Boolean(id)),
+        ),
+      ];
+      const [metadata, messages] = await Promise.all([
+        fetchRoomMetadata(roomId, signal),
+        Promise.all(ids.map((id) => fetchRoomMessage(roomId, id, signal))),
+      ]);
+      if (version !== loadVersion) return;
+      roomsStore.syncMetadata(metadata);
+      if (clearDeletedFilters()) {
+        await loadRoom();
+        return;
+      }
+      roomsStore.applyMessages(roomId, messages, filters());
+      current.eventId = page.nextEventId;
+    });
   }
 
   function clearDeletedFilters(): boolean {
     let changed = false;
+    const target = detailTarget.value;
+    if (target.kind === "topic" && !activeTopics.value.some((topic) => topic.id === target.id)) {
+      detailTarget.value = { kind: "message" };
+    } else if (
+      target.kind === "member" &&
+      !activeMembers.value.some((member) => member.id === target.id)
+    ) {
+      detailTarget.value = { kind: "message" };
+    }
     if (
       selectedTopicId.value &&
       !activeTopics.value.some((topic) => topic.id === selectedTopicId.value)
@@ -416,6 +425,7 @@
     selectedTopicId.value = undefined;
     selectedMemberId.value = undefined;
     selectedMessageId.value = undefined;
+    detailTarget.value = { kind: "message" };
     detailsOpen.value = true;
     replyTo.value = undefined;
     sendError.value = null;
@@ -447,6 +457,8 @@
   async function selectTopic(topicId?: string): Promise<void> {
     selectedTopicId.value = topicId;
     if (!topicId) selectedMemberId.value = undefined;
+    detailTarget.value = topicId ? { kind: "topic", id: topicId } : { kind: "message" };
+    detailsOpen.value = true;
     syncDraftRouting();
     await loadRoom();
     await nextTick();
@@ -455,10 +467,18 @@
 
   async function selectMember(memberId: string): Promise<void> {
     selectedMemberId.value = selectedMemberId.value === memberId ? undefined : memberId;
+    detailTarget.value = { kind: "member", id: memberId };
+    detailsOpen.value = true;
     syncDraftRouting();
     await loadRoom();
     await nextTick();
     timeline.value?.scrollToEnd();
+  }
+
+  function selectMessage(messageId: string): void {
+    selectedMessageId.value = messageId;
+    detailTarget.value = { kind: "message" };
+    detailsOpen.value = true;
   }
 
   async function sendMessage(draft: MessageDraft): Promise<void> {
@@ -511,6 +531,8 @@
       return;
     }
     selectedMessageId.value = sentMessage.id;
+    detailTarget.value = { kind: "message" };
+    detailsOpen.value = true;
     pendingPublication.value = undefined;
     composer.value?.reset();
     replyTo.value = undefined;
@@ -693,6 +715,8 @@
       }
     }
     selectedMessageId.value = messageId;
+    detailTarget.value = { kind: "message" };
+    detailsOpen.value = true;
     await nextTick();
     timeline.value?.scrollToMessage(messageId);
   }

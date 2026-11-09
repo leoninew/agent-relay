@@ -21,6 +21,9 @@
         <div v-if="startsNewDay(index)" class="timeline-date">
           <span>{{ formatDate(message.createdAt) }}</span>
         </div>
+        <div v-if="startsNewMinute(index)" class="timeline-time">
+          <time :datetime="message.createdAt">{{ formatMinute(message.createdAt) }}</time>
+        </div>
         <article
           class="message"
           :class="{ 'is-selected': message.id === selectedMessageId }"
@@ -78,19 +81,10 @@
               <AppIcon name="reply" />
               <span>引用 {{ referenceLabel(message.replyToMessageId) }}</span>
             </button>
-            <p class="message-content">
-              {{ message.content }}
-              <time class="message-time" :datetime="message.createdAt">
-                {{ formatTime(message.createdAt) }}
-              </time>
-            </p>
-            <div
-              v-if="message.deliveries.length || message.id === selectedMessageId"
-              class="message-dispatch-footer"
-            >
-              <span v-if="message.deliveries.length" class="message-delivery-summary">
-                {{ deliverySummary(message) }}
-              </span>
+            <div class="message-content-row">
+              <p class="message-content">
+                {{ message.content }}
+              </p>
               <button
                 type="button"
                 class="message-details-link"
@@ -119,7 +113,7 @@
   import AppLoading from "@/components/AppLoading.vue";
   import MemberAvatar from "@/domains/room/MemberAvatar.vue";
   import type { Member, RoomMessage, Topic } from "@/services/roomApi";
-  import { formatDate, formatTime } from "@/utils/time";
+  import { formatDate, formatMinute } from "@/utils/time";
 
   const props = defineProps<{
     messages: RoomMessage[];
@@ -169,30 +163,21 @@
     emit("showDetails");
   }
 
-  function deliverySummary(message: RoomMessage): string {
-    const labels = {
-      pending: "待提交",
-      submitting: "提交中",
-      queued: "已入队",
-      received: "已进入会话",
-      rejected: "已拒绝",
-      unknown: "结果未知",
-    } as const;
-    return Object.entries(labels)
-      .map(([status, label]) => {
-        const count = message.deliveries.filter((delivery) => delivery.status === status).length;
-        return count ? `${count} ${label}` : "";
-      })
-      .filter(Boolean)
-      .join(" · ");
-  }
-
   function startsNewDay(index: number): boolean {
     return (
       index === 0 ||
       formatDate(props.messages[index - 1].createdAt) !==
         formatDate(props.messages[index].createdAt)
     );
+  }
+
+  function startsNewMinute(index: number): boolean {
+    if (index === 0) return true;
+    const previousMinute = Math.floor(
+      new Date(props.messages[index - 1].createdAt).getTime() / 60000,
+    );
+    const currentMinute = Math.floor(new Date(props.messages[index].createdAt).getTime() / 60000);
+    return previousMinute !== currentMinute;
   }
 
   function referenceLabel(messageId: string): string {

@@ -5,6 +5,12 @@ const timeFormatter = new Intl.DateTimeFormat("zh-CN", {
   hour12: false,
 });
 
+const minuteFormatter = new Intl.DateTimeFormat("zh-CN", {
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+
 const dateFormatter = new Intl.DateTimeFormat("zh-CN", {
   month: "long",
   day: "numeric",
@@ -13,6 +19,10 @@ const dateFormatter = new Intl.DateTimeFormat("zh-CN", {
 
 export function formatTime(value: string): string {
   return timeFormatter.format(new Date(value));
+}
+
+export function formatMinute(value: string): string {
+  return minuteFormatter.format(new Date(value));
 }
 
 export function formatDate(value: string): string {

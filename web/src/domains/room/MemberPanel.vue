@@ -1,7 +1,7 @@
 <template>
   <section class="sidebar-members" aria-label="聊天室成员">
-    <div class="sidebar-section-heading">
-      <h2>成员</h2>
+    <header class="room-panel-heading sidebar-section-heading">
+      <h2 class="room-panel-title">成员</h2>
       <button
         type="button"
         class="icon-button"
@@ -12,7 +12,7 @@
       >
         <AppIcon name="plus" />
       </button>
-    </div>
+    </header>
 
     <div class="sidebar-member-list">
       <div
@@ -23,7 +23,7 @@
       >
         <button
           type="button"
-          class="sidebar-member"
+          class="member-row sidebar-member"
           :aria-label="`筛选成员：${member.name}`"
           :aria-pressed="selectedMemberId === member.id"
           @click="$emit('select', member.id)"
@@ -31,7 +31,7 @@
           <MemberIdentity :member="member" />
           <span
             v-if="member.kind === 'agent'"
-            class="sidebar-member-status"
+            class="member-row-status sidebar-member-status"
             :data-presence="member.presence"
           >
             {{ presenceLabel[member.presence] }}
@@ -55,21 +55,9 @@
             删除
           </button>
         </div>
-        <p
-          v-if="member.kind === 'agent' && member.presence === 'unknown'"
-          class="sidebar-member-observation"
-        >
-          {{ member.activity }}
-        </p>
       </div>
       <p v-if="!members.length" class="sidebar-members-empty">暂无成员</p>
     </div>
-    <MemberTopicPositions
-      v-if="selectedMember?.kind === 'agent'"
-      :member="selectedMember"
-      :topics="snapshot.topics"
-      :positions="snapshot.positions.filter((position) => position.memberId === selectedMemberId)"
-    />
   </section>
 </template>
 
@@ -78,7 +66,6 @@
 
   import AppIcon from "@/components/AppIcon.vue";
   import MemberIdentity from "@/domains/room/MemberIdentity.vue";
-  import MemberTopicPositions from "@/domains/room/MemberTopicPositions.vue";
   import type { Member, RoomSnapshot } from "@/services/roomApi";
 
   const props = defineProps<{
@@ -97,9 +84,6 @@
     props.snapshot.members
       .filter((member) => !member.deletedAt)
       .toSorted((left, right) => Number(right.kind === "human") - Number(left.kind === "human")),
-  );
-  const selectedMember = computed(() =>
-    members.value.find((member) => member.id === props.selectedMemberId),
   );
   const presenceLabel = {
     available: "空闲",

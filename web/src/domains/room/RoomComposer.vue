@@ -52,13 +52,12 @@
               v-for="member in agentMembers"
               :key="member.id"
               class="recipient-choice"
-              :title="member.activity"
               :value="member.id"
               :aria-label="`@ ${member.name}`"
               :aria-invalid="showRecipientError"
               :aria-describedby="showRecipientError ? 'routing-error' : undefined"
             >
-              <span>{{ member.name }}</span>
+              <span>@ {{ member.name }}</span>
             </AppCheckbox>
           </AppCheckboxGroup>
         </div>

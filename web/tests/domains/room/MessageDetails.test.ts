@@ -9,7 +9,7 @@ import { roomFixture } from "../../fixtures/room";
 describe("MessageDetails", () => {
   afterEach(cleanup);
 
-  it("shows topics and recipient dispatch states without inferring reception or receipts", () => {
+  it("shows topics and recipient queue states without inferring session entry", () => {
     const room = roomFixture();
     const message: RoomMessage = {
       ...room.messages[1],
@@ -21,19 +21,22 @@ describe("MessageDetails", () => {
 
     expect(screen.getByText("# 前端")).toBeTruthy();
     expect(screen.getByText("# 后端")).toBeTruthy();
-    const memberTags = within(screen.getByRole("list", { name: "@ 成员" }));
-    expect(memberTags.getAllByRole("listitem")).toHaveLength(1);
-    expect(memberTags.queryByText("前端 Worker")).toBeNull();
-    expect(memberTags.getByText("测试 Worker")).toBeTruthy();
-    expect(screen.getAllByRole("columnheader").map((header) => header.textContent)).toEqual([
+    const mentionedMembers = within(screen.getByRole("list", { name: "@ 成员" }));
+    expect(mentionedMembers.getAllByRole("listitem")).toHaveLength(1);
+    expect(mentionedMembers.queryByText("前端 Worker")).toBeNull();
+    expect(mentionedMembers.getByText("测试 Worker")).toBeTruthy();
+    const deliveries = within(screen.getByRole("table", { name: "分发状态" }));
+    expect(deliveries.getAllByRole("columnheader").map((header) => header.textContent)).toEqual([
       "成员",
-      "投递状态",
+      "入队",
+      "进入会话",
     ]);
-    const queued = within(screen.getByRole("row", { name: /前端 Worker/ }));
+    const queued = within(deliveries.getByRole("row", { name: /前端 Worker/ }));
     expect(queued.getByText("提交中")).toBeTruthy();
-    const enqueued = within(screen.getByRole("row", { name: /测试 Worker/ }));
+    const enqueued = within(deliveries.getByRole("row", { name: /测试 Worker/ }));
     expect(enqueued.getByText("已入队")).toBeTruthy();
-    expect(screen.queryByText(message.content)).toBeNull();
+    expect(enqueued.getAllByRole("cell")[2].textContent?.trim()).toBe("—");
+    expect(screen.getByText(message.content)).toBeTruthy();
   });
 
   it("shows topic-free messages using saved delivery targets rather than current subscriptions", () => {
@@ -48,20 +51,16 @@ describe("MessageDetails", () => {
     render(MessageDetails, { props: { message, topics: room.topics, members: room.members } });
 
     expect(screen.getByText("未选择话题")).toBeTruthy();
-    expect(screen.getByRole("row", { name: /前端 Worker/ })).toBeTruthy();
-    expect(screen.queryByRole("row", { name: /测试 Worker/ })).toBeNull();
+    const deliveries = within(screen.getByRole("table", { name: "分发状态" }));
+    expect(deliveries.getByRole("row", { name: /前端 Worker/ })).toBeTruthy();
+    expect(deliveries.queryByRole("row", { name: /测试 Worker/ })).toBeNull();
   });
 
-  it("shows confirmed original-session input evidence separately from queue acceptance", () => {
+  it("shows queue acceptance and confirmed session entry separately", () => {
     const room = roomFixture();
     const delivery = {
       ...room.messages[0].deliveries[0],
       status: "received" as const,
-      queuedAt: "2026-11-08T04:00:01Z",
-      receivedAt: "2026-11-08T04:00:03Z",
-      updatedAt: "2026-11-08T04:00:03Z",
-      receivedItemId: "original-input",
-      receivedTurnId: "original-turn",
     };
     const message = {
       ...room.messages[0],
@@ -69,16 +68,18 @@ describe("MessageDetails", () => {
       deliveries: [delivery],
     };
     render(MessageDetails, { props: { message, topics: room.topics, members: room.members } });
-    expect(screen.getByText("已进入会话")).toBeTruthy();
-    expect(screen.getByText("投递凭证")).toBeTruthy();
-    expect(screen.getByText("original-input")).toBeTruthy();
-    expect(screen.getByText(/入队 \d{2}:\d{2}:\d{2}/)).toBeTruthy();
-    expect(document.querySelector("time")?.getAttribute("datetime")).toBe(delivery.receivedAt);
+    const recipient = within(screen.getByRole("row", { name: /前端 Worker/ }));
+    const cells = recipient.getAllByRole("cell");
+    expect(cells[1].textContent?.trim()).toBe("已入队");
+    expect(cells[2].textContent?.trim()).toBe("已进入");
   });
 
-  it("shows an unsubmitted delivery without implying queue acceptance", () => {
+  it.each([
+    { status: "pending", label: "待提交", error: null },
+    { status: "rejected", label: "已拒绝", error: "队列拒绝接收" },
+  ] as const)("shows $status without implying session entry", ({ status, label, error }) => {
     const room = roomFixture();
-    const delivery = { ...room.messages[0].deliveries[0], status: "pending" as const };
+    const delivery = { ...room.messages[0].deliveries[0], status, error };
     const message = {
       ...room.messages[0],
       recipientIds: [delivery.targetMemberId],
@@ -86,12 +87,10 @@ describe("MessageDetails", () => {
     };
     render(MessageDetails, { props: { message, topics: room.topics, members: room.members } });
 
-    expect(screen.getByText("待提交")).toBeTruthy();
-    expect(screen.queryByText("已入队")).toBeNull();
-    expect(screen.queryByText("待接收")).toBeNull();
-    expect(screen.queryByText("待回执")).toBeNull();
-    const time = screen.getByText(/\d{2}:\d{2}:\d{2}/);
-    expect(time.getAttribute("datetime")).toBe(delivery.updatedAt);
+    const recipient = within(screen.getByRole("row", { name: /前端 Worker/ }));
+    expect(recipient.getByText(label)).toBeTruthy();
+    expect(recipient.getAllByRole("cell")[2].textContent?.trim()).toBe("—");
+    if (error) expect(recipient.getByText(error)).toBeTruthy();
   });
 
   it("shows the user as a member without inventing an agent delivery", () => {

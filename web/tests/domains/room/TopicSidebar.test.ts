@@ -13,6 +13,7 @@ describe("TopicSidebar", () => {
     const topic = snapshot.topics[1];
     const { emitted } = render(TopicSidebar, { props: { snapshot, busy: false } });
 
+    expect(screen.getByRole("heading", { level: 2, name: "话题" })).toBeTruthy();
     await fireEvent.click(screen.getByRole("button", { name: "筛选话题：前端" }));
     await fireEvent.click(screen.getByRole("button", { name: "编辑话题：前端" }));
     await fireEvent.click(screen.getByRole("button", { name: "删除话题：前端" }));

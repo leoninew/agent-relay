@@ -1,7 +1,7 @@
 <template>
   <aside class="topic-sidebar" aria-label="话题导航">
-    <div class="sidebar-section-heading">
-      <span class="eyebrow">讨论话题</span>
+    <header class="room-panel-heading sidebar-section-heading">
+      <h2 class="room-panel-title">话题</h2>
       <button
         type="button"
         class="icon-button"
@@ -12,8 +12,8 @@
       >
         <AppIcon name="plus" />
       </button>
-    </div>
-    <nav class="topic-list" aria-label="筛选讨论话题">
+    </header>
+    <nav class="topic-list" aria-label="筛选话题">
       <button
         type="button"
         class="topic-nav-item"

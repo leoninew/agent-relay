@@ -135,7 +135,7 @@ describe("RoomPage publication", () => {
     ]);
     await waitFor(() => expect(useToastsStore(pinia).items.at(-1)?.tone).toBe("success"));
     expect(sessionStorage.getItem("relay-publication:agent-relay")).toBeNull();
-    expect(screen.getByRole("button", { name: "刷新聊天室" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "刷新" })).toBeTruthy();
   });
 
   it("allows manual routing changes after selecting a member and clears them on all messages", async () => {

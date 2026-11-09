@@ -60,6 +60,44 @@ describe("MessageTimeline history", () => {
     expect(screen.queryByText("YOU")).toBeNull();
   });
 
+  it("shows one standalone time marker per minute before its message group", () => {
+    const snapshot = roomFixture();
+    const messages = snapshot.messages.map((message, index) => ({
+      ...message,
+      createdAt: index === 0 ? "2026-11-06T10:00:23Z" : "2026-11-06T10:00:48Z",
+    }));
+    messages.push({
+      ...messages[1],
+      id: "msg-0003",
+      seq: 3,
+      createdAt: "2026-11-06T10:01:00Z",
+    });
+    const { container } = render(MessageTimeline, {
+      props: {
+        messages,
+        members: snapshot.members,
+        topics: snapshot.topics,
+        hasMore: false,
+        hasNewer: false,
+        loadingOlder: false,
+        loading: false,
+        unavailable: false,
+        detailsOpen: false,
+      },
+    });
+
+    const markers = Array.from(container.querySelectorAll(".timeline-time time"));
+    expect(markers).toHaveLength(2);
+    expect(markers.map((marker) => marker.getAttribute("datetime"))).toEqual([
+      messages[0].createdAt,
+      messages[2].createdAt,
+    ]);
+    expect(markers.every((marker) => /^\d{2}:\d{2}$/.test(marker.textContent ?? ""))).toBe(true);
+    expect(container.querySelectorAll(".message-content .message-time")).toHaveLength(0);
+    expect(markers[0].parentElement?.nextElementSibling?.classList.contains("message")).toBe(true);
+    expect(markers[1].parentElement?.nextElementSibling?.classList.contains("message")).toBe(true);
+  });
+
   it("updates authors and references when members are renamed without reloading messages", async () => {
     const snapshot = roomFixture();
     snapshot.messages[0].replyToMessageId = snapshot.messages[1].id;

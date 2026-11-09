@@ -7,7 +7,7 @@ export function subscribeRoomEvents(
   roomId: string,
   afterEventId: number,
   apply: (page: RoomEventPage) => Promise<void>,
-  status: (state: SyncState) => void,
+  status?: (state: SyncState) => void,
 ): () => void {
   let stopped = false;
   let socket: WebSocket | undefined;
@@ -24,7 +24,7 @@ export function subscribeRoomEvents(
 
   function reconnect(): void {
     if (stopped || timer) return;
-    status("reconnecting");
+    status?.("reconnecting");
     timer = setTimeout(() => {
       timer = undefined;
       void connect();
@@ -51,7 +51,7 @@ export function subscribeRoomEvents(
       const active = new WebSocket(url);
       socket = active;
       active.onopen = () => {
-        if (!stopped) status("connected");
+        if (!stopped) status?.("connected");
       };
       active.onmessage = (event: MessageEvent<string>) => {
         chain = chain
@@ -72,7 +72,7 @@ export function subscribeRoomEvents(
     }
   }
 
-  status("connecting");
+  status?.("connecting");
   void connect();
   return () => {
     stopped = true;
