@@ -23,6 +23,7 @@
     Plus,
     RefreshCw,
     Reply,
+    Trash2,
     Waypoints,
     X,
   } from "@lucide/vue";
@@ -45,5 +46,6 @@
     refresh: RefreshCw,
     relay: Waypoints,
     reply: Reply,
+    trash: Trash2,
   };
 </script>

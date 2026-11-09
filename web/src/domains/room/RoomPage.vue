@@ -197,6 +197,7 @@
 
   type DetailTarget =
     { kind: "message" } | { kind: "topic"; id: string } | { kind: "member"; id: string };
+  type ResourceDeleteTarget = Exclude<DeleteTarget, { kind: "room" }>;
 
   const props = defineProps<{ roomId?: string }>();
   const router = useRouter();
@@ -251,7 +252,7 @@
   const setupMode = ref<"member" | "topic">();
   const editingMember = ref<Member>();
   const editingTopic = ref<Topic>();
-  const deleteTarget = ref<DeleteTarget>();
+  const deleteTarget = ref<ResourceDeleteTarget>();
   const saving = ref(false);
   const setupError = ref<string | null>(null);
   const sessions = ref<SessionCandidate[]>([]);
@@ -624,7 +625,7 @@
     setupMode.value = "topic";
   }
 
-  function openDelete(target: DeleteTarget): void {
+  function openDelete(target: ResourceDeleteTarget): void {
     setupMode.value = undefined;
     editingMember.value = undefined;
     setupError.value = null;
@@ -748,7 +749,15 @@
   watch(
     () => props.roomId,
     (roomId) => {
-      if (roomId) void openRoom(roomId);
+      if (roomId) {
+        void openRoom(roomId);
+      } else {
+        cancelQueries();
+        sessionsVersion++;
+        currentRoomId.value = undefined;
+        pendingPublication.value = undefined;
+        void initialize();
+      }
     },
   );
 

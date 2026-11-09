@@ -29,21 +29,34 @@
         </template>
         <div v-else class="room-options">
           <p v-if="!roomsStore.rooms.length" class="switcher-state">暂无聊天室</p>
-          <DropdownMenuItem
-            v-for="room in roomsStore.rooms"
-            :key="room.id"
-            class="room-option"
-            :class="{ 'is-selected': route.params.roomId === room.id }"
-            :aria-current="route.params.roomId === room.id ? 'page' : undefined"
-            @select="select(room.id)"
-          >
-            <span class="room-option-icon"><AppIcon name="chat" /></span>
-            <span class="room-option-label">
-              <span>{{ room.name }}</span>
-              <span class="room-option-path" :title="room.projectPath">{{ room.projectPath }}</span>
-            </span>
-            <AppIcon v-if="route.params.roomId === room.id" name="check" />
-          </DropdownMenuItem>
+          <div v-for="room in roomsStore.rooms" :key="room.id" class="room-option-row">
+            <DropdownMenuItem
+              class="room-option"
+              :class="{ 'is-selected': route.params.roomId === room.id }"
+              :aria-current="route.params.roomId === room.id ? 'page' : undefined"
+              @select="select(room.id)"
+            >
+              <span class="room-option-icon"><AppIcon name="chat" /></span>
+              <span class="room-option-label">
+                <span>{{ room.name }}</span>
+                <span class="room-option-path" :title="room.projectPath">{{
+                  room.projectPath
+                }}</span>
+              </span>
+              <AppIcon v-if="route.params.roomId === room.id" name="check" />
+            </DropdownMenuItem>
+            <DropdownMenuItem as-child @select="startDelete(room)">
+              <button
+                type="button"
+                class="room-delete-button"
+                :aria-label="`删除聊天室：${room.name}`"
+                :title="`删除聊天室：${room.name}`"
+                :disabled="deleting"
+              >
+                <AppIcon name="trash" />
+              </button>
+            </DropdownMenuItem>
+          </div>
         </div>
         <DropdownMenuSeparator class="room-menu-separator" />
         <DropdownMenuItem class="room-menu-action" @select="startCreate">
@@ -59,6 +72,13 @@
     :error="createError"
     @close="roomsStore.createOpen = false"
     @create-room="saveRoom"
+  />
+  <RoomDeleteDialog
+    :target="roomToDelete ? { kind: 'room', node: roomToDelete } : undefined"
+    :saving="deleting"
+    :error="deleteError"
+    @close="roomToDelete = undefined"
+    @confirm="deleteRoom"
   />
 </template>
 
@@ -76,9 +96,10 @@
 
   import AppIcon from "@/components/AppIcon.vue";
   import AppLoading from "@/components/AppLoading.vue";
+  import RoomDeleteDialog from "@/domains/room/RoomDeleteDialog.vue";
   import RoomSetupDialog from "@/domains/room/RoomSetupDialog.vue";
   import { describeApiError } from "@/services/api";
-  import type { CreateRoom } from "@/services/roomApi";
+  import type { CreateRoom, Room } from "@/services/roomApi";
   import { useRoomsStore } from "@/stores/rooms";
   import { useToastsStore } from "@/stores/toasts";
 
@@ -94,6 +115,9 @@
   const saving = ref(false);
   const loadError = ref<string | null>(null);
   const createError = ref<string | null>(null);
+  const roomToDelete = ref<Room>();
+  const deleting = ref(false);
+  const deleteError = ref<string | null>(null);
 
   async function load(): Promise<void> {
     loading.value = true;
@@ -132,6 +156,36 @@
       toasts.error(createError.value);
     } finally {
       saving.value = false;
+    }
+  }
+
+  async function startDelete(room: Room): Promise<void> {
+    open.value = false;
+    await nextTick();
+    deleteError.value = null;
+    roomToDelete.value = room;
+  }
+
+  async function deleteRoom(): Promise<void> {
+    const room = roomToDelete.value;
+    if (!room || deleting.value) return;
+    deleting.value = true;
+    deleteError.value = null;
+    try {
+      await roomsStore.remove(room.id);
+    } catch (caught) {
+      deleteError.value = describeApiError(caught, "删除失败，请重试。");
+      return;
+    } finally {
+      deleting.value = false;
+    }
+    roomToDelete.value = undefined;
+    toasts.success("聊天室已删除");
+    if (route.params.roomId === room.id) {
+      const nextRoom = roomsStore.rooms[0];
+      await router.replace(
+        nextRoom ? { name: "room-detail", params: { roomId: nextRoom.id } } : { name: "room" },
+      );
     }
   }
 

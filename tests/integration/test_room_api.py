@@ -77,6 +77,46 @@ def test_room_returns_topics_members_messages_and_delivery_summary(client: TestC
     assert response.headers["X-Request-Id"]
 
 
+def test_room_deletion_removes_history_and_allows_recreating_the_project(
+    client: TestClient,
+) -> None:
+    original = client.get(ROOM_ROUTE).json()
+    other_room = client.get("/api/room/housekeeper").json()
+    context = client.post(
+        f"{ROOM_ROUTE}/member/frontend-worker/context", json={"topicId": "frontend", "limit": 1}
+    )
+    assert context.status_code == 200
+    assert context.json()["messages"]
+
+    response = client.delete(ROOM_ROUTE)
+
+    assert response.status_code == 204
+    assert response.content == b""
+    assert client.get(ROOM_ROUTE).status_code == 404
+    assert [room["id"] for room in client.get("/api/room").json()] == ["housekeeper"]
+    assert client.get("/api/room/housekeeper").json() == other_room
+    recreated = client.post(
+        "/api/room",
+        json={"name": "重新创建", "projectPath": original["room"]["projectPath"]},
+    )
+    assert recreated.status_code == 201
+    snapshot = client.get(f"/api/room/{recreated.json()['id']}").json()
+    assert snapshot["messages"] == []
+    assert [member["id"] for member in snapshot["members"]] == ["user"]
+
+
+def test_deleting_an_absent_room_uses_the_standard_error_contract(client: TestClient) -> None:
+    response = client.delete("/api/room/missing", headers={"X-Request-Id": "delete-room-request"})
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "code": "not_found",
+        "error": "聊天室不存在",
+        "requestId": "delete-room-request",
+    }
+    assert response.headers["X-Request-Id"] == "delete-room-request"
+
+
 def test_topic_filter_keeps_cross_topic_message_once_and_global_counts(client: TestClient) -> None:
     full_room = client.get(ROOM_ROUTE).json()
     response = client.get(ROOM_ROUTE, params={"topic_id": "frontend"})

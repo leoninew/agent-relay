@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { apiClient } from "@/services/api";
 import {
   addRoomMember,
+  deleteRoom,
   fetchRoom,
   fetchRoomEvents,
   fetchRoomMessage,
@@ -147,5 +148,20 @@ describe("room API", () => {
       }),
     ).rejects.toThrow();
     expect(adapterMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("deletes the selected room and accepts an empty successful response", async () => {
+    adapterMock.mockImplementationOnce(async (config: InternalAxiosRequestConfig) => ({
+      config,
+      data: "",
+      headers: {},
+      status: 204,
+      statusText: "No Content",
+    }));
+
+    await expect(deleteRoom("room/one")).resolves.toBeUndefined();
+    expect(adapterMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ method: "delete", url: "/api/room/room%2Fone" }),
+    );
   });
 });

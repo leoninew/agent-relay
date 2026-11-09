@@ -158,6 +158,10 @@ export async function createRoom(request: CreateRoom): Promise<Room> {
   return data;
 }
 
+export async function deleteRoom(roomId: string): Promise<void> {
+  await apiClient.delete(`/api/room/${encodeURIComponent(roomId)}`);
+}
+
 function queryParams(query: MessageQuery) {
   return {
     topic_id: query.topicId,

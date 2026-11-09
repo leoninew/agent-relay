@@ -6,6 +6,8 @@
 
 聊天室输入以用户身份发布，话题只有一个成员也会投递给该成员。成员主动发布时排除自己，即使显式 `@` 自己也不创建自身投递；排除后仍须至少有一个实际接收人，否则整条拒绝。[统一术语](docs/design/terminology.md)约定 Topic 为“话题”、Session 为“会话”，Codex Thread 是会话的底层实现。
 
+右上角聊天室菜单中的删除按钮会先显示确认弹窗。确认后永久删除该聊天室及其话题、成员、消息、投递和查阅记录，关联的 Codex 会话不受影响；删除当前聊天室后切换到其他聊天室，删除最后一个后显示空状态。同一项目可重新创建聊天室。对应接口为 `DELETE /api/room/{roomId}`，成功返回 `204`，聊天室不存在返回统一 `404` 错误。
+
 需要 Python 3.12、uv、Node.js 22.23.4（见 `.node-version`）、Corepack 0.34.6、GNU Make 和 Bash。Windows 可使用 Git Bash 或 Cygwin。缺少 Corepack 时执行 `npm install -g corepack@0.34.6`；不全局安装 pnpm。
 
 ## 安装

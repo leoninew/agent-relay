@@ -37,6 +37,11 @@ def create_room(request: CreateRoom, service: RoomServiceDependency) -> Room:
     return service.create_room(request)
 
 
+@router.delete("/{room_id}", status_code=204)
+def delete_room(room_id: str, service: RoomServiceDependency) -> None:
+    service.delete_room(room_id)
+
+
 @router.get("/{room_id}")
 def get_room(
     room_id: str,

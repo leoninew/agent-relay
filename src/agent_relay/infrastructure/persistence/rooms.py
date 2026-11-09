@@ -53,6 +53,21 @@ class SQLiteRoomData:
     def insert_room(self, room: Room) -> None:
         self.store.insert_room(self.connection, room)
 
+    def delete_room(self, room_id: str) -> None:
+        for table in (
+            "deliveries",
+            "member_context_queries",
+            "member_topic_positions",
+            "member_topics",
+            "messages",
+            "members",
+            "sessions",
+            "topics",
+            "room_events",
+        ):
+            self.connection.execute(f"DELETE FROM {table} WHERE room_id = ?", (room_id,))
+        self.connection.execute("DELETE FROM rooms WHERE id = ?", (room_id,))
+
     def save_resources(self, state: RoomState, original: RoomState) -> None:
         self.store.save_resources(self.connection, state, original)
 

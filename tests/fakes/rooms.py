@@ -114,6 +114,10 @@ class MemoryRoomData:
         self.states[room.id] = RoomState(room=deepcopy(room))
         self.messages[room.id] = []
 
+    def delete_room(self, room_id: str) -> None:
+        del self.states[room_id]
+        del self.messages[room_id]
+
     def save_resources(self, state: RoomState, original: RoomState) -> None:
         self.states[state.room.id] = deepcopy(state)
 

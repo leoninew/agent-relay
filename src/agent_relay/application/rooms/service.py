@@ -54,6 +54,11 @@ class RoomService:
             rooms.save_resources(state, original)
             return room.model_copy(deep=True)
 
+    def delete_room(self, room_id: str) -> None:
+        with self.store.write_rooms() as rooms:
+            rooms.room(room_id)
+            rooms.delete_room(room_id)
+
     def update_member(self, room_id: str, member_id: str, request: UpdateMember) -> ChangedMember:
         with self.store.write_rooms() as rooms:
             state = rooms.resources(room_id)

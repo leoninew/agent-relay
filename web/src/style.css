@@ -222,7 +222,7 @@
   gap: 14px;
   min-height: 34px;
   padding: 8px 13px;
-  border: 1px solid hsl(var(--primary));
+  border: 1px solid transparent;
   border-radius: 6px;
   background: hsl(var(--primary));
   color: hsl(var(--primary-foreground));
@@ -678,11 +678,17 @@
   max-height: 360px;
   overflow-y: auto;
 }
+.room-option-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
 .room-option {
   display: flex;
   align-items: center;
   gap: 12px;
   min-width: 0;
+  flex: 1;
   width: 100%;
   border-radius: 6px;
   padding: 10px;
@@ -723,6 +729,31 @@
   font-size: var(--font-size-caption);
   line-height: var(--line-height-caption);
   color: hsl(var(--muted-foreground));
+}
+.room-delete-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  outline: none;
+}
+.room-delete-button svg {
+  width: 16px;
+  height: 16px;
+}
+.room-delete-button[data-highlighted],
+.room-delete-button:hover:not(:disabled) {
+  color: hsl(var(--destructive));
+  background: hsl(var(--destructive) / 0.08);
+}
+.room-delete-button:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 .switcher-state {
   padding: 12px;

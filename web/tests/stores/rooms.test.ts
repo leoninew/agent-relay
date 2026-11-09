@@ -1,7 +1,7 @@
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { addRoomTopic } from "@/services/roomApi";
+import { addRoomTopic, deleteRoom } from "@/services/roomApi";
 import { useRoomsStore } from "@/stores/rooms";
 
 import { roomFixture } from "../fixtures/room";
@@ -9,6 +9,7 @@ import { roomFixture } from "../fixtures/room";
 vi.mock("@/services/roomApi", () => ({
   addRoomTopic: vi.fn(),
   createRoom: vi.fn(),
+  deleteRoom: vi.fn(),
   fetchRooms: vi.fn(),
 }));
 
@@ -16,6 +17,35 @@ describe("room state", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     setActivePinia(createPinia());
+  });
+
+  it("removes a deleted room and its snapshot while retaining other rooms", async () => {
+    const store = useRoomsStore();
+    const snapshot = roomFixture();
+    const otherRoom = { ...snapshot.room, id: "other" };
+    store.rooms = [snapshot.room, otherRoom];
+    store.sync(snapshot);
+    store.sync({ ...snapshot, room: otherRoom });
+    vi.mocked(deleteRoom).mockResolvedValue();
+
+    await store.remove(snapshot.room.id);
+
+    expect(deleteRoom).toHaveBeenCalledWith(snapshot.room.id);
+    expect(store.rooms).toEqual([otherRoom]);
+    expect(store.snapshots[snapshot.room.id]).toBeUndefined();
+    expect(store.snapshots[otherRoom.id].room).toEqual(otherRoom);
+  });
+
+  it("retains a room and its snapshot when deletion fails", async () => {
+    const store = useRoomsStore();
+    const snapshot = roomFixture();
+    store.rooms = [snapshot.room];
+    store.sync(snapshot);
+    vi.mocked(deleteRoom).mockRejectedValue(new Error("unavailable"));
+
+    await expect(store.remove(snapshot.room.id)).rejects.toThrow("unavailable");
+    expect(store.rooms).toEqual([snapshot.room]);
+    expect(store.snapshots[snapshot.room.id]).toEqual(snapshot);
   });
 
   it("applies saved resources in one room while keeping messages and the applied cursor", async () => {

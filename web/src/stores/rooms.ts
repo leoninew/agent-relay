@@ -1,7 +1,7 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
 
-import { addRoomTopic, createRoom, fetchRooms } from "@/services/roomApi";
+import { addRoomTopic, createRoom, deleteRoom, fetchRooms } from "@/services/roomApi";
 import type {
   CreateRoom,
   CreateTopic,
@@ -43,6 +43,13 @@ export const useRoomsStore = defineStore("rooms", () => {
     const room = await createRoom(request);
     rooms.value.push(room);
     return room;
+  }
+
+  async function remove(roomId: string): Promise<void> {
+    await deleteRoom(roomId);
+    rooms.value = rooms.value.filter((room) => room.id !== roomId);
+    delete snapshots.value[roomId];
+    delete metadataVersions[roomId];
   }
 
   function sync(snapshot: RoomSnapshot): void {
@@ -106,6 +113,7 @@ export const useRoomsStore = defineStore("rooms", () => {
     snapshots,
     load,
     create,
+    remove,
     sync,
     syncMetadata,
     prependPage,
