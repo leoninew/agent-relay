@@ -247,7 +247,10 @@ class RoomQueries:
             clauses.append("m.seq < ?")
             args.append(before_seq)
         rows = connection.execute(
-            f"SELECT m.payload FROM messages m WHERE {' AND '.join(clauses)} "
+            "SELECT json_set(m.payload, '$.sender_name', sender.name) AS payload "
+            "FROM messages m JOIN members sender "
+            "ON sender.room_id = m.room_id AND sender.id = m.publisher_id "
+            f"WHERE {' AND '.join(clauses)} "
             "ORDER BY m.seq DESC LIMIT ?",
             (*args, limit + 1),
         ).fetchall()
@@ -309,7 +312,11 @@ class RoomQueries:
         with self.store.read() as connection:
             self.room_in(connection, room_id)
             rows = connection.execute(
-                "SELECT payload FROM messages WHERE room_id = ? AND id = ?", (room_id, message_id)
+                "SELECT json_set(m.payload, '$.sender_name', sender.name) AS payload "
+                "FROM messages m JOIN members sender "
+                "ON sender.room_id = m.room_id AND sender.id = m.publisher_id "
+                "WHERE m.room_id = ? AND m.id = ?",
+                (room_id, message_id),
             ).fetchall()
             if not rows:
                 raise RoomNotFoundError("消息不存在")
@@ -323,8 +330,10 @@ class RoomQueries:
         publication_id: str,
     ) -> Message | None:
         row = connection.execute(
-            "SELECT payload FROM messages "
-            "WHERE room_id = ? AND publisher_id = ? AND publication_id = ?",
+            "SELECT json_set(m.payload, '$.sender_name', sender.name) AS payload "
+            "FROM messages m JOIN members sender "
+            "ON sender.room_id = m.room_id AND sender.id = m.publisher_id "
+            "WHERE m.room_id = ? AND m.publisher_id = ? AND m.publication_id = ?",
             (room_id, publisher_id, publication_id),
         ).fetchone()
         if row is None:

@@ -217,7 +217,9 @@ class SQLiteRoomStore:
                 room_id,
                 message.id,
                 message.seq,
-                message.model_copy(update={"deliveries": []}).model_dump_json(),
+                message.model_copy(update={"deliveries": []}).model_dump_json(
+                    exclude={"sender_name"}
+                ),
                 message.sender_id,
                 message.publication_id,
             ),
@@ -265,9 +267,11 @@ class SQLiteRoomStore:
     def claim_delivery(self) -> ClaimedDelivery | None:
         with self.write() as connection:
             row = connection.execute(
-                "SELECT d.room_id, d.payload, m.payload AS message, r.payload AS room "
+                "SELECT d.room_id, d.payload, "
+                "json_set(m.payload, '$.sender_name', sender.name) AS message, r.payload AS room "
                 "FROM deliveries d JOIN messages m ON m.room_id = d.room_id "
                 "AND m.id = d.message_id JOIN rooms r ON r.id = d.room_id "
+                "JOIN members sender ON sender.room_id = m.room_id AND sender.id = m.publisher_id "
                 "JOIN members target ON target.room_id = d.room_id "
                 "AND target.id = d.target_member_id AND target.session_id = d.target_session_id "
                 "AND json_extract(target.payload, '$.kind') = 'agent' "

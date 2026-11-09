@@ -118,7 +118,7 @@ def test_publication_keys_and_lookup_are_scoped_to_each_publisher(
     assert len(message_ids) == 3
 
 
-def test_member_publication_replay_preserves_original_targets_and_sender_name(
+def test_member_publication_replay_preserves_original_targets_and_resolves_current_sender_name(
     members: MemberEnvironment,
 ) -> None:
     request = {
@@ -139,7 +139,7 @@ def test_member_publication_replay_preserves_original_targets_and_sender_name(
 
     assert replay.status_code == 201
     assert replay.json()["id"] == message["id"]
-    assert replay.json()["senderName"] == "前端 Worker"
+    assert replay.json()["senderName"] == "前端成员"
     assert replay.json()["recipientIds"] == ["coordinator", "test-worker"]
 
 

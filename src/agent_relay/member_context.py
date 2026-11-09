@@ -135,7 +135,10 @@ class MemberContext:
             args.append(request.after_seq)
         direction = "ASC" if request.after_seq is not None else "DESC"
         rows = connection.execute(
-            f"SELECT m.payload FROM messages m WHERE {' AND '.join(clauses)} "
+            "SELECT json_set(m.payload, '$.sender_name', sender.name) AS payload "
+            "FROM messages m JOIN members sender "
+            "ON sender.room_id = m.room_id AND sender.id = m.publisher_id "
+            f"WHERE {' AND '.join(clauses)} "
             f"ORDER BY m.seq {direction} LIMIT ?",
             (*args, request.limit + 1),
         ).fetchall()

@@ -88,7 +88,7 @@
         v-model:draft="drafts[snapshot.room.id]"
         :room-id="snapshot.room.id"
         :topics="activeTopics"
-        :members="activeMembers"
+        :members="snapshot.members"
         :reply-to="replyTo"
         :sending="sending"
         :locked="Boolean(pendingPublication)"

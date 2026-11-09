@@ -12,7 +12,9 @@ from session_fixtures import FakeQueueDriver, FakeSessionDriver
 from agent_relay.api import create_app
 from agent_relay.delivery_service import DeliveryService
 from agent_relay.drivers.codex import SessionInfo
-from agent_relay.room_models import CreateMessage, RoomEvent
+from agent_relay.member_context import MemberContext
+from agent_relay.member_context_models import ContextQuery
+from agent_relay.room_models import CreateMessage, RoomEvent, UpdateMember
 from agent_relay.room_queries import RoomQueries
 from agent_relay.room_service import RoomService
 from agent_relay.room_store import SQLiteRoomStore
@@ -73,6 +75,64 @@ def seed_history(service: DemoRoomService) -> None:
                 created_at=datetime.now(UTC),
             )
             service.store.insert_message(connection, state.room.id, message)
+
+
+@pytest.mark.parametrize("legacy_name", [None, "旧名称"])
+def test_message_names_follow_members_across_history_context_and_delivery(
+    service: DemoRoomService, client: TestClient, legacy_name: str | None
+) -> None:
+    request = CreateMessage(
+        publication_id=str(uuid4()),
+        content="成员改名后仍属于同一会话",
+        mentioned_member_ids=["backend-worker"],
+    )
+    message = service.post_message("agent-relay", request, member_id="frontend-worker")
+    with service.store.write() as connection:
+        assert (
+            connection.execute(
+                "SELECT json_extract(payload, '$.sender_name') FROM messages WHERE id = ?",
+                (message.id,),
+            ).fetchone()[0]
+            is None
+        )
+        if legacy_name is not None:
+            connection.execute(
+                "UPDATE messages SET payload = json_set(payload, '$.sender_name', ?) WHERE id = ?",
+                (legacy_name, message.id),
+            )
+    renamed = service.update_member(
+        "agent-relay", "frontend-worker", UpdateMember(name="界面开发", topic_ids=["frontend"])
+    )
+    for route in (ROOM, f"{ROOM}/message"):
+        saved = next(
+            saved for saved in client.get(route).json()["messages"] if saved["id"] == message.id
+        )
+        assert saved["senderId"] == renamed.id
+        assert saved["senderName"] == renamed.name
+    assert client.get(f"{ROOM}/message/{message.id}").json()["senderName"] == renamed.name
+    assert (
+        service.publication("agent-relay", request.publication_id, member_id=renamed.id).sender_name
+        == renamed.name
+    )
+    assert service.post_message("agent-relay", request, member_id=renamed.id).sender_name == (
+        renamed.name
+    )
+    context = MemberContext(service.store).query(
+        "agent-relay", "backend-worker", ContextQuery(message_id=message.id)
+    )
+    assert context.messages[0].sender_name == renamed.name
+    claimed_names = []
+    while work := service.store.claim_delivery():
+        if work.message.id == message.id:
+            claimed_names.append(work.message.sender_name)
+        work.delivery.status = "queued"
+        service.store.finish_delivery(work.room_id, work.delivery)
+    assert claimed_names == [renamed.name]
+
+    service.delete_member("agent-relay", renamed.id)
+    restored = RoomQueries(SQLiteRoomStore(service.store.path)).message("agent-relay", message.id)
+    assert restored.sender_id == renamed.id
+    assert restored.sender_name == renamed.name
 
 
 def test_keyset_history_keeps_three_pages_stable_during_new_publication(

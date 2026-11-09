@@ -58,6 +58,31 @@ describe("RoomComposer", () => {
     expect(screen.queryByText("YOU")).toBeNull();
   });
 
+  it("keeps the reply author current and retains their identity after removal", async () => {
+    const room = roomFixture();
+    const { rerender } = render(RoomComposer, {
+      props: {
+        roomId: room.room.id,
+        topics: room.topics,
+        members: room.members,
+        replyTo: room.messages[1],
+        sending: false,
+        error: null,
+      },
+    });
+    await rerender({
+      members: room.members.map((member) =>
+        member.id === "backend-worker"
+          ? { ...member, name: "后端开发", deletedAt: "2026-11-09T00:00:00Z" }
+          : member,
+      ),
+    });
+
+    expect(screen.getByText("后端开发", { selector: "strong" })).toBeTruthy();
+    expect(screen.queryByRole("checkbox", { name: "@ 后端开发" })).toBeNull();
+    expect(screen.queryByText("后端 Worker")).toBeNull();
+  });
+
   it("sends to a mentioned member without a topic, including in a room with no topics", async () => {
     const { emitted, rerender } = renderComposer();
     await rerender({ topics: [] });

@@ -3,7 +3,7 @@
     <div v-if="replyTo" class="composer-reply">
       <AppIcon name="reply" />
       <span>
-        回复 <strong>{{ replyTo.senderName }}</strong> · {{ replyTo.content }}
+        回复 <strong>{{ replyToMember?.name ?? replyTo.senderId }}</strong> · {{ replyTo.content }}
       </span>
       <button type="button" class="icon-button" aria-label="取消引用" @click="$emit('cancelReply')">
         <AppIcon name="close" />
@@ -153,7 +153,12 @@
   const attempted = ref(false);
   const textarea = ref<InstanceType<typeof AppInput>>();
   const showContentError = computed(() => attempted.value && !content.value.trim());
-  const agentMembers = computed(() => props.members.filter((member) => member.kind === "agent"));
+  const replyToMember = computed(() =>
+    props.members.find((member) => member.id === props.replyTo?.senderId),
+  );
+  const agentMembers = computed(() =>
+    props.members.filter((member) => member.kind === "agent" && !member.deletedAt),
+  );
   const recipients = computed(() =>
     agentMembers.value.filter(
       (member) =>

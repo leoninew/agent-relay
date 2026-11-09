@@ -25,7 +25,7 @@
           class="message"
           :class="{ 'is-selected': message.id === selectedMessageId }"
           tabindex="0"
-          :aria-label="`${message.senderName}的消息`"
+          :aria-label="`${memberName(message.senderId)}的消息`"
           @click="$emit('select', message.id)"
           @keydown.enter.self.prevent="$emit('select', message.id)"
           @keydown.space.self.prevent="$emit('select', message.id)"
@@ -34,7 +34,7 @@
             <div class="message-heading">
               <span class="message-identity">
                 <MemberAvatar :member="findMember(message.senderId)" />
-                <span class="message-author">{{ message.senderName }}</span>
+                <span class="message-author">{{ memberName(message.senderId) }}</span>
               </span>
               <div v-if="message.topicIds.length" class="message-topics" aria-label="所属话题">
                 <span
@@ -160,6 +160,10 @@
     return props.members.find((member) => member.id === memberId);
   }
 
+  function memberName(memberId: string): string {
+    return findMember(memberId)?.name ?? memberId;
+  }
+
   function showDetails(messageId: string): void {
     emit("select", messageId);
     emit("showDetails");
@@ -193,7 +197,7 @@
 
   function referenceLabel(messageId: string): string {
     const message = props.messages.find((item) => item.id === messageId);
-    return message ? `#${message.seq} · ${message.senderName}` : messageId;
+    return message ? `#${message.seq} · ${memberName(message.senderId)}` : messageId;
   }
 
   function scrollToEnd(): void {

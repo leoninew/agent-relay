@@ -59,4 +59,34 @@ describe("MessageTimeline history", () => {
     expect(screen.getByRole("button", { name: "引用 #1 · 你" })).toBeTruthy();
     expect(screen.queryByText("YOU")).toBeNull();
   });
+
+  it("updates authors and references when members are renamed without reloading messages", async () => {
+    const snapshot = roomFixture();
+    snapshot.messages[0].replyToMessageId = snapshot.messages[1].id;
+    const { rerender } = render(MessageTimeline, {
+      props: {
+        messages: snapshot.messages,
+        members: snapshot.members,
+        topics: snapshot.topics,
+        hasMore: false,
+        hasNewer: false,
+        loadingOlder: false,
+        loading: false,
+        unavailable: false,
+        detailsOpen: false,
+      },
+    });
+
+    expect(screen.getByRole("article", { name: "后端 Worker的消息" })).toBeTruthy();
+    await rerender({
+      members: snapshot.members.map((member) =>
+        member.id === "backend-worker" ? { ...member, name: "后端开发" } : member,
+      ),
+    });
+
+    expect(screen.getByRole("article", { name: "后端开发的消息" })).toBeTruthy();
+    expect(screen.getByText("后端开发", { selector: ".message-author" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "引用 #2 · 后端开发" })).toBeTruthy();
+    expect(screen.queryByText("后端 Worker")).toBeNull();
+  });
 });
