@@ -25,39 +25,61 @@
         <span>全部消息</span>
         <span class="topic-count">{{ snapshot.summary.totalMessages }}</span>
       </button>
-      <div v-for="topic in topics" :key="topic.id" class="sidebar-node">
-        <button
-          type="button"
-          class="topic-nav-item"
-          :class="{ 'is-active': selectedTopicId === topic.id }"
-          :aria-pressed="selectedTopicId === topic.id"
-          :aria-label="`筛选话题：${topic.name}`"
-          :title="topic.description"
-          @click="$emit('select', topic.id)"
-        >
-          <AppIcon name="hash" :data-topic="topic.id" />
-          <span class="sidebar-node-name">{{ topic.name }}</span>
-          <span class="topic-count">{{ topic.messageCount }}</span>
-        </button>
-        <div class="sidebar-node-actions">
+      <VueDraggable
+        v-model="topics"
+        class="topic-sortable-list"
+        draggable=".sidebar-node"
+        handle=".sidebar-drag-handle"
+        ghost-class="sidebar-drag-ghost"
+        chosen-class="sidebar-drag-chosen"
+        :animation="150"
+        :disabled="busy"
+      >
+        <div v-for="topic in topics" :key="topic.id" class="sidebar-node">
           <button
             type="button"
-            :aria-label="`编辑话题：${topic.name}`"
-            :disabled="busy"
-            @click="$emit('editTopic', topic)"
+            class="sidebar-drag-handle"
+            :aria-label="`调整话题顺序：${topic.name}`"
+            title="拖动排序，也可使用上下方向键"
+            :disabled="busy || topics.length < 2"
+            @keydown.up.prevent="moveTopic(topic.id, -1)"
+            @keydown.down.prevent="moveTopic(topic.id, 1)"
           >
-            编辑
+            <AppIcon name="grip" />
           </button>
           <button
             type="button"
-            :aria-label="`删除话题：${topic.name}`"
-            :disabled="busy"
-            @click="$emit('deleteTopic', topic)"
+            class="topic-nav-item"
+            :class="{ 'is-active': selectedTopicId === topic.id }"
+            :aria-pressed="selectedTopicId === topic.id"
+            :aria-label="`筛选话题：${topic.name}`"
+            :title="topic.description"
+            @click="$emit('select', topic.id)"
           >
-            删除
+            <AppIcon name="hash" :data-topic="topic.id" />
+            <span class="sidebar-node-name">{{ topic.name }}</span>
+            <span class="topic-count">{{ topic.messageCount }}</span>
           </button>
+          <div class="sidebar-node-actions">
+            <button
+              type="button"
+              :aria-label="`编辑话题：${topic.name}`"
+              :disabled="busy"
+              @click="$emit('editTopic', topic)"
+            >
+              编辑
+            </button>
+            <button
+              type="button"
+              :aria-label="`删除话题：${topic.name}`"
+              :disabled="busy"
+              @click="$emit('deleteTopic', topic)"
+            >
+              删除
+            </button>
+          </div>
         </div>
-      </div>
+      </VueDraggable>
     </nav>
 
     <slot />
@@ -65,9 +87,10 @@
 </template>
 
 <script setup lang="ts">
-  import { computed } from "vue";
+  import { VueDraggable } from "vue-draggable-plus";
 
   import AppIcon from "@/components/AppIcon.vue";
+  import { useSidebarOrder } from "@/domains/room/useSidebarOrder";
   import type { RoomSnapshot, Topic } from "@/services/roomApi";
 
   const props = defineProps<{
@@ -82,5 +105,9 @@
     editTopic: [topic: Topic];
     deleteTopic: [topic: Topic];
   }>();
-  const topics = computed(() => props.snapshot.topics.filter((topic) => !topic.deletedAt));
+  const { orderedItems: topics, moveItem: moveTopic } = useSidebarOrder(
+    () => props.snapshot.room.id,
+    "topics",
+    () => props.snapshot.topics.filter((topic) => !topic.deletedAt),
+  );
 </script>
