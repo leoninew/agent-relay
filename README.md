@@ -6,7 +6,7 @@
 
 聊天室输入以用户身份发布，话题只有一个成员也会投递给该成员。成员主动发布时排除自己，即使显式 `@` 自己也不创建自身投递；排除后仍须至少有一个实际接收人，否则整条拒绝。[统一术语](docs/design/terminology.md)约定 Topic 为“话题”、Session 为“会话”，Codex Thread 是会话的底层实现。
 
-需要 Python 3.12、uv、Node.js 22+、Corepack、GNU Make 和 Bash。Windows 可使用 Git Bash 或 Cygwin。
+需要 Python 3.12、uv、Node.js 22.23.4（见 `.node-version`）、Corepack 0.34.6、GNU Make 和 Bash。Windows 可使用 Git Bash 或 Cygwin。缺少 Corepack 时执行 `npm install -g corepack@0.34.6`；不全局安装 pnpm。
 
 ## 安装
 
@@ -14,7 +14,9 @@
 make deps
 ```
 
-前端位于 `web/`，使用项目指定的 Yarn 4。
+前端位于 `web/`，通过 `corepack pnpm` 使用项目固定的 pnpm 10.34.9，按 `pnpm-lock.yaml` 冻结安装。Docker 使用相同的 Node.js 和工具版本。
+
+迁移已有工作区时先移走旧 Yarn 的 `web/node_modules`，再运行安装，避免残留依赖影响解析。共享版本为 Vue 3.5.44、Reka UI 2.11.0、Tailwind CSS 4.3.3、Prettier 3.9.10 和 `@lucide/vue` 1.70.0，其余依赖由各自锁文件固定。
 
 安装 CLI，并将 MCP 和协作 skill 一起发布到本机 Codex：
 
@@ -210,7 +212,7 @@ make test
 
 ```bash
 cd web
-corepack yarn build
+corepack pnpm build
 cd ..
 uv run --locked --no-sync python scripts/probes/relay_runtime_integration.py --run-model --output runtime-evidence.json
 ```
@@ -227,9 +229,9 @@ uv run --locked --no-sync python scripts/probes/relay_runtime_integration.py --r
 - 直接运行时用 `AGENT_RELAY_PROFILE` 选择 profile，未设置时默认 `prod`。
 - 数据库：`database.path` 默认 `./data/agent-relay.sqlite3`，相对路径按工作目录解析。`database.migrate_on_startup` 默认 `false`，可通过 `AGENT_RELAY_DATABASE__MIGRATE_ON_STARTUP=true` 开启启动迁移，`.env.dev` 已开启；关闭时使用 `make migrate` 手动迁移。详见[迁移说明](migrations/README.md)。
 - 服务参数：`--host`、`--port`、`--reload`。
-- 前端 `corepack yarn dev` 和 `corepack yarn build` 分别默认 `dev`、`prod`，可用 `--mode qa` 覆盖。
+- 前端 `corepack pnpm dev` 和 `corepack pnpm build` 分别默认 `dev`、`prod`，可用 `--mode qa` 覆盖。
 - 日志：`src/agent_relay/logging.yaml` 统一配置，UTF-8 文本写入 stdout 和 `logs/agent-relay.log`，20 MiB 轮转，保留 5 份。
-- 更新依赖后执行 `uv lock` 或在 `web/` 下执行 `corepack yarn install`，提交对应锁文件。
+- 更新依赖后执行 `uv lock` 或在 `web/` 下执行 `corepack pnpm install`，提交对应锁文件。
 
 ```bash
 docker build -t agent-relay .

@@ -22,7 +22,7 @@ help:
 
 deps:
 	uv sync --all-groups --locked
-	cd web && corepack yarn install --immutable
+	cd web && corepack pnpm install --frozen-lockfile
 
 install:
 	uv run --locked python scripts/install.py plugin check --codex
@@ -42,7 +42,7 @@ test:
 	$(MAKE) -C web test
 
 web:
-	cd web && corepack yarn dev --mode $(profile)
+	cd web && corepack pnpm dev --mode $(profile)
 
 migrate webapi: export AGENT_RELAY_PROFILE = $(profile)
 migrate:

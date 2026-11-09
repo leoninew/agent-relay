@@ -1,4 +1,4 @@
-YARN := corepack yarn
+PNPM := corepack pnpm
 fix ?= 0
 
 LINT_SCRIPT := $(if $(filter 1,$(fix)),lint:fix,lint)
@@ -16,12 +16,12 @@ help:
 	@printf "  make test             Run frontend unit tests\n"
 
 check:
-	$(YARN) typecheck
-	$(YARN) $(LINT_SCRIPT)
-	$(YARN) $(FORMAT_SCRIPT)
+	$(PNPM) typecheck
+	$(PNPM) $(LINT_SCRIPT)
+	$(PNPM) $(FORMAT_SCRIPT)
 
 test:
-	$(YARN) vitest run
+	$(PNPM) test
 
 deps:
-	$(YARN) install --immutable
+	$(PNPM) install --frozen-lockfile

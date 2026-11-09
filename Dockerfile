@@ -1,13 +1,16 @@
 # syntax=docker/dockerfile:1
 
-FROM node:22-alpine AS web-build
+FROM node:22.23.4-alpine AS web-build
 WORKDIR /web
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+RUN npm install --global corepack@0.34.6
 
-COPY web/package.json web/yarn.lock web/.yarnrc.yml ./
-RUN corepack yarn install --immutable
+COPY web/package.json web/pnpm-lock.yaml web/pnpm-workspace.yaml web/.npmrc ./
+RUN --mount=type=cache,id=pnpm10-store,target=/pnpm/store,sharing=locked \
+    corepack pnpm install --store-dir=/pnpm/store --frozen-lockfile
 
 COPY web/ ./
-RUN corepack yarn build
+RUN corepack pnpm build
 
 FROM python:3.12-slim
 
