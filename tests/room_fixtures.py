@@ -3,11 +3,13 @@
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from agent_relay.migrations import run_migrations
-from agent_relay.room_models import Member, Message, Room, Session, Topic
-from agent_relay.room_service import RoomService
-from agent_relay.room_state import RoomState
-from agent_relay.room_store import SQLiteRoomStore
+from agent_relay.application.members.service import MemberSessions
+from agent_relay.application.rooms.service import RoomService
+from agent_relay.domain.rooms.models import Member, Message, Room, Session, Topic
+from agent_relay.domain.rooms.rules import build_message
+from agent_relay.domain.rooms.state import RoomState
+from agent_relay.infrastructure.persistence.migrations import run_migrations
+from agent_relay.infrastructure.persistence.store import SQLiteRoomStore
 
 
 def create_room_store(path: Path) -> SQLiteRoomStore:
@@ -15,7 +17,15 @@ def create_room_store(path: Path) -> SQLiteRoomStore:
     return SQLiteRoomStore(path)
 
 
-class DemoRoomService(RoomService):
+class StoredRoomService(RoomService):
+    store: SQLiteRoomStore
+
+
+class StoredMemberSessions(MemberSessions):
+    store: SQLiteRoomStore
+
+
+class DemoRoomService(StoredRoomService):
     def __init__(self, store: SQLiteRoomStore) -> None:
         super().__init__(store)
         with store.write() as connection:
@@ -148,7 +158,7 @@ class DemoRoomService(RoomService):
         members = {member.id: member for member in state.members}
         messages = []
         for index, (sender_id, topic_ids, mentioned_member_ids, content) in enumerate(examples):
-            message = self._build_message(
+            message = build_message(
                 state,
                 seq=index + 1,
                 content=content,

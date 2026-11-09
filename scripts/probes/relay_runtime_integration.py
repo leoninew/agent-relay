@@ -34,12 +34,12 @@ import uvicorn
 from codex_capabilities import Client
 from websockets.sync.client import connect
 
-from agent_relay.api import create_app
-from agent_relay.client import RelayClient
-from agent_relay.config import Settings, load_settings
-from agent_relay.delivery_service import SubmitterLock
-from agent_relay.drivers.codex import CodexDriver, _launch_command
-from agent_relay.migrations import run_migrations
+from agent_relay.bootstrap.config import Settings, load_settings
+from agent_relay.bootstrap.http import create_app
+from agent_relay.infrastructure.codex.driver import CodexDriver, _launch_command
+from agent_relay.infrastructure.dispatch.lock import SubmitterLock
+from agent_relay.infrastructure.persistence.migrations import run_migrations
+from agent_relay.interfaces.client import RelayClient
 
 
 def serve(settings: Settings, listener: socket.socket, control: Connection) -> None:
@@ -74,7 +74,7 @@ def serve(settings: Settings, listener: socket.socket, control: Connection) -> N
         control.send(
             {
                 "httpThreadStopped": not worker.is_alive(),
-                "dispatchThreadStopped": not app.state.delivery_service.thread.is_alive(),
+                "dispatchThreadStopped": not app.state.delivery_runner.thread.is_alive(),
                 "shutdownSeconds": time.monotonic() - stopped_at,
                 "remainingConnections": len(server.server_state.connections),
                 "remainingTasks": len(server.server_state.tasks),

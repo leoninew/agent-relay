@@ -3,7 +3,7 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, event, pool
 
-from agent_relay.config import load_settings
+from agent_relay.bootstrap.config import load_settings
 
 config = context.config
 if config.config_file_name and not config.attributes.get("skip_logging_config", False):

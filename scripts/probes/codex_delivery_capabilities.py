@@ -20,8 +20,8 @@ from uuid import uuid4
 
 from codex_capabilities import Client, tool_spec
 
-from agent_relay.config import load_settings
-from agent_relay.drivers.codex import _launch_command
+from agent_relay.bootstrap.config import load_settings
+from agent_relay.infrastructure.codex.driver import _launch_command
 
 
 def snapshot(client: Client, thread_id: str) -> dict[str, Any]:

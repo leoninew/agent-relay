@@ -17,10 +17,10 @@ from uuid import uuid4
 from codex_capabilities import Client
 from relay_runtime_integration import running_relay
 
-from agent_relay.client import RelayClient
-from agent_relay.config import load_settings
-from agent_relay.drivers.codex import _launch_command
-from agent_relay.migrations import run_migrations
+from agent_relay.bootstrap.config import load_settings
+from agent_relay.infrastructure.codex.driver import _launch_command
+from agent_relay.infrastructure.persistence.migrations import run_migrations
+from agent_relay.interfaces.client import RelayClient
 
 
 def run(output: Path) -> None:

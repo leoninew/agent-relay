@@ -55,9 +55,9 @@ indent-style = "space"
 line-ending = "lf"
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests/unit"]
 python_files = ["test_*.py"]
-pythonpath = ["src"]
+pythonpath = ["src", "tests"]
 addopts = "-ra"
 
 [tool.mypy]

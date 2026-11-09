@@ -18,12 +18,11 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from agent_relay.api import create_app
-from agent_relay.config import load_settings
-from agent_relay.drivers.codex import CodexDriver, ProxyRpc
-from agent_relay.migrations import run_migrations
-from agent_relay.room_service import RoomService
-from agent_relay.room_store import SQLiteRoomStore
+from agent_relay.bootstrap.config import load_settings
+from agent_relay.bootstrap.http import create_app
+from agent_relay.infrastructure.codex.driver import CodexDriver, ProxyRpc
+from agent_relay.infrastructure.persistence.migrations import run_migrations
+from agent_relay.infrastructure.persistence.store import SQLiteRoomStore
 
 
 def main() -> None:
@@ -37,7 +36,6 @@ def main() -> None:
     database_path = workspace / "rooms.sqlite3"
     run_migrations(database_path)
     store = SQLiteRoomStore(database_path)
-    service = RoomService(store)
     settings = load_settings(root)
     command = [str(args.codex), "app-server", "proxy"] if args.codex else settings.codex.command
     driver = CodexDriver(command, settings.codex.rpc_timeout)
@@ -52,9 +50,7 @@ def main() -> None:
     with (
         patch.object(ProxyRpc, "call", metadata_only),
         TestClient(
-            create_app(
-                logging.getLogger("member-smoke"), room_service=service, session_driver=driver
-            )
+            create_app(logging.getLogger("member-smoke"), store=store, session_driver=driver)
         ) as client,
     ):
         room = client.post(
@@ -85,8 +81,9 @@ def main() -> None:
         )
 
     code = (
-        "from pathlib import Path; from agent_relay.room_store import SQLiteRoomStore; "
-        "from agent_relay.room_service import RoomService; import sys; "
+        "from pathlib import Path; "
+        "from agent_relay.infrastructure.persistence.store import SQLiteRoomStore; "
+        "from agent_relay.application.rooms.service import RoomService; import sys; "
         "print(RoomService(SQLiteRoomStore(Path(sys.argv[1]))).snapshot(sys.argv[2])."
         "members[0].session_id)"
     )
@@ -99,14 +96,13 @@ def main() -> None:
     )
     assert reloaded.stdout.strip() == selected["id"]
     files = [
-        "src/agent_relay/drivers/codex.py",
-        "src/agent_relay/member_sessions.py",
-        "src/agent_relay/room_store.py",
-        "src/agent_relay/room_models.py",
-        "src/agent_relay/migrations.py",
-        "migrations/sqlite/sql/0002_remove_member_role/01_remove_member_role.up.sql",
-        "migrations/sqlite/sql/0003_sidebar_node_actions/01_nodes.up.sql",
-        "migrations/sqlite/versions/0003_sidebar_node_actions.py",
+        "src/agent_relay/infrastructure/codex/driver.py",
+        "src/agent_relay/application/members/service.py",
+        "src/agent_relay/infrastructure/persistence/store.py",
+        "src/agent_relay/domain/rooms/models.py",
+        "src/agent_relay/infrastructure/persistence/migrations.py",
+        "migrations/sqlite/sql/0001_baseline/01_schema.up.sql",
+        "migrations/sqlite/versions/0001_baseline.py",
         "scripts/probes/member_session_smoke.py",
     ]
     evidence = {

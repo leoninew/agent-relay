@@ -116,7 +116,7 @@ make web profile=dev
 
 初始化和消息页接受 `topic_id`、`member_id`（发送成员）、`before_seq`、`limit`；默认 50、最大 200，按 `seq < before_seq` 取历史，响应按 seq 正序排列，包含 `hasMore/nextBeforeSeq/hasNewer`。资源元数据保留已删除节点，以解析历史名称。
 
-事件由 SQLite 触发器与资源、订阅、消息、投递或查阅位置在同一事务内保存，首版持续保留。Web 按顺序应用事件后推进游标，断线先通过 HTTP 补取，再连接 WebSocket；未知游标返回 `resyncRequired`，重新初始化。历史窗口只更新已加载消息，最新窗口接入匹配筛选的新消息。切换房间、筛选或分页会释放旧连接并取消旧查询。服务每秒读取持久变化，不依赖进程内通知，也不持有数据库事务等待网络。
+事件由持久化代码显式保存，与资源、订阅、消息、投递或查阅位置的变化处于同一事务，首版持续保留。Web 按顺序应用事件后推进游标，断线先通过 HTTP 补取，再连接 WebSocket；未知游标返回 `resyncRequired`，重新初始化。历史窗口只更新已加载消息，最新窗口接入匹配筛选的新消息。切换房间、筛选或分页会释放旧连接并取消旧查询。服务每秒读取持久变化，不依赖进程内通知，也不持有数据库事务等待网络。
 
 ## HTTP CLI
 
@@ -207,6 +207,8 @@ make check
 make check fix=1
 make test
 ```
+
+`make test` 覆盖全部后端及前端测试。后端默认 `uv run --locked pytest` 仅运行纯业务单元测试；`make test-unit` 和 `make test-integration` 分别运行业务及适配/生命周期测试。后端职责、依赖与事务边界见[结构说明](docs/design/backend-architecture.md)。
 
 本机运行链路集成验证使用既有共享 Codex daemon、临时数据库和专门新建的测试会话。先构建 Web，再从仓库根执行：
 

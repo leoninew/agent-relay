@@ -1,4 +1,5 @@
-from agent_relay.drivers.codex import InputPage, QueueHead, ReceivedInput, SessionInfo
+from agent_relay.application.delivery.ports import InputPage, QueueHead, QueueReceipt, ReceivedInput
+from agent_relay.application.members.sessions import SessionInfo
 
 
 class FakeSessionDriver:
@@ -30,9 +31,12 @@ class FakeQueueDriver:
         self.activations: list[tuple[str, str]] = []
         self.inputs: dict[str, list[ReceivedInput]] = {}
 
-    def enqueue(self, thread_id: str, client_message_id: str, text: str) -> dict[str, object]:
+    def enqueue(self, thread_id: str, client_message_id: str, text: str) -> QueueReceipt:
         self.calls.append((thread_id, client_message_id, text))
-        return {"id": "queue-" + client_message_id, "clientUserMessageId": client_message_id}
+        return QueueReceipt(
+            "queue-" + client_message_id,
+            {"id": "queue-" + client_message_id, "clientUserMessageId": client_message_id},
+        )
 
     def activation_candidate(self, thread_id: str) -> QueueHead | None:
         return self.heads.get(thread_id)

@@ -145,6 +145,7 @@ try:
                 "queuedSubmission": {
                     "id": "queued-original",
                     "clientUserMessageId": params["clientUserMessageId"],
+                    "input": params["input"],
                 }
             }
         elif method == "skills/list":

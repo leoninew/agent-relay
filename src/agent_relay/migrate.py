@@ -3,8 +3,8 @@
 import argparse
 import logging
 
-from agent_relay.config import load_settings
-from agent_relay.migrations import MIGRATION_HEAD, run_migrations
+from agent_relay.bootstrap.config import load_settings
+from agent_relay.infrastructure.persistence.migrations import MIGRATION_HEAD, run_migrations
 
 
 def main() -> None:

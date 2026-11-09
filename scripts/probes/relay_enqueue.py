@@ -13,12 +13,12 @@ from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
-from agent_relay.api import create_app
-from agent_relay.config import load_settings
-from agent_relay.drivers.codex import ProxyRpc
-from agent_relay.migrations import run_migrations
-from agent_relay.room_service import RoomService
-from agent_relay.room_store import SQLiteRoomStore
+from agent_relay.application.rooms.service import RoomService
+from agent_relay.bootstrap.config import load_settings
+from agent_relay.bootstrap.http import create_app
+from agent_relay.infrastructure.codex.driver import ProxyRpc
+from agent_relay.infrastructure.persistence.migrations import run_migrations
+from agent_relay.infrastructure.persistence.store import SQLiteRoomStore
 
 
 def run(output: Path) -> None:
