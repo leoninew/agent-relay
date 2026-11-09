@@ -125,10 +125,21 @@
                         <span class="min-w-0 flex-1 truncate font-medium" :title="session.name">
                           {{ session.name }}
                         </span>
-                        <span class="shrink-0 text-xs">{{ sessionStatus(session) }}</span>
+                        <AppTooltip
+                          v-if="sessionStatus(session) === '不可用'"
+                          :text="unavailableReason(session)"
+                        >
+                          <button
+                            type="button"
+                            class="shrink-0 cursor-help rounded-sm text-xs underline decoration-dotted underline-offset-2 focus-visible:outline-2 focus-visible:outline-ring"
+                          >
+                            {{ sessionStatus(session) }}
+                          </button>
+                        </AppTooltip>
+                        <span v-else class="shrink-0 text-xs">{{ sessionStatus(session) }}</span>
                       </div>
                       <span class="truncate text-xs" :title="session.id">{{ session.id }}</span>
-                      <p class="text-xs break-words">
+                      <p v-if="sessionStatus(session) !== '不可用'" class="text-xs break-words">
                         {{ unavailableReason(session) }}
                       </p>
                     </li>
@@ -168,7 +179,7 @@
             :invalid="!!errors.projectPath"
             clear-label="清空项目路径"
             aria-describedby="setup-path-error"
-            placeholder="D:/SourceCodes/mywork/project"
+            placeholder=""
             autocomplete="off"
           />
           <p v-if="errors.projectPath" id="setup-path-error" class="field-error">
@@ -230,6 +241,7 @@
   import AppIcon from "@/components/AppIcon.vue";
   import AppInput from "@/components/AppInput.vue";
   import AppLoading from "@/components/AppLoading.vue";
+  import AppTooltip from "@/components/AppTooltip.vue";
   import MemberTopicsField from "@/domains/room/MemberTopicsField.vue";
   import type {
     CreateMember,

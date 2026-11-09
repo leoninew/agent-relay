@@ -8,6 +8,8 @@ import type { SessionCandidate } from "@/services/roomApi";
 import { roomFixture } from "../../fixtures/room";
 
 const { createTopic } = vi.hoisted(() => ({ createTopic: vi.fn() }));
+const unavailableReason =
+  "未接入当前消息通道，可能未运行或在独立实例中运行；请使用共享 daemon 打开此会话后刷新";
 
 vi.mock("@/stores/rooms", () => ({ useRoomsStore: () => ({ createTopic }) }));
 
@@ -59,7 +61,7 @@ describe("RoomSetupDialog form", () => {
             archived: false,
             memberId: null,
             usable: false,
-            unavailableReason: "请使用共享 daemon 打开此会话后刷新",
+            unavailableReason,
           },
         ],
         saving: false,
@@ -71,6 +73,10 @@ describe("RoomSetupDialog form", () => {
           AppDialog: {
             props: ["open", "title", "busy"],
             template: '<section v-if="open"><h2>{{ title }}</h2><slot /></section>',
+          },
+          AppTooltip: {
+            props: ["text"],
+            template: '<span :data-tooltip="text"><slot /></span>',
           },
         },
       },
@@ -129,7 +135,13 @@ describe("RoomSetupDialog form", () => {
     expect(await screen.findByRole("list", { name: "不可用会话" })).toBeTruthy();
     expect(screen.getByText("已加入会话")).toBeTruthy();
     expect(screen.getByText("未接入的会话")).toBeTruthy();
-    expect(screen.getByText("请使用共享 daemon 打开此会话后刷新")).toBeTruthy();
+    expect(screen.queryByText(unavailableReason)).toBeNull();
+    expect(
+      screen
+        .getByRole("button", { name: "不可用" })
+        .closest("[data-tooltip]")
+        ?.getAttribute("data-tooltip"),
+    ).toBe(unavailableReason);
     expect(screen.getAllByRole("radio")).toHaveLength(1);
     expect(choice.getAttribute("aria-checked")).toBe("true");
 
