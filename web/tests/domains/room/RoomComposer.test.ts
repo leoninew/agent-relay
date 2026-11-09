@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/vue";
+import { mount } from "@vue/test-utils";
 import { afterEach, describe, expect, it } from "vitest";
 
 import RoomComposer from "@/domains/room/RoomComposer.vue";
@@ -182,7 +183,7 @@ describe("RoomComposer", () => {
   });
 
   it.each([{ topicIds: ["backend"] }, { topicIds: [] }])(
-    "carries over the original mentions when replying with topics $topicIds",
+    "reuses topics and mentions on every quote with topics $topicIds",
     async ({ topicIds }) => {
       const room = roomFixture();
       const replyTo = {
@@ -195,30 +196,45 @@ describe("RoomComposer", () => {
         topicIds: ["frontend"],
         mentionedMemberIds: ["frontend-worker"],
       };
-      const { emitted, rerender } = renderComposer(draft);
-      await rerender({ replyTo });
+      const wrapper = mount(RoomComposer, {
+        props: {
+          roomId: room.room.id,
+          topics: room.topics,
+          members: room.members,
+          replyTo,
+          draft,
+          sending: false,
+          error: null,
+        },
+      });
+      try {
+        await wrapper.vm.quote(replyTo);
+        await wrapper.get('button[aria-label="清空 @ 成员"]').trigger("click");
+        await wrapper.vm.quote(replyTo);
+        expect(
+          wrapper.get('[role="checkbox"][aria-label="@ 测试 Worker"]').attributes("aria-checked"),
+        ).toBe("true");
+        expect(
+          wrapper.get('[role="checkbox"][aria-label="@ 后端 Worker"]').attributes("aria-checked"),
+        ).toBe("false");
+        expect(
+          wrapper.get('[role="checkbox"][aria-label="@ 前端 Worker"]').attributes("aria-checked"),
+        ).toBe("false");
+        await wrapper.get("form").trigger("submit");
 
-      expect(
-        screen.getByRole("checkbox", { name: "@ 测试 Worker" }).getAttribute("aria-checked"),
-      ).toBe("true");
-      expect(
-        screen.getByRole("checkbox", { name: "@ 后端 Worker" }).getAttribute("aria-checked"),
-      ).toBe("false");
-      expect(
-        screen.getByRole("checkbox", { name: "@ 前端 Worker" }).getAttribute("aria-checked"),
-      ).toBe("false");
-      await fireEvent.click(screen.getByRole("button", { name: "发送消息" }));
-
-      expect(emitted().send).toEqual([
-        [
-          {
-            content: draft.content,
-            topicIds,
-            mentionedMemberIds: ["test-worker"],
-            replyToMessageId: replyTo.id,
-          },
-        ],
-      ]);
+        expect(wrapper.emitted("send")).toEqual([
+          [
+            {
+              content: draft.content,
+              topicIds,
+              mentionedMemberIds: ["test-worker"],
+              replyToMessageId: replyTo.id,
+            },
+          ],
+        ]);
+      } finally {
+        wrapper.unmount();
+      }
     },
   );
 

@@ -186,23 +186,17 @@
     { immediate: true },
   );
 
-  watch(
-    () => props.replyTo,
-    async (message) => {
-      if (message) {
-        draft.value = {
-          ...draft.value,
-          topicIds: message.topicIds.filter((id) => props.topics.some((topic) => topic.id === id)),
-          mentionedMemberIds: message.mentionedMemberIds.filter((id) =>
-            agentMembers.value.some((member) => member.id === id),
-          ),
-        };
-        await nextTick();
-        textarea.value?.focus();
-      }
-    },
-    { immediate: true },
-  );
+  async function quote(message: RoomMessage): Promise<void> {
+    draft.value = {
+      ...draft.value,
+      topicIds: message.topicIds.filter((id) => props.topics.some((topic) => topic.id === id)),
+      mentionedMemberIds: message.mentionedMemberIds.filter((id) =>
+        agentMembers.value.some((member) => member.id === id),
+      ),
+    };
+    await nextTick();
+    textarea.value?.focus();
+  }
 
   function submit(): void {
     if (props.sending || props.locked) return;
@@ -229,5 +223,5 @@
     textarea.value?.focus();
   }
 
-  defineExpose({ reset });
+  defineExpose({ reset, quote });
 </script>

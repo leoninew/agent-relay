@@ -191,6 +191,11 @@
     }
   }
 
+  function isAtEnd(): boolean {
+    const element = timeline.value;
+    return Boolean(element && element.scrollHeight - element.scrollTop - element.clientHeight <= 2);
+  }
+
   function scrollToMessage(messageId: string): void {
     const index = props.messages.findIndex((message) => message.id === messageId);
     const article = timeline.value?.querySelectorAll<HTMLElement>("article")[index];
@@ -198,5 +203,5 @@
     article?.focus({ preventScroll: true });
   }
 
-  defineExpose({ scrollToEnd, scrollToMessage, rememberScroll, restoreScroll });
+  defineExpose({ scrollToEnd, isAtEnd, scrollToMessage, rememberScroll, restoreScroll });
 </script>

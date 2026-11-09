@@ -73,7 +73,7 @@
         :loading="loading"
         @load-older="loadOlder"
         @latest="loadLatest"
-        @reply="replyTo = $event"
+        @reply="quoteMessage"
         @reference="showReference"
         @select="selectMessage"
         @show-details="detailsOpen = true"
@@ -303,8 +303,16 @@
         await loadRoom();
         return;
       }
+      const wasAtEnd = timeline.value?.isAtEnd();
+      const previousSeq = current.messages.at(-1)?.seq ?? 0;
       roomsStore.applyMessages(roomId, messages, filters());
       current.eventId = page.nextEventId;
+      const newest = current.messages.at(-1);
+      if (wasAtEnd && newest && newest.seq > previousSeq) {
+        selectMessage(newest.id);
+        await nextTick();
+        if (version === loadVersion) timeline.value?.scrollToEnd();
+      }
     });
   }
 
@@ -346,6 +354,7 @@
       const result = await fetchRoom(roomId, { ...filters(), beforeSeq }, queryController?.signal);
       if (version !== loadVersion) return false;
       roomsStore.sync(result);
+      selectedMessageId.value = selectedMessage.value?.id;
       if (clearDeletedFilters()) return await loadRoom();
       startEvents(roomId, version);
       return true;
@@ -481,6 +490,12 @@
     detailsOpen.value = true;
   }
 
+  function quoteMessage(message: RoomMessage): void {
+    if (sending.value || pendingPublication.value) return;
+    replyTo.value = message;
+    void composer.value?.quote(message);
+  }
+
   async function sendMessage(draft: MessageDraft): Promise<void> {
     if (sending.value || !currentRoomId.value) return;
     if (pendingPublication.value) return;
@@ -586,7 +601,11 @@
     } finally {
       refreshingSessions.value = false;
     }
-    if (roomId === currentRoomId.value) await loadRoom();
+    if (roomId !== currentRoomId.value || !(await loadRoom())) return;
+    const newest = visibleMessages.value.at(-1);
+    if (newest) selectMessage(newest.id);
+    await nextTick();
+    if (roomId === currentRoomId.value) timeline.value?.scrollToEnd();
   }
 
   function editMember(member: Member): void {
