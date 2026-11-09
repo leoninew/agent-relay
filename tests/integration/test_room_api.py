@@ -314,37 +314,68 @@ def test_create_room_add_topic_and_invite_member(client: TestClient) -> None:
     assert room["name"] == "Acme"
     assert room["projectPath"] == "d:/work/acme"
     assert client.get(room_route).json()["messages"] == []
-    assert client.get(room_route).json()["topics"] == []
+    topics = client.get(room_route).json()["topics"]
+    assert [topic["name"] for topic in topics] == ["产品", "架构", "开发", "测试"]
+    assert len({topic["id"] for topic in topics}) == 4
+    assert all(topic["createdAt"] and topic["messageCount"] == 0 for topic in topics)
     assert [s["id"] for s in client.get(f"{room_route}/session").json()] == ["acme-1"]
 
-    topic_response = client.post(
-        f"{room_route}/topic", json={"name": "集成", "description": "端到端联调"}
-    )
-    assert topic_response.status_code == 201
     member_response = client.post(
         f"{room_route}/member",
         json={
             "sessionId": "acme-1",
             "name": "集成 Worker",
-            "topicIds": [topic_response.json()["id"]],
+            "topicIds": [topics[2]["id"]],
         },
     )
     assert member_response.status_code == 201
     member = member_response.json()
     assert member["sessionId"] == "acme-1"
+    assert member["topicIds"] == [topics[2]["id"]]
+    topic_response = client.post(
+        f"{room_route}/topic", json={"name": "集成", "description": "端到端联调"}
+    )
+    assert topic_response.status_code == 201
+    assert [topic["name"] for topic in topic_response.json()["metadata"]["topics"]] == [
+        "产品",
+        "架构",
+        "开发",
+        "测试",
+        "集成",
+    ]
     message_response = client.post(
         f"{room_route}/message",
         json={
             "publicationId": str(uuid4()),
             "content": "开始联调",
-            "topicIds": [topic_response.json()["id"]],
-            "mentionedMemberIds": [member["id"]],
+            "topicIds": [topics[2]["id"]],
         },
     )
     assert message_response.status_code == 201
     assert len(message_response.json()["deliveries"]) == 1
     assert message_response.json()["deliveries"][0]["targetMemberId"] == member["id"]
     assert len(client.get(ROOM_ROUTE).json()["messages"]) == 6
+
+
+def test_new_room_topics_can_be_updated_and_deleted(client: TestClient) -> None:
+    room = client.post("/api/room", json={"name": "Acme", "projectPath": "D:/work/acme"}).json()
+    route = f"/api/room/{room['id']}"
+    topics = client.get(route).json()["topics"]
+
+    for topic in topics:
+        topic_route = f"{route}/topic/{topic['id']}"
+        updated = client.patch(
+            topic_route, json={"name": f"{topic['name']}讨论", "description": "团队讨论"}
+        )
+        assert updated.status_code == 200
+        assert updated.json()["name"] == f"{topic['name']}讨论"
+        assert updated.json()["description"] == "团队讨论"
+        assert updated.json()["createdAt"] == topic["createdAt"]
+        deleted = client.delete(topic_route)
+        assert deleted.status_code == 200
+        assert deleted.json()["deletedAt"]
+
+    assert all(topic["deletedAt"] for topic in client.get(route).json()["topics"])
 
 
 def test_topic_creation_time_is_preserved_in_metadata_updates_and_deletion(
@@ -432,7 +463,13 @@ def test_zero_and_multiple_subscriptions_keep_direct_mentions_and_saved_metadata
     member_id = member["id"]
     assert member["topicIds"] == []
     assert member["metadata"] == client.get(f"{route}/metadata").json()
-    assert member["metadata"]["topics"] == member["metadata"]["positions"] == []
+    assert [topic["name"] for topic in member["metadata"]["topics"]] == [
+        "产品",
+        "架构",
+        "开发",
+        "测试",
+    ]
+    assert member["metadata"]["positions"] == []
     assert member["metadata"]["sessions"] == [member["session"]]
     message = client.post(
         f"{route}/message",

@@ -52,5 +52,11 @@ def test_request_shares_writes_and_commits_before_the_response_starts(tmp_path: 
     assert response.status_code == 201
     metadata = RoomMetadata.model_validate(response.json())
     assert committed == [metadata]
-    assert [topic.name for topic in metadata.topics] == ["Implementation"]
+    assert [topic.name for topic in metadata.topics] == [
+        "产品",
+        "架构",
+        "开发",
+        "测试",
+        "Implementation",
+    ]
     assert metadata.event_id > 0

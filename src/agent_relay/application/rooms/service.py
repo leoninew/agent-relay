@@ -39,6 +39,19 @@ class RoomService:
                 description="",
             )
             rooms.insert_room(room)
+            state = rooms.resources(room.id)
+            original = deepcopy(state)
+            created_at = datetime.now(UTC)
+            state.topics.extend(
+                Topic(
+                    id=f"topic-{uuid4().hex[:12]}",
+                    name=name,
+                    description="",
+                    created_at=created_at,
+                )
+                for name in ("产品", "架构", "开发", "测试")
+            )
+            rooms.save_resources(state, original)
             return room.model_copy(deep=True)
 
     def update_member(self, room_id: str, member_id: str, request: UpdateMember) -> ChangedMember:

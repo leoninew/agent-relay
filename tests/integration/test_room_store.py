@@ -46,7 +46,7 @@ def test_production_starts_empty_and_does_not_invent_sessions() -> None:
         assert client.get("/api/room").json() == [created.json()]
         snapshot = client.get(f"/api/room/{room_id}").json()
         assert snapshot["messages"] == []
-        assert snapshot["topics"] == []
+        assert [topic["name"] for topic in snapshot["topics"]] == ["产品", "架构", "开发", "测试"]
         assert len(snapshot["members"]) == 1
         assert snapshot["members"][0]["kind"] == "human"
         assert snapshot["members"][0]["name"] == "你"
@@ -103,7 +103,15 @@ def test_existing_app_instances_read_each_others_commits() -> None:
         one = first.post(f"{route}/topic", json={"name": "One"}).json()
         two = second.post(f"{route}/topic", json={"name": "Two"}).json()
         assert first.get(route).json()["topics"] == two["metadata"]["topics"]
-        assert [topic["id"] for topic in two["metadata"]["topics"]] == [one["id"], two["id"]]
+        assert [topic["name"] for topic in two["metadata"]["topics"]] == [
+            "产品",
+            "架构",
+            "开发",
+            "测试",
+            "One",
+            "Two",
+        ]
+        assert [topic["id"] for topic in two["metadata"]["topics"]][-2:] == [one["id"], two["id"]]
         assert second.get(route).json() == first.get(route).json()
 
 
