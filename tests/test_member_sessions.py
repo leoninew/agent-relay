@@ -1,7 +1,10 @@
 import logging
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
+from datetime import timedelta
 from pathlib import Path
+from threading import Event
 
 import pytest
 from fastapi.testclient import TestClient
@@ -10,9 +13,10 @@ from session_fixtures import FakeQueueDriver, FakeSessionDriver
 
 from agent_relay.api import create_app
 from agent_relay.drivers.codex import SessionInfo
+from agent_relay.member_presence import MemberPresenceService
 from agent_relay.member_sessions import MemberSessions, SessionUnavailableError
 from agent_relay.room_errors import RoomConflictError, RoomInputError
-from agent_relay.room_models import CreateMember, CreateRoom, CreateTopic
+from agent_relay.room_models import CreateMember, CreateRoom, CreateTopic, UpdateMember
 from agent_relay.room_queries import RoomQueries
 from agent_relay.room_service import RoomService
 from agent_relay.room_state import RoomState
@@ -111,6 +115,123 @@ def test_running_member_observations_refresh_when_the_original_session_changes_s
     assert RoomQueries(rooms.store).metadata(room_id).members[0].presence == "available"
 
 
+def test_presence_worker_updates_joined_members_and_emits_events_without_listing_sessions(
+    tmp_path: Path,
+) -> None:
+    members, rooms, driver, room_id, topic_id = setup(tmp_path)
+    member = members.add(room_id, request(topic_id))
+    rooms.update_member(room_id, member.id, UpdateMember(name="Renamed", topic_ids=[topic_id]))
+    queries = RoomQueries(rooms.store)
+    cursor = queries.events(room_id, 0).next_event_id
+    driver.inspected.clear()
+    worker = MemberPresenceService(members, logging.getLogger("tests.member-presence"))
+    driver.sessions["one"] = replace(driver.sessions["one"], status="idle")
+
+    worker.refresh()
+
+    current = queries.metadata(room_id).members[0]
+    assert current.presence == "available"
+    assert current.name == "Renamed" and current.topic_ids == [topic_id]
+    assert queries.metadata(room_id).sessions[0].presence == "available"
+    assert {event.kind for event in queries.events(room_id, cursor).events} == {"member", "session"}
+    assert driver.inspected == ["one"] and driver.listed == 0
+    driver.sessions["one"] = replace(driver.sessions["one"], status="active")
+    worker.refresh()
+    assert queries.metadata(room_id).members[0].presence == "busy"
+    rooms.delete_member(room_id, member.id)
+    worker.refresh()
+    assert driver.inspected == ["one", "one"]
+
+
+@pytest.mark.parametrize("failure", ["unavailable", "identity", "directory"])
+def test_presence_worker_marks_failed_observations_unknown_and_continues_other_members(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+    members, rooms, driver, room_id, topic_id = setup(tmp_path)
+    member = members.add(room_id, request(topic_id))
+    driver.sessions["two"] = replace(driver.sessions["two"], status="active", archived=False)
+    other = members.add(room_id, CreateMember(name="Other", session_id="two", topic_ids=[]))
+    driver.sessions["two"] = replace(driver.sessions["two"], status="idle")
+    inspect = driver.inspect
+
+    def inspect_with_failure(session_id: str) -> SessionInfo:
+        if session_id != "one":
+            return inspect(session_id)
+        if failure == "unavailable":
+            raise TimeoutError("upstream unavailable")
+        if failure == "identity":
+            return replace(driver.sessions[session_id], id="different")
+        return replace(driver.sessions[session_id], cwd="D:/other")
+
+    monkeypatch.setattr(driver, "inspect", inspect_with_failure)
+    worker = MemberPresenceService(members, logging.getLogger("tests.member-presence"))
+    worker.refresh()
+
+    current = {item.id: item for item in rooms.snapshot(room_id).members}
+    assert current[member.id].presence == "unknown"
+    assert current[other.id].presence == "available"
+    assert current["user"].presence == "available" and current["user"].observed_at is None
+    monkeypatch.setattr(driver, "inspect", inspect)
+    worker.refresh()
+    assert RoomQueries(rooms.store).metadata(room_id).members[0].presence == "busy"
+
+
+def test_unchanged_observations_checkpoint_without_emitting_events_on_every_poll(
+    tmp_path: Path,
+) -> None:
+    members, rooms, driver, room_id, topic_id = setup(tmp_path)
+    member = members.add(room_id, request(topic_id))
+    assert member.observed_at is not None
+    queries = RoomQueries(rooms.store)
+    cursor = queries.events(room_id, 0).next_event_id
+    members.record_observations(
+        room_id, list(driver.sessions.values()), member.observed_at + timedelta(seconds=5)
+    )
+    assert queries.events(room_id, cursor).events == []
+    assert queries.metadata(room_id).members[0].observed_at == member.observed_at
+    checkpoint = member.observed_at + timedelta(seconds=31)
+    members.record_observations(room_id, list(driver.sessions.values()), checkpoint)
+    assert {event.kind for event in queries.events(room_id, cursor).events} == {"member", "session"}
+    assert queries.metadata(room_id).members[0].observed_at == checkpoint
+
+
+@pytest.mark.parametrize("fail_first", [False, True])
+def test_application_observes_presence_and_stops_worker_on_shutdown(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fail_first: bool
+) -> None:
+    members, rooms, driver, room_id, topic_id = setup(tmp_path)
+    members.add(room_id, request(topic_id))
+    driver.sessions["one"] = replace(driver.sessions["one"], status="idle")
+    app = create_app(
+        logging.getLogger("tests.member-presence"),
+        room_service=rooms,
+        queue_driver=FakeQueueDriver(),
+        session_driver=driver,
+    )
+    worker: MemberPresenceService = app.state.member_presence_service
+    worker.interval = 0.01
+    observed = Event()
+    refresh = worker.refresh
+    attempts = 0
+
+    def observe() -> None:
+        nonlocal attempts
+        attempts += 1
+        if fail_first and attempts == 1:
+            raise sqlite3.OperationalError("temporary observation failure")
+        refresh()
+        observed.set()
+
+    monkeypatch.setattr(worker, "refresh", observe)
+    with TestClient(app) as client:
+        assert observed.wait(timeout=2)
+        assert worker.thread.is_alive()
+        assert client.get(f"/api/room/{room_id}/metadata").json()["members"][0]["presence"] == (
+            "available"
+        )
+    assert not worker.thread.is_alive()
+
+
 def test_join_revalidates_directory_id_topics_and_does_not_write_on_failure(tmp_path: Path) -> None:
     members, rooms, driver, room_id, topic_id = setup(tmp_path)
     with pytest.raises(RoomInputError, match="不属于"):
@@ -178,7 +299,7 @@ def test_api_preserves_bindings_on_restart_and_hides_upstream_errors(tmp_path: P
         assert client.get(route + "/session").json()[0]["memberId"] == member["id"]
         member = client.get(route).json()["members"][0]
         assert client.get(route + "/member-operation/old").status_code == 404
-    driver = FakeSessionDriver()
+    driver = FakeSessionDriver([driver.sessions["one"]])
     restored = RoomService(SQLiteRoomStore(members.store.path))
     with TestClient(
         create_app(
@@ -189,7 +310,7 @@ def test_api_preserves_bindings_on_restart_and_hides_upstream_errors(tmp_path: P
             item for item in client.get(route).json()["members"] if item["kind"] == "agent"
         ] == [member]
         assert client.get(route).json()["sessions"][0]["name"] == "Existing"
-        assert driver.listed == 0 and driver.inspected == []
+        assert driver.listed == 0
         driver.error = OSError("secret path and token")
         failed = client.get(route + "/session", headers={"X-Request-Id": "req_session"})
         assert failed.status_code == 503

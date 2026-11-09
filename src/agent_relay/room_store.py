@@ -3,7 +3,7 @@ from collections.abc import Iterator
 from contextlib import closing, contextmanager
 from copy import copy
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from agent_relay.drivers.codex import QueueHead, ReceivedInput
@@ -252,16 +252,35 @@ class SQLiteRoomStore:
         activity: str,
         observed_at: datetime,
     ) -> None:
+        checkpoint_before = (observed_at - timedelta(seconds=30)).isoformat()
         connection.execute(
             "UPDATE members SET payload = json_set(payload, '$.presence', ?, "
             "'$.activity', ?, '$.activity_source', 'codex', '$.observed_at', ?) "
-            "WHERE room_id = ? AND id = ? AND deleted_at IS NULL",
-            (presence, activity, observed_at.isoformat(), room_id, member_id),
+            "WHERE room_id = ? AND id = ? AND session_id = ? AND deleted_at IS NULL "
+            "AND (json_extract(payload, '$.presence') IS NOT ? "
+            "OR json_extract(payload, '$.activity') IS NOT ? "
+            "OR json_extract(payload, '$.activity_source') IS NOT 'codex' "
+            "OR json_extract(payload, '$.observed_at') IS NULL "
+            "OR julianday(json_extract(payload, '$.observed_at')) <= julianday(?))",
+            (
+                presence,
+                activity,
+                observed_at.isoformat(),
+                room_id,
+                member_id,
+                session_id,
+                presence,
+                activity,
+                checkpoint_before,
+            ),
         )
         connection.execute(
             "UPDATE sessions SET payload = json_set(payload, '$.presence', ?, "
-            "'$.observed_at', ?) WHERE room_id = ? AND id = ?",
-            (presence, observed_at.isoformat(), room_id, session_id),
+            "'$.observed_at', ?) WHERE room_id = ? AND id = ? "
+            "AND (json_extract(payload, '$.presence') IS NOT ? "
+            "OR json_extract(payload, '$.observed_at') IS NULL "
+            "OR julianday(json_extract(payload, '$.observed_at')) <= julianday(?))",
+            (presence, observed_at.isoformat(), room_id, session_id, presence, checkpoint_before),
         )
 
     def claim_delivery(self) -> ClaimedDelivery | None:

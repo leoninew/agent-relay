@@ -9,6 +9,7 @@ from agent_relay.config import Settings, load_settings
 from agent_relay.delivery_service import DeliveryService, QueueDriver
 from agent_relay.drivers.codex import CodexDriver
 from agent_relay.exception_handlers import register_exception_handlers, unexpected_exception_handler
+from agent_relay.member_presence import MemberPresenceService
 from agent_relay.member_sessions import MemberSessions, SessionDriver
 from agent_relay.middleware import RequestLoggingMiddleware, RequestTransactionMiddleware
 from agent_relay.migrations import run_migrations
@@ -30,11 +31,13 @@ def create_app(
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.delivery_service.start()
+        app.state.member_presence_service.start()
         try:
             yield
         finally:
             from starlette.concurrency import run_in_threadpool
 
+            await run_in_threadpool(app.state.member_presence_service.close)
             await run_in_threadpool(app.state.delivery_service.close)
 
     app = FastAPI(title="Agent Relay", lifespan=lifespan)
@@ -72,6 +75,7 @@ def configure_application_state(
         else CodexDriver(codex.command, codex.rpc_timeout)
     )
     app.state.member_sessions = MemberSessions(store, driver)
+    app.state.member_presence_service = MemberPresenceService(app.state.member_sessions, logger)
     app.state.delivery_service = DeliveryService(
         store,
         queue_driver if queue_driver is not None else CodexDriver(codex.command, codex.rpc_timeout),
