@@ -17,12 +17,75 @@ describe("RoomComposer", () => {
         roomId: room.room.id,
         topics: room.topics,
         members: room.members,
+        sessions: room.sessions,
         draft,
         sending: false,
         error: null,
       },
     });
   }
+
+  it("sends with Enter and prevents inserting a newline", async () => {
+    const { emitted } = renderComposer({
+      content: " 第一行\n第二行 ",
+      topicIds: ["frontend"],
+      mentionedMemberIds: [],
+    });
+    const event = new KeyboardEvent("keydown", {
+      key: "Enter",
+      bubbles: true,
+      cancelable: true,
+    });
+
+    await fireEvent(screen.getByRole("textbox", { name: "消息内容" }), event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(emitted().send).toEqual([
+      [{ content: "第一行\n第二行", topicIds: ["frontend"], mentionedMemberIds: [] }],
+    ]);
+  });
+
+  it.each([
+    { name: "Shift+Enter", shiftKey: true },
+    { name: "IME composition", isComposing: true },
+    { name: "IME confirmation", keyCode: 229 },
+  ])("keeps $name available for editing without sending", async ({ name, ...modifiers }) => {
+    const { emitted } = renderComposer({
+      content: "输入中的消息",
+      topicIds: ["frontend"],
+      mentionedMemberIds: [],
+    });
+    const input = screen.getByRole("textbox", { name: "消息内容" }) as HTMLTextAreaElement;
+    const event = new KeyboardEvent("keydown", {
+      key: "Enter",
+      bubbles: true,
+      cancelable: true,
+      ...modifiers,
+    });
+
+    await fireEvent(input, event);
+
+    expect(event.defaultPrevented, name).toBe(false);
+    expect(emitted().send).toBeUndefined();
+    expect(input.value).toBe("输入中的消息");
+  });
+
+  it.each([{ sending: true }, { locked: true }])(
+    "does not send with Enter when unavailable: %j",
+    async (state) => {
+      const { emitted, rerender } = renderComposer({
+        content: "等待发送",
+        topicIds: ["frontend"],
+        mentionedMemberIds: [],
+      });
+      await rerender(state);
+      await fireEvent.keyDown(screen.getByRole("textbox", { name: "消息内容" }), {
+        key: "Enter",
+      });
+
+      expect(emitted().send).toBeUndefined();
+    },
+  );
 
   it("sends to topics without requiring a member selection", async () => {
     const { emitted } = renderComposer();
@@ -50,6 +113,7 @@ describe("RoomComposer", () => {
         roomId: room.room.id,
         topics: room.topics,
         members: room.members,
+        sessions: room.sessions,
         replyTo: room.messages[0],
         sending: false,
         error: null,
@@ -66,6 +130,7 @@ describe("RoomComposer", () => {
         roomId: room.room.id,
         topics: room.topics,
         members: room.members,
+        sessions: room.sessions,
         replyTo: room.messages[1],
         sending: false,
         error: null,
@@ -201,6 +266,7 @@ describe("RoomComposer", () => {
           roomId: room.room.id,
           topics: room.topics,
           members: room.members,
+          sessions: room.sessions,
           replyTo,
           draft,
           sending: false,
@@ -259,4 +325,135 @@ describe("RoomComposer", () => {
       screen.getByRole("checkbox", { name: "消息话题：后端" }).getAttribute("aria-checked"),
     ).toBe("false");
   });
+
+  it("adds heading targets once while preserving the existing draft, routing and reply", async () => {
+    const room = roomFixture();
+    const draft = {
+      content: "保留这条草稿",
+      topicIds: ["frontend"],
+      mentionedMemberIds: ["frontend-worker"],
+    };
+    const wrapper = mount(RoomComposer, {
+      props: {
+        roomId: room.room.id,
+        topics: room.topics,
+        members: room.members,
+        sessions: room.sessions,
+        replyTo: room.messages[1],
+        draft,
+        sending: false,
+        error: null,
+      },
+    });
+    try {
+      wrapper.vm.addTopic("backend");
+      wrapper.vm.addTopic("backend");
+      wrapper.vm.addMember("backend-worker");
+      wrapper.vm.addMember("backend-worker");
+      wrapper.vm.addMember("user");
+      await wrapper.get("form").trigger("submit");
+
+      expect(wrapper.emitted("send")).toEqual([
+        [
+          {
+            ...draft,
+            topicIds: ["frontend", "backend"],
+            mentionedMemberIds: ["frontend-worker", "backend-worker"],
+            replyToMessageId: room.messages[1].id,
+          },
+        ],
+      ]);
+    } finally {
+      wrapper.unmount();
+    }
+  });
+
+  it.each(["topic", "member"] as const)(
+    "preserves the other routing category when selecting and clearing a sidebar %s",
+    async (category) => {
+      const room = roomFixture();
+      const draft = {
+        content: "保留草稿和引用",
+        topicIds: ["frontend"],
+        mentionedMemberIds: ["frontend-worker"],
+      };
+      const wrapper = mount(RoomComposer, {
+        props: {
+          roomId: room.room.id,
+          topics: room.topics,
+          members: room.members,
+          sessions: room.sessions,
+          replyTo: room.messages[1],
+          draft,
+          sending: false,
+          error: null,
+        },
+      });
+      try {
+        wrapper.vm.addTopic("backend");
+        wrapper.vm.addMember("backend-worker");
+        if (category === "topic") wrapper.vm.selectTopic("backend");
+        else wrapper.vm.selectMember("backend-worker");
+        await wrapper.get("form").trigger("submit");
+
+        const selected = {
+          ...draft,
+          topicIds: category === "topic" ? ["backend"] : ["frontend", "backend"],
+          mentionedMemberIds:
+            category === "member" ? ["backend-worker"] : ["frontend-worker", "backend-worker"],
+          replyToMessageId: room.messages[1].id,
+        };
+        expect(wrapper.emitted("send")).toEqual([[selected]]);
+
+        if (category === "topic") wrapper.vm.selectTopic();
+        else wrapper.vm.selectMember();
+        await wrapper.get("form").trigger("submit");
+
+        expect(wrapper.emitted("send")?.[1]).toEqual([
+          {
+            ...selected,
+            ...(category === "topic" ? { topicIds: [] } : { mentionedMemberIds: [] }),
+          },
+        ]);
+      } finally {
+        wrapper.unmount();
+      }
+    },
+  );
+
+  it.each([{ sending: true }, { locked: true }])(
+    "preserves locked routing when adding heading targets: %j",
+    async (state) => {
+      const room = roomFixture();
+      const draft = {
+        content: "等待发送",
+        topicIds: ["frontend"],
+        mentionedMemberIds: ["frontend-worker"],
+      };
+      const wrapper = mount(RoomComposer, {
+        props: {
+          roomId: room.room.id,
+          topics: room.topics,
+          members: room.members,
+          sessions: room.sessions,
+          draft,
+          sending: false,
+          error: null,
+          ...state,
+        },
+      });
+      try {
+        wrapper.vm.addTopic("backend");
+        wrapper.vm.addMember("backend-worker");
+        wrapper.vm.selectTopic("backend");
+        wrapper.vm.selectMember("backend-worker");
+        await wrapper.setProps({ sending: false, locked: false });
+        await wrapper.get("form").trigger("submit");
+
+        expect(wrapper.emitted("send")).toEqual([[draft]]);
+      } finally {
+        wrapper.unmount();
+      }
+    },
+  );
 });

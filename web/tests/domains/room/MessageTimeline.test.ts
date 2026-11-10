@@ -1,12 +1,101 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/vue";
-import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/vue";
+import { createPinia, setActivePinia } from "pinia";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import MessageTimeline from "@/domains/room/MessageTimeline.vue";
+import type { Delivery } from "@/services/roomApi";
+import { useToastsStore } from "@/stores/toasts";
 
 import { roomFixture } from "../../fixtures/room";
 
 describe("MessageTimeline history", () => {
-  afterEach(cleanup);
+  beforeEach(() => setActivePinia(createPinia()));
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  it("copies the full original body without selecting the message and keeps quote replies", async () => {
+    const snapshot = roomFixture();
+    snapshot.messages[0].content = "  **消息正文**\n第二行\n";
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("navigator", { clipboard: { writeText } });
+    const { emitted } = render(MessageTimeline, {
+      props: {
+        messages: snapshot.messages,
+        members: snapshot.members,
+        sessions: snapshot.sessions,
+        topics: snapshot.topics,
+        hasMore: false,
+        hasNewer: false,
+        loadingOlder: false,
+        loading: false,
+        unavailable: false,
+        detailsOpen: false,
+      },
+    });
+
+    await fireEvent.click(screen.getByRole("button", { name: "复制消息 #1 正文" }));
+
+    expect(writeText).toHaveBeenCalledOnce();
+    expect(writeText).toHaveBeenCalledWith(snapshot.messages[0].content);
+    expect(useToastsStore().items).toMatchObject([{ tone: "success", message: "消息正文已复制" }]);
+    expect(emitted().select).toBeUndefined();
+    expect(emitted().reply).toBeUndefined();
+
+    await fireEvent.click(screen.getByRole("button", { name: "引用消息 #1" }));
+    expect(emitted().reply).toEqual([[snapshot.messages[0]]]);
+    expect(emitted().select).toBeUndefined();
+  });
+
+  it("reports a clipboard failure without claiming the message was copied", async () => {
+    const snapshot = roomFixture();
+    const writeText = vi.fn().mockRejectedValue(new Error("Clipboard denied"));
+    vi.stubGlobal("navigator", { clipboard: { writeText } });
+    render(MessageTimeline, {
+      props: {
+        messages: snapshot.messages,
+        members: snapshot.members,
+        sessions: snapshot.sessions,
+        topics: snapshot.topics,
+        hasMore: false,
+        hasNewer: false,
+        loadingOlder: false,
+        loading: false,
+        unavailable: false,
+        detailsOpen: false,
+      },
+    });
+
+    await fireEvent.click(screen.getByRole("button", { name: "复制消息 #1 正文" }));
+
+    expect(useToastsStore().items).toMatchObject([
+      { tone: "error", message: "复制失败，请重试或手动复制消息正文" },
+    ]);
+  });
+
+  it("distinguishes an empty search result from a room with no messages", async () => {
+    const snapshot = roomFixture();
+    const { rerender } = render(MessageTimeline, {
+      props: {
+        messages: [],
+        members: snapshot.members,
+        sessions: snapshot.sessions,
+        topics: snapshot.topics,
+        hasMore: false,
+        hasNewer: false,
+        loadingOlder: false,
+        loading: false,
+        unavailable: false,
+        detailsOpen: false,
+        searching: true,
+      },
+    });
+
+    expect(screen.getByText("未找到匹配的消息")).toBeTruthy();
+    await rerender({ searching: false });
+    expect(screen.getByText("暂无消息")).toBeTruthy();
+  });
 
   it("offers older and latest pages and lets an off-page reference be located", async () => {
     const snapshot = roomFixture();
@@ -15,6 +104,7 @@ describe("MessageTimeline history", () => {
       props: {
         messages: snapshot.messages,
         members: snapshot.members,
+        sessions: snapshot.sessions,
         topics: snapshot.topics,
         hasMore: true,
         hasNewer: true,
@@ -34,6 +124,38 @@ describe("MessageTimeline history", () => {
     expect(emitted().reference).toEqual([["off-page-message"]]);
   });
 
+  it("adds heading topics, authors and mentions to routing without selecting the message", async () => {
+    const snapshot = roomFixture();
+    const { emitted } = render(MessageTimeline, {
+      props: {
+        messages: snapshot.messages,
+        members: snapshot.members,
+        sessions: snapshot.sessions,
+        topics: snapshot.topics,
+        hasMore: false,
+        hasNewer: false,
+        loadingOlder: false,
+        loading: false,
+        unavailable: false,
+        detailsOpen: false,
+      },
+    });
+    const agentMessage = within(screen.getByRole("article", { name: "后端 Worker的消息" }));
+    const userMessage = within(screen.getByRole("article", { name: "你的消息" }));
+
+    await fireEvent.click(agentMessage.getByRole("button", { name: "勾选话题：后端" }));
+    await fireEvent.click(agentMessage.getByRole("button", { name: "勾选成员：后端 Worker" }));
+    await fireEvent.click(agentMessage.getByRole("button", { name: "勾选成员：测试 Worker" }));
+
+    expect(emitted().addTopic).toEqual([["backend"]]);
+    expect(emitted().addMember).toEqual([["backend-worker"], ["test-worker"]]);
+    expect(userMessage.getByRole("button", { name: "勾选成员：你" }).hasAttribute("disabled")).toBe(
+      true,
+    );
+    expect(emitted().select).toBeUndefined();
+    expect(emitted().showDetails).toBeUndefined();
+  });
+
   it("identifies messages addressed to the room user", () => {
     const snapshot = roomFixture();
     snapshot.messages[1].mentionedMemberIds = ["user"];
@@ -44,6 +166,7 @@ describe("MessageTimeline history", () => {
       props: {
         messages: snapshot.messages,
         members: snapshot.members,
+        sessions: snapshot.sessions,
         topics: snapshot.topics,
         hasMore: false,
         hasNewer: false,
@@ -54,10 +177,113 @@ describe("MessageTimeline history", () => {
       },
     });
 
-    expect(screen.getByText("@ 你")).toBeTruthy();
-    expect(screen.getByRole("article", { name: "你的消息" })).toBeTruthy();
+    const userRecipientMessage = screen.getByRole("article", {
+      name: "后端 Worker的消息",
+    });
+    expect(userRecipientMessage.querySelector(".message-mentions")?.textContent?.trim()).toBe("你");
     expect(screen.getByRole("button", { name: "引用 #1 · 你" })).toBeTruthy();
     expect(screen.queryByText("YOU")).toBeNull();
+    expect(userRecipientMessage.querySelector(".message-delivery-summary")).toBeNull();
+  });
+
+  it("completes each delivery label and tone only when all deliveries reach that stage", async () => {
+    const snapshot = roomFixture();
+    const queuedAt = "2026-11-06T10:02:00Z";
+    const receivedAt = "2026-11-06T10:02:04Z";
+    const message = {
+      ...snapshot.messages[0],
+      deliveries: snapshot.messages[0].deliveries.map((delivery, index) =>
+        index === 0
+          ? { ...delivery, status: "received" as const, queuedAt, receivedAt }
+          : { ...delivery, status: "queued" as const, queuedAt },
+      ),
+    };
+    const { rerender } = render(MessageTimeline, {
+      props: {
+        messages: [snapshot.messages[0]],
+        members: snapshot.members,
+        sessions: snapshot.sessions,
+        topics: snapshot.topics,
+        hasMore: false,
+        hasNewer: false,
+        loadingOlder: false,
+        loading: false,
+        unavailable: false,
+        detailsOpen: false,
+      },
+    });
+
+    expect(screen.getByText("入队中").getAttribute("data-tone")).toBe("info");
+    expect(screen.getByText("接收中").getAttribute("data-tone")).toBe("info");
+
+    await rerender({ messages: [message] });
+
+    expect(screen.getByText("已入队").getAttribute("data-tone")).toBe("success");
+    expect(screen.getByText("接收中").getAttribute("data-tone")).toBe("info");
+    expect(screen.getByLabelText("分发状态").classList.contains("is-complete")).toBe(false);
+
+    await rerender({
+      messages: [
+        {
+          ...message,
+          deliveries: message.deliveries.map((delivery) => ({
+            ...delivery,
+            status: "received" as const,
+            receivedAt,
+          })),
+        },
+      ],
+    });
+
+    expect(screen.getByText("已入队").getAttribute("data-tone")).toBe("success");
+    expect(screen.getByText("已接收").getAttribute("data-tone")).toBe("success");
+    expect(screen.getByLabelText("分发状态").classList.contains("is-complete")).toBe(true);
+  });
+
+  it.each<{
+    statuses: Delivery["status"][];
+    labels: string[];
+    tone: string;
+  }>([
+    { statuses: ["rejected"], labels: ["入队失败", "接收未完成"], tone: "error" },
+    { statuses: ["unknown"], labels: ["入队待确认", "接收待确认"], tone: "warning" },
+    { statuses: ["received", "rejected"], labels: ["入队失败", "接收未完成"], tone: "error" },
+    {
+      statuses: ["received", "unknown"],
+      labels: ["入队待确认", "接收待确认"],
+      tone: "warning",
+    },
+    { statuses: ["rejected", "unknown"], labels: ["入队失败", "接收未完成"], tone: "error" },
+  ])("reports abnormal delivery outcomes for $statuses", ({ statuses, labels, tone }) => {
+    const snapshot = roomFixture();
+    const message = {
+      ...snapshot.messages[0],
+      deliveries: statuses.map((status, index) => ({
+        ...snapshot.messages[0].deliveries[index],
+        status,
+      })),
+    };
+    render(MessageTimeline, {
+      props: {
+        messages: [message],
+        members: snapshot.members,
+        sessions: snapshot.sessions,
+        topics: snapshot.topics,
+        hasMore: false,
+        hasNewer: false,
+        loadingOlder: false,
+        loading: false,
+        unavailable: false,
+        detailsOpen: false,
+      },
+    });
+
+    for (const label of labels) {
+      expect(screen.getByText(label).getAttribute("data-tone")).toBe(tone);
+    }
+    expect(screen.queryByText("入队中")).toBeNull();
+    expect(screen.queryByText("接收中")).toBeNull();
+    expect(screen.getByLabelText("分发状态").classList.contains("is-complete")).toBe(false);
   });
 
   it("shows one standalone time marker per minute before its message group", () => {
@@ -76,6 +302,7 @@ describe("MessageTimeline history", () => {
       props: {
         messages,
         members: snapshot.members,
+        sessions: snapshot.sessions,
         topics: snapshot.topics,
         hasMore: false,
         hasNewer: false,
@@ -105,6 +332,7 @@ describe("MessageTimeline history", () => {
       props: {
         messages: snapshot.messages,
         members: snapshot.members,
+        sessions: snapshot.sessions,
         topics: snapshot.topics,
         hasMore: false,
         hasNewer: false,

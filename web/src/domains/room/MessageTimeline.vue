@@ -4,7 +4,7 @@
     <div v-else-if="unavailable" class="timeline-placeholder">暂时无法加载消息，请重试。</div>
     <div v-else-if="messages.length === 0" class="timeline-placeholder">
       <span class="empty-icon"><AppIcon name="chat" /></span>
-      <h3>暂无消息</h3>
+      <h3>{{ searching ? "未找到匹配的消息" : "暂无消息" }}</h3>
     </div>
     <template v-else>
       <div v-if="hasMore" class="timeline-page-actions">
@@ -26,7 +26,10 @@
         </div>
         <article
           class="message"
-          :class="{ 'is-selected': message.id === selectedMessageId }"
+          :class="{
+            'is-selected': message.id === selectedMessageId,
+            'is-user': findMember(message.senderId)?.kind === 'human',
+          }"
           tabindex="0"
           :aria-label="`${memberName(message.senderId)}的消息`"
           @click="$emit('select', message.id)"
@@ -34,34 +37,97 @@
           @keydown.space.self.prevent="$emit('select', message.id)"
         >
           <div class="message-body">
-            <div class="message-heading">
-              <span class="message-identity">
-                <MemberAvatar :member="findMember(message.senderId)" />
-                <span class="message-author">{{ memberName(message.senderId) }}</span>
-              </span>
-              <div v-if="message.topicIds.length" class="message-topics" aria-label="所属话题">
-                <span
-                  v-for="topicId in message.topicIds"
-                  :key="topicId"
-                  class="topic-chip"
-                  :data-topic="topicId"
+            <div class="message-main">
+              <div class="message-heading">
+                <div class="message-heading-main">
+                  <button
+                    type="button"
+                    class="message-heading-action"
+                    :aria-label="`勾选成员：${memberName(message.senderId)}`"
+                    :disabled="!isRoutableMember(message.senderId)"
+                    @click.stop="$emit('addMember', message.senderId)"
+                  >
+                    <MemberIdentity
+                      :member="identityMember(message.senderId)"
+                      :session-name="sessionName(message.senderId)"
+                      appearance="author"
+                    />
+                  </button>
+                  <div v-if="message.topicIds.length" class="message-topics" aria-label="所属话题">
+                    <button
+                      v-for="topicId in message.topicIds"
+                      :key="topicId"
+                      type="button"
+                      class="message-heading-action topic-chip"
+                      :data-topic="topicId"
+                      :aria-label="`勾选话题：${findTopic(topicId)?.name ?? topicId}`"
+                      :disabled="findTopic(topicId)?.deletedAt !== null"
+                      @click.stop="$emit('addTopic', topicId)"
+                    >
+                      # {{ findTopic(topicId)?.name ?? topicId }}
+                    </button>
+                  </div>
+                  <div
+                    v-if="message.mentionedMemberIds.length"
+                    class="message-mentions"
+                    aria-label="@ 成员"
+                  >
+                    <button
+                      v-for="memberId in message.mentionedMemberIds"
+                      :key="memberId"
+                      type="button"
+                      class="message-heading-action mention-chip"
+                      :aria-label="`勾选成员：${memberName(memberId)}`"
+                      :disabled="!isRoutableMember(memberId)"
+                      @click.stop="$emit('addMember', memberId)"
+                    >
+                      <MemberIdentity
+                        :member="identityMember(memberId)"
+                        :session-name="sessionName(memberId)"
+                        appearance="text"
+                      />
+                    </button>
+                  </div>
+                </div>
+                <div
+                  v-if="message.deliveries.length"
+                  class="message-delivery-summary"
+                  :class="{ 'is-complete': message.deliveries.every(isReceived) }"
+                  aria-label="分发状态"
                 >
-                  # {{ topics.find((topic) => topic.id === topicId)?.name ?? topicId }}
-                </span>
+                  <span
+                    v-for="status in deliverySummary(message)"
+                    :key="status.label"
+                    class="message-delivery-status"
+                    :data-tone="status.tone"
+                  >
+                    {{ status.label }}
+                  </span>
+                </div>
               </div>
-              <div
-                v-if="message.mentionedMemberIds.length"
-                class="message-mentions"
-                aria-label="@ 成员"
+              <button
+                v-if="message.replyToMessageId"
+                type="button"
+                class="message-reference"
+                @click.stop="$emit('reference', message.replyToMessageId)"
               >
-                <span
-                  v-for="memberId in message.mentionedMemberIds"
-                  :key="memberId"
-                  class="mention-chip"
-                >
-                  @ {{ findMember(memberId)?.name ?? memberId }}
-                </span>
-              </div>
+                <AppIcon name="reply" />
+                <span>引用 {{ referenceLabel(message.replyToMessageId) }}</span>
+              </button>
+              <p class="message-content">
+                {{ message.content }}
+              </p>
+            </div>
+            <div class="message-actions">
+              <button
+                type="button"
+                class="message-copy icon-button"
+                :aria-label="`复制消息 #${message.seq} 正文`"
+                title="复制正文"
+                @click.stop="copyMessage(message)"
+              >
+                <AppIcon name="copy" />
+              </button>
               <button
                 type="button"
                 class="message-reply icon-button"
@@ -71,28 +137,15 @@
               >
                 <AppIcon name="reply" />
               </button>
-            </div>
-            <button
-              v-if="message.replyToMessageId"
-              type="button"
-              class="message-reference"
-              @click.stop="$emit('reference', message.replyToMessageId)"
-            >
-              <AppIcon name="reply" />
-              <span>引用 {{ referenceLabel(message.replyToMessageId) }}</span>
-            </button>
-            <div class="message-content-row">
-              <p class="message-content">
-                {{ message.content }}
-              </p>
               <button
                 type="button"
-                class="message-details-link"
+                class="message-details icon-button"
                 :aria-label="`查看消息 #${message.seq} 详情`"
                 :aria-expanded="message.id === selectedMessageId && detailsOpen"
+                title="查看详情"
                 @click.stop="showDetails(message.id)"
               >
-                查看详情<AppIcon name="arrow" />
+                <AppIcon name="info" />
               </button>
             </div>
           </div>
@@ -111,32 +164,42 @@
   import AppIcon from "@/components/AppIcon.vue";
   import AppButton from "@/components/AppButton.vue";
   import AppLoading from "@/components/AppLoading.vue";
-  import MemberAvatar from "@/domains/room/MemberAvatar.vue";
-  import type { Member, RoomMessage, Topic } from "@/services/roomApi";
+  import MemberIdentity from "@/domains/room/MemberIdentity.vue";
+  import { memberSessionName } from "@/domains/room/memberSessionName";
+  import type { Delivery, Member, RoomMessage, Session, Topic } from "@/services/roomApi";
+  import { useToastsStore } from "@/stores/toasts";
   import { formatDate, formatMinute } from "@/utils/time";
 
-  const props = defineProps<{
-    messages: RoomMessage[];
-    members: Member[];
-    topics: Topic[];
-    selectedMessageId?: string;
-    detailsOpen: boolean;
-    loading: boolean;
-    unavailable: boolean;
-    hasMore: boolean;
-    hasNewer: boolean;
-    loadingOlder: boolean;
-  }>();
+  const props = withDefaults(
+    defineProps<{
+      messages: RoomMessage[];
+      members: Member[];
+      sessions: Session[];
+      topics: Topic[];
+      selectedMessageId?: string;
+      detailsOpen: boolean;
+      loading: boolean;
+      searching?: boolean;
+      unavailable: boolean;
+      hasMore: boolean;
+      hasNewer: boolean;
+      loadingOlder: boolean;
+    }>(),
+    { selectedMessageId: undefined, searching: false },
+  );
   const emit = defineEmits<{
     reply: [message: RoomMessage];
     reference: [messageId: string];
     select: [messageId: string];
+    addTopic: [topicId: string];
+    addMember: [memberId: string];
     showDetails: [];
     loadOlder: [];
     latest: [];
   }>();
 
   const timeline = ref<HTMLElement>();
+  const toasts = useToastsStore();
   let previousScroll = 0;
   let previousHeight = 0;
 
@@ -154,13 +217,78 @@
     return props.members.find((member) => member.id === memberId);
   }
 
+  function findTopic(topicId: string): Topic | undefined {
+    return props.topics.find((topic) => topic.id === topicId);
+  }
+
+  function isRoutableMember(memberId: string): boolean {
+    const member = findMember(memberId);
+    return member?.kind === "agent" && !member.deletedAt;
+  }
+
   function memberName(memberId: string): string {
     return findMember(memberId)?.name ?? memberId;
+  }
+
+  function identityMember(memberId: string): Pick<Member, "id" | "name"> {
+    return findMember(memberId) ?? { id: memberId, name: memberId };
+  }
+
+  function sessionName(memberId: string): string | undefined {
+    return memberSessionName({ id: memberId }, props.members, props.sessions);
+  }
+
+  function deliverySummary(message: RoomMessage): {
+    label: string;
+    tone: "info" | "success" | "error" | "warning";
+  }[] {
+    const deliveries = message.deliveries;
+    if (deliveries.some((delivery) => delivery.status === "rejected")) {
+      return [
+        { label: "入队失败", tone: "error" },
+        { label: "接收未完成", tone: "error" },
+      ];
+    }
+    if (deliveries.some((delivery) => delivery.status === "unknown")) {
+      return [
+        { label: "入队待确认", tone: "warning" },
+        { label: "接收待确认", tone: "warning" },
+      ];
+    }
+    const enqueued = deliveries.every(isEnqueued);
+    const received = deliveries.every(isReceived);
+    return [
+      {
+        label: enqueued ? "已入队" : "入队中",
+        tone: enqueued ? "success" : "info",
+      },
+      {
+        label: received ? "已接收" : "接收中",
+        tone: received ? "success" : "info",
+      },
+    ];
+  }
+
+  function isEnqueued(delivery: Delivery): boolean {
+    return delivery.status === "queued" || isReceived(delivery);
+  }
+
+  function isReceived(delivery: Delivery): boolean {
+    return delivery.status === "received";
   }
 
   function showDetails(messageId: string): void {
     emit("select", messageId);
     emit("showDetails");
+  }
+
+  async function copyMessage(message: RoomMessage): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(message.content);
+      toasts.success("消息正文已复制");
+    } catch {
+      toasts.error("复制失败，请重试或手动复制消息正文");
+    }
   }
 
   function startsNewDay(index: number): boolean {

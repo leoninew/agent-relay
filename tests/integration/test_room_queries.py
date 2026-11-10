@@ -201,6 +201,54 @@ def test_topic_and_member_filter_before_pagination_keep_whole_room_statistics(
     assert client.get(f"{ROOM}/metadata").json() == full
 
 
+def test_keyword_search_filters_history_before_pagination_and_keeps_room_totals(
+    service: DemoRoomService, client: TestClient
+) -> None:
+    seed_history(service)
+    full = client.get(f"{ROOM}/metadata").json()
+    params: dict[str, str | int] = {
+        "keyword": "历史消息 1",
+        "topic_id": "frontend",
+        "member_id": "frontend-worker",
+        "limit": 3,
+    }
+    snapshot = client.get(ROOM, params=params).json()
+    assert snapshot["summary"] == full["summary"]
+    assert snapshot["topics"] == full["topics"]
+    pages = [snapshot]
+    while pages[-1]["hasMore"]:
+        params["before_seq"] = pages[-1]["nextBeforeSeq"]
+        pages.append(client.get(f"{ROOM}/message", params=params).json())
+    messages = [message for page in reversed(pages) for message in page["messages"]]
+    assert [message["seq"] for message in messages] == [
+        seq for seq in range(7, 126) if str(seq).startswith("1") and seq % 3 != 2
+    ]
+    assert messages[0]["seq"] == 10
+    assert len(pages) > 1
+
+
+def test_keyword_search_is_literal_and_blank_keywords_restore_the_list(
+    service: DemoRoomService, client: TestClient
+) -> None:
+    for index, content in enumerate(["Search%_ Exact", "Searchxy Exact", "search%_ Exact"]):
+        service.post_message(
+            "agent-relay",
+            CreateMessage(
+                publication_id=f"search-{index}", content=content, topic_ids=["frontend"]
+            ),
+        )
+    for route in (ROOM, f"{ROOM}/message"):
+        response = client.get(route, params={"keyword": " Search%_ "})
+        assert response.status_code == 200
+        assert [message["content"] for message in response.json()["messages"]] == ["Search%_ Exact"]
+        assert client.get(route, params={"keyword": "不存在的关键词"}).json()["messages"] == []
+        assert client.get(route, params={"keyword": " "}).json() == client.get(route).json()
+        invalid = client.get(route, params={"keyword": "字" * 201})
+        assert invalid.status_code == 422
+        assert invalid.json()["code"] == "validation_error"
+        assert invalid.json()["requestId"]
+
+
 def test_topic_and_member_filters_use_explicit_topics_and_resolved_recipients(
     service: DemoRoomService, client: TestClient
 ) -> None:

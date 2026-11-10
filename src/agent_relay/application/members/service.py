@@ -63,7 +63,7 @@ class MemberSessions:
     def record_observations(
         self, room_id: str, sessions: list[SessionInfo], observed_at: datetime
     ) -> None:
-        """Update observation fields only; never overwrite names or subscriptions."""
+        """Refresh session metadata without changing member names or subscriptions."""
         by_id = {info.id: info for info in sessions}
         with self.store.write_rooms() as rooms:
             cwd = rooms.room(room_id).project_path
@@ -83,6 +83,7 @@ class MemberSessions:
                     presence,
                     activity,
                     observed_at,
+                    info.name if valid and info is not None else None,
                 )
 
     @staticmethod

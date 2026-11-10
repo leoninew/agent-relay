@@ -206,6 +206,7 @@ class SQLiteRoomQueries:
         *,
         topic_id: str | None,
         member_id: str | None,
+        keyword: str | None,
         before_seq: int | None,
         limit: int,
     ) -> MessagePage:
@@ -236,6 +237,9 @@ class SQLiteRoomQueries:
                 "(SELECT 1 FROM json_each(m.payload, '$.recipient_ids') WHERE value = ?))"
             )
             args.extend([member_id, member_id])
+        if keyword and keyword.strip():
+            clauses.append("instr(json_extract(m.payload, '$.content'), ?) > 0")
+            args.append(keyword.strip())
         where = " AND ".join(clauses)
         newer = (
             before_seq is not None
@@ -275,6 +279,7 @@ class SQLiteRoomQueries:
         topic_id: str | None = None,
         *,
         member_id: str | None = None,
+        keyword: str | None = None,
         before_seq: int | None = None,
         limit: int = 50,
     ) -> RoomSnapshot:
@@ -285,6 +290,7 @@ class SQLiteRoomQueries:
                 room_id,
                 topic_id=topic_id,
                 member_id=member_id,
+                keyword=keyword,
                 before_seq=before_seq,
                 limit=limit,
             )
@@ -296,6 +302,7 @@ class SQLiteRoomQueries:
         *,
         topic_id: str | None = None,
         member_id: str | None = None,
+        keyword: str | None = None,
         before_seq: int | None = None,
         limit: int = 50,
     ) -> MessagePage:
@@ -306,6 +313,7 @@ class SQLiteRoomQueries:
                 room_id,
                 topic_id=topic_id,
                 member_id=member_id,
+                keyword=keyword,
                 before_seq=before_seq,
                 limit=limit,
             )

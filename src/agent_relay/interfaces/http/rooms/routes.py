@@ -48,11 +48,17 @@ def get_room(
     queries: RoomQueriesDependency,
     topic_id: Annotated[str | None, Query()] = None,
     member_id: Annotated[str | None, Query()] = None,
+    keyword: Annotated[str | None, Query(max_length=200)] = None,
     before_seq: Annotated[int | None, Query(ge=1)] = None,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
 ) -> RoomSnapshot:
     return queries.snapshot(
-        room_id, topic_id, member_id=member_id, before_seq=before_seq, limit=limit
+        room_id,
+        topic_id,
+        member_id=member_id,
+        keyword=keyword,
+        before_seq=before_seq,
+        limit=limit,
     )
 
 
@@ -67,11 +73,17 @@ def list_messages(
     queries: RoomQueriesDependency,
     topic_id: Annotated[str | None, Query()] = None,
     member_id: Annotated[str | None, Query()] = None,
+    keyword: Annotated[str | None, Query(max_length=200)] = None,
     before_seq: Annotated[int | None, Query(ge=1)] = None,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
 ) -> MessagePage:
     return queries.page(
-        room_id, topic_id=topic_id, member_id=member_id, before_seq=before_seq, limit=limit
+        room_id,
+        topic_id=topic_id,
+        member_id=member_id,
+        keyword=keyword,
+        before_seq=before_seq,
+        limit=limit,
     )
 
 

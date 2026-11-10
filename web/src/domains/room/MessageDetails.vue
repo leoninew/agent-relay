@@ -1,7 +1,49 @@
 <template>
   <aside class="message-details" :aria-label="`${detailLabel}详情`">
     <header class="room-panel-heading message-details-heading">
-      <h2 class="room-panel-title">{{ detailLabel }}详情</h2>
+      <div class="detail-heading-title">
+        <h2 class="room-panel-title">{{ detailLabel }}详情</h2>
+        <template v-if="topic && !topic.deletedAt">
+          <button
+            type="button"
+            class="detail-action-link"
+            :disabled="busy"
+            :aria-label="`编辑话题：${topic.name}`"
+            @click="$emit('editTopic', topic)"
+          >
+            编辑
+          </button>
+          <button
+            type="button"
+            class="detail-action-link detail-delete-link"
+            :disabled="busy"
+            :aria-label="`删除话题：${topic.name}`"
+            @click="$emit('deleteTopic', topic)"
+          >
+            删除
+          </button>
+        </template>
+        <template v-else-if="member?.kind === 'agent' && !member.deletedAt">
+          <button
+            type="button"
+            class="detail-action-link"
+            :disabled="busy"
+            :aria-label="`编辑成员：${member.name}`"
+            @click="$emit('editMember', member)"
+          >
+            编辑
+          </button>
+          <button
+            type="button"
+            class="detail-action-link detail-delete-link"
+            :disabled="busy"
+            :aria-label="`删除成员：${member.name}`"
+            @click="$emit('deleteMember', member)"
+          >
+            删除
+          </button>
+        </template>
+      </div>
       <button
         type="button"
         class="icon-button"
@@ -13,30 +55,18 @@
     </header>
     <div v-if="topic" class="message-details-content">
       <div class="detail-object-summary">
-        <div class="detail-summary-heading">
-          <h3># {{ topic.name }}</h3>
-          <time v-if="topic.createdAt" :datetime="topic.createdAt">
-            {{ formatDateTime(topic.createdAt) }}
-          </time>
+        <div class="sidebar-list-item detail-object-identity">
+          <TopicIdentity :topic="topic" />
+          <span class="sidebar-item-meta">{{ topic.messageCount }}</span>
         </div>
         <p v-if="topic.description" class="detail-description">{{ topic.description }}</p>
       </div>
-      <dl class="detail-stats" aria-label="话题概览">
-        <div>
-          <dt>消息</dt>
-          <dd>{{ topic.messageCount }}</dd>
-        </div>
-        <div>
-          <dt>成员</dt>
-          <dd>{{ topicMembers.length }}</dd>
-        </div>
-      </dl>
       <section class="message-detail-section">
         <h3>成员</h3>
         <ul v-if="topicMembers.length" class="detail-members">
           <li v-for="subscriber in topicMembers" :key="subscriber.id">
             <div class="member-row">
-              <MemberIdentity :member="subscriber" />
+              <MemberIdentity :member="subscriber" :session-name="sessionName(subscriber)" />
               <span
                 v-if="subscriber.kind === 'agent'"
                 class="member-row-status detail-presence"
@@ -53,12 +83,11 @@
     </div>
     <div v-else-if="member" class="message-details-content">
       <div class="detail-object-summary">
-        <MemberIdentity :member="member" />
-        <div class="detail-member-meta">
-          <span class="detail-member-kind">{{ member.kind === "agent" ? "Agent" : "用户" }}</span>
+        <div class="sidebar-list-item detail-object-identity">
+          <MemberIdentity :member="member" :session-name="sessionName(member)" />
           <span
             v-if="member.kind === 'agent'"
-            class="detail-presence"
+            class="sidebar-item-meta sidebar-member-status"
             :data-presence="member.presence"
           >
             {{ presenceLabel[member.presence] }}
@@ -78,7 +107,10 @@
     <div v-else-if="message" class="message-details-content">
       <div class="detail-message-summary">
         <div class="detail-summary-heading">
-          <MemberIdentity :member="resolveMember(message.senderId)" />
+          <MemberIdentity
+            :member="resolveMember(message.senderId)"
+            :session-name="sessionName(resolveMember(message.senderId))"
+          />
           <time :datetime="message.createdAt">{{ formatDateTime(message.createdAt) }}</time>
         </div>
         <p class="detail-message-content">{{ messagePreview }}</p>
@@ -98,11 +130,14 @@
         <p v-else>未选择话题</p>
       </section>
       <section v-if="mentionedMembers.length" class="message-detail-section">
-        <h3>@ 成员</h3>
-        <ul class="detail-members" aria-label="@ 成员">
+        <h3>成员</h3>
+        <ul class="detail-members" aria-label="成员">
           <li v-for="mentionedMember in mentionedMembers" :key="mentionedMember.id">
             <div class="member-row">
-              <MemberIdentity :member="mentionedMember" />
+              <MemberIdentity
+                :member="mentionedMember"
+                :session-name="sessionName(mentionedMember)"
+              />
             </div>
           </li>
         </ul>
@@ -114,25 +149,27 @@
             <tr>
               <th scope="col">成员</th>
               <th scope="col">入队</th>
-              <th scope="col">进入会话</th>
+              <th scope="col">接收</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="{ member: recipient, status, error } in dispatchRows" :key="recipient.id">
-              <td><MemberIdentity :member="recipient" /></td>
+            <tr
+              v-for="{ member: recipient, queuedAt, receivedAt, error } in dispatchRows"
+              :key="recipient.id"
+            >
+              <td><MemberIdentity :member="recipient" :session-name="sessionName(recipient)" /></td>
               <td>
-                <span class="dispatch-status" :data-state="status">
-                  {{ status ? enqueueLabels[status] : "—" }}
-                </span>
+                <time v-if="queuedAt" class="dispatch-time" :datetime="queuedAt">
+                  {{ formatMinute(queuedAt) }}
+                </time>
+                <span v-else class="dispatch-time">—</span>
                 <small v-if="error" class="dispatch-error">{{ error }}</small>
               </td>
               <td>
-                <span
-                  class="dispatch-status"
-                  :data-state="status === 'received' ? 'received' : undefined"
-                >
-                  {{ status === "received" ? "已进入" : "—" }}
-                </span>
+                <time v-if="receivedAt" class="dispatch-time" :datetime="receivedAt">
+                  {{ formatMinute(receivedAt) }}
+                </time>
+                <span v-else class="dispatch-time">—</span>
               </td>
             </tr>
           </tbody>
@@ -148,8 +185,10 @@
 
   import AppIcon from "@/components/AppIcon.vue";
   import MemberIdentity from "@/domains/room/MemberIdentity.vue";
-  import type { Member, RoomMessage, Topic } from "@/services/roomApi";
-  import { formatDateTime } from "@/utils/time";
+  import TopicIdentity from "@/domains/room/TopicIdentity.vue";
+  import { memberSessionName } from "@/domains/room/memberSessionName";
+  import type { Member, RoomMessage, Session, Topic } from "@/services/roomApi";
+  import { formatDateTime, formatMinute } from "@/utils/time";
 
   const props = withDefaults(
     defineProps<{
@@ -158,10 +197,22 @@
       member?: Member;
       topics: Topic[];
       members: Member[];
+      sessions: Session[];
+      busy?: boolean;
     }>(),
-    { message: undefined, topic: undefined, member: undefined },
+    { message: undefined, topic: undefined, member: undefined, busy: false },
   );
-  defineEmits<{ close: [] }>();
+  defineEmits<{
+    close: [];
+    editTopic: [topic: Topic];
+    deleteTopic: [topic: Topic];
+    editMember: [member: Member];
+    deleteMember: [member: Member];
+  }>();
+
+  function sessionName(member: Pick<Member, "id">): string | undefined {
+    return memberSessionName(member, props.members, props.sessions);
+  }
 
   const detailLabel = computed(() => (props.topic ? "话题" : props.member ? "成员" : "消息"));
   const messagePreview = computed(() => {
@@ -217,20 +268,13 @@
       const delivery = props.message?.deliveries.find(
         (delivery) => delivery.targetMemberId === member.id,
       );
+      const status = delivery?.status;
       return {
         member,
-        status: delivery?.status,
-        error:
-          delivery?.status === "rejected" || delivery?.status === "unknown" ? delivery.error : null,
+        queuedAt: delivery?.queuedAt,
+        receivedAt: delivery?.receivedAt,
+        error: status === "rejected" || status === "unknown" ? delivery?.error : null,
       };
     }),
   );
-  const enqueueLabels = {
-    pending: "待提交",
-    submitting: "提交中",
-    queued: "已入队",
-    received: "已入队",
-    rejected: "已拒绝",
-    unknown: "结果未知",
-  };
 </script>

@@ -82,7 +82,15 @@ class SQLiteRoomData:
         presence: str,
         activity: str,
         observed_at: datetime,
+        session_name: str | None,
     ) -> None:
         self.store.save_observation(
-            self.connection, room_id, member_id, session_id, presence, activity, observed_at
+            self.connection,
+            room_id,
+            member_id,
+            session_id,
+            presence,
+            activity,
+            observed_at,
+            session_name,
         )

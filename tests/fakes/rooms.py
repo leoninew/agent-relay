@@ -132,6 +132,7 @@ class MemoryRoomData:
         presence: str,
         activity: str,
         observed_at: datetime,
+        session_name: str | None,
     ) -> None:
         raise NotImplementedError
 

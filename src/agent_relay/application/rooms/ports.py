@@ -37,6 +37,7 @@ class RoomData(Protocol):
         presence: str,
         activity: str,
         observed_at: datetime,
+        session_name: str | None,
     ) -> None: ...
 
 
@@ -50,6 +51,7 @@ class RoomQueries(Protocol):
         topic_id: str | None = None,
         *,
         member_id: str | None = None,
+        keyword: str | None = None,
         before_seq: int | None = None,
         limit: int = 50,
     ) -> RoomSnapshot: ...
@@ -59,6 +61,7 @@ class RoomQueries(Protocol):
         *,
         topic_id: str | None = None,
         member_id: str | None = None,
+        keyword: str | None = None,
         before_seq: int | None = None,
         limit: int = 50,
     ) -> MessagePage: ...

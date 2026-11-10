@@ -27,7 +27,7 @@
 
 <script setup lang="ts">
   import { Primitive } from "reka-ui";
-  import { nextTick, ref } from "vue";
+  import { nextTick, ref, watch } from "vue";
 
   import AppClearButton from "@/components/AppClearButton.vue";
 
@@ -35,6 +35,7 @@
   const props = defineProps<{
     clearLabel: string;
     multiline?: boolean;
+    autoresize?: boolean;
     disabled?: boolean;
     readonly?: boolean;
     invalid?: boolean;
@@ -42,6 +43,39 @@
   const model = defineModel<string>({ required: true });
   const root = ref<HTMLElement>();
   const composing = ref(false);
+
+  function resize(): void {
+    const control = root.value?.querySelector("textarea");
+    if (!props.autoresize || !control) return;
+    const scrollTop = control.scrollTop;
+    control.style.height = "auto";
+    control.style.height = `${control.scrollHeight}px`;
+    control.scrollTop = scrollTop;
+  }
+
+  watch(model, resize, { flush: "post" });
+  watch(
+    [root, () => props.multiline, () => props.autoresize],
+    ([element, multiline, autoresize], _, onCleanup) => {
+      if (!element || !multiline || !autoresize) return;
+      resize();
+      let observer: ResizeObserver | undefined;
+      if (typeof ResizeObserver !== "undefined") {
+        let width = element.getBoundingClientRect().width;
+        observer = new ResizeObserver(([entry]) => {
+          if (!entry || entry.contentRect.width === width) return;
+          width = entry.contentRect.width;
+          resize();
+        });
+        observer.observe(element);
+      }
+      onCleanup(() => {
+        observer?.disconnect();
+        element.querySelector("textarea")?.style.removeProperty("height");
+      });
+    },
+    { flush: "post" },
+  );
 
   function updateValue(event: Event): void {
     if (!composing.value)

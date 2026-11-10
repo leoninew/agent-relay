@@ -291,6 +291,7 @@ class SQLiteRoomStore:
         presence: str,
         activity: str,
         observed_at: datetime,
+        session_name: str | None,
     ) -> None:
         checkpoint_before = (observed_at - timedelta(seconds=30)).isoformat()
         member_cursor = connection.execute(
@@ -318,11 +319,23 @@ class SQLiteRoomStore:
             SQLiteRoomStore.record_event(connection, RoomChange(room_id, "member", member_id))
         session_cursor = connection.execute(
             "UPDATE sessions SET payload = json_set(payload, '$.presence', ?, "
-            "'$.observed_at', ?) WHERE room_id = ? AND id = ? "
+            "'$.observed_at', ?, '$.name', COALESCE(?, json_extract(payload, '$.name'))) "
+            "WHERE room_id = ? AND id = ? "
             "AND (json_extract(payload, '$.presence') IS NOT ? "
+            "OR (? IS NOT NULL AND json_extract(payload, '$.name') IS NOT ?) "
             "OR json_extract(payload, '$.observed_at') IS NULL "
             "OR julianday(json_extract(payload, '$.observed_at')) <= julianday(?))",
-            (presence, observed_at.isoformat(), room_id, session_id, presence, checkpoint_before),
+            (
+                presence,
+                observed_at.isoformat(),
+                session_name,
+                room_id,
+                session_id,
+                presence,
+                session_name,
+                session_name,
+                checkpoint_before,
+            ),
         )
         if session_cursor.rowcount:
             SQLiteRoomStore.record_event(connection, RoomChange(room_id, "session", session_id))

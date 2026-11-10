@@ -22,11 +22,8 @@
       :snapshot="snapshot"
       :busy="sending || saving"
       :selected-topic-id="selectedTopicId"
-      :selected-member-id="selectedMemberId"
       @select="selectTopic"
       @create-topic="openSetup('topic')"
-      @edit-topic="editTopic"
-      @delete-topic="openDelete({ kind: 'topic', node: $event })"
     >
       <MemberPanel
         :snapshot="snapshot"
@@ -34,50 +31,74 @@
         :selected-member-id="selectedMemberId"
         @select="selectMember"
         @add-member="openSetup('member')"
-        @edit-member="editMember"
-        @delete-member="openDelete({ kind: 'member', node: $event })"
       />
     </TopicSidebar>
 
     <section class="conversation-panel" aria-label="聊天室">
-      <header class="room-panel-heading conversation-heading">
-        <div class="conversation-title">
-          <h2 class="room-panel-title">聊天室</h2>
-          <AppButton
-            variant="plain"
-            class="conversation-refresh"
-            :loading="loading || refreshingSessions"
-            loading-label="刷新中…"
-            :disabled="sending"
-            @click="refreshRoom()"
+      <div class="conversation-messages">
+        <header class="room-panel-heading conversation-heading">
+          <div class="conversation-title">
+            <h2 class="room-panel-title">聊天室</h2>
+          </div>
+          <form
+            class="conversation-search"
+            role="search"
+            aria-label="搜索聊天室消息"
+            @submit.prevent="submitSearch"
           >
-            刷新
-          </AppButton>
+            <div class="conversation-search-field">
+              <AppIcon name="search" />
+              <AppInput
+                v-model="searchText"
+                type="search"
+                name="keyword"
+                maxlength="200"
+                placeholder="搜索消息…"
+                aria-label="搜索消息"
+                clear-label="清空搜索"
+                autocomplete="off"
+              />
+            </div>
+            <AppButton
+              type="submit"
+              class="conversation-search-button"
+              :title="searchText.trim() ? '搜索消息' : '刷新聊天室'"
+              :loading="loading || refreshingSessions"
+              loading-label="加载中…"
+              :disabled="sending"
+            >
+              搜索
+            </AppButton>
+          </form>
+        </header>
+        <div v-if="loadError" class="room-alert" role="alert">
+          <span>{{ loadError }}</span>
+          <button type="button" @click="loadRoom()">重试</button>
         </div>
-      </header>
-      <div v-if="loadError" class="room-alert" role="alert">
-        <span>{{ loadError }}</span>
-        <button type="button" @click="loadRoom()">重试</button>
+        <MessageTimeline
+          ref="timeline"
+          :messages="visibleMessages"
+          :has-more="snapshot.hasMore"
+          :has-newer="snapshot.hasNewer"
+          :loading-older="loadingOlder"
+          :unavailable="loadError !== null"
+          :members="snapshot.members"
+          :sessions="snapshot.sessions"
+          :topics="snapshot.topics"
+          :selected-message-id="detailMessage?.id"
+          :details-open="detailsOpen"
+          :loading="loading"
+          :searching="Boolean(keyword)"
+          @load-older="loadOlder"
+          @latest="loadLatest"
+          @reply="quoteMessage"
+          @reference="showReference"
+          @select="selectMessage"
+          @add-topic="composer?.addTopic($event)"
+          @add-member="composer?.addMember($event)"
+          @show-details="detailsOpen = true"
+        />
       </div>
-      <MessageTimeline
-        ref="timeline"
-        :messages="visibleMessages"
-        :has-more="snapshot.hasMore"
-        :has-newer="snapshot.hasNewer"
-        :loading-older="loadingOlder"
-        :unavailable="loadError !== null"
-        :members="snapshot.members"
-        :topics="snapshot.topics"
-        :selected-message-id="detailMessage?.id"
-        :details-open="detailsOpen"
-        :loading="loading"
-        @load-older="loadOlder"
-        @latest="loadLatest"
-        @reply="quoteMessage"
-        @reference="showReference"
-        @select="selectMessage"
-        @show-details="detailsOpen = true"
-      />
       <RoomComposer
         :key="snapshot.room.id"
         ref="composer"
@@ -85,6 +106,7 @@
         :room-id="snapshot.room.id"
         :topics="activeTopics"
         :members="snapshot.members"
+        :sessions="snapshot.sessions"
         :reply-to="replyTo"
         :sending="sending"
         :locked="Boolean(pendingPublication)"
@@ -105,7 +127,13 @@
       :member="detailMember"
       :topics="snapshot.topics"
       :members="snapshot.members"
+      :sessions="snapshot.sessions"
+      :busy="sending || saving"
       @close="detailsOpen = false"
+      @edit-topic="editTopic"
+      @delete-topic="openDelete({ kind: 'topic', node: $event })"
+      @edit-member="editMember"
+      @delete-member="openDelete({ kind: 'member', node: $event })"
     />
   </div>
   <RoomSetupDialog
@@ -149,6 +177,7 @@
 
   import AppButton from "@/components/AppButton.vue";
   import AppIcon from "@/components/AppIcon.vue";
+  import AppInput from "@/components/AppInput.vue";
   import AppLoading from "@/components/AppLoading.vue";
   import MemberEditDialog from "@/domains/room/MemberEditDialog.vue";
   import MemberPanel from "@/domains/room/MemberPanel.vue";
@@ -209,6 +238,8 @@
   );
   const selectedTopicId = ref<string>();
   const selectedMemberId = ref<string>();
+  const searchText = ref("");
+  const keyword = ref("");
   const activeTopics = computed(
     () => snapshot.value?.topics.filter((topic) => !topic.deletedAt) ?? [],
   );
@@ -263,9 +294,36 @@
 
   let stopEvents: (() => void) | undefined;
   let queryController: AbortController | undefined;
+  let searchTimer: ReturnType<typeof setTimeout> | undefined;
 
   function filters(): MessageQuery {
-    return { topicId: selectedTopicId.value, memberId: selectedMemberId.value };
+    return {
+      topicId: selectedTopicId.value,
+      memberId: selectedMemberId.value,
+      keyword: keyword.value || undefined,
+    };
+  }
+
+  function resetSearch(): void {
+    clearTimeout(searchTimer);
+    searchText.value = "";
+    keyword.value = "";
+  }
+
+  async function applySearch(): Promise<void> {
+    clearTimeout(searchTimer);
+    const nextKeyword = searchText.value.trim();
+    if (nextKeyword === keyword.value) return;
+    keyword.value = nextKeyword;
+    await loadLatest();
+  }
+
+  async function submitSearch(): Promise<void> {
+    clearTimeout(searchTimer);
+    if (loading.value || refreshingSessions.value || sending.value) return;
+    keyword.value = searchText.value.trim();
+    if (keyword.value) await loadLatest();
+    else await refreshRoom();
   }
 
   function cancelQueries(): number {
@@ -310,7 +368,9 @@
       current.eventId = page.nextEventId;
       const newest = current.messages.at(-1);
       if (wasAtEnd && newest && newest.seq > previousSeq) {
-        selectMessage(newest.id);
+        if (detailTarget.value.kind === "message" && detailsOpen.value) {
+          selectedMessageId.value = newest.id;
+        }
         await nextTick();
         if (version === loadVersion) timeline.value?.scrollToEnd();
       }
@@ -421,6 +481,7 @@
   }
 
   async function openRoom(roomId: string): Promise<void> {
+    resetSearch();
     currentRoomId.value = roomId;
     cancelQueries();
     delete roomsStore.snapshots[roomId];
@@ -452,24 +513,11 @@
     else await initialize();
   }
 
-  function syncDraftRouting(): void {
-    const roomId = currentRoomId.value;
-    if (!roomId || pendingPublication.value) return;
-    const draft = drafts.value[roomId] ?? { content: "", topicIds: [], mentionedMemberIds: [] };
-    const member = activeMembers.value.find((member) => member.id === selectedMemberId.value);
-    drafts.value[roomId] = {
-      ...draft,
-      topicIds: selectedTopicId.value ? [selectedTopicId.value] : [],
-      mentionedMemberIds: member?.kind === "agent" ? [member.id] : [],
-    };
-  }
-
-  async function selectTopic(topicId?: string): Promise<void> {
-    selectedTopicId.value = topicId;
-    if (!topicId) selectedMemberId.value = undefined;
-    detailTarget.value = topicId ? { kind: "topic", id: topicId } : { kind: "message" };
+  async function selectTopic(topicId: string): Promise<void> {
+    selectedTopicId.value = selectedTopicId.value === topicId ? undefined : topicId;
+    detailTarget.value = { kind: "topic", id: topicId };
     detailsOpen.value = true;
-    syncDraftRouting();
+    composer.value?.selectTopic(selectedTopicId.value);
     await loadRoom();
     await nextTick();
     timeline.value?.scrollToEnd();
@@ -479,7 +527,7 @@
     selectedMemberId.value = selectedMemberId.value === memberId ? undefined : memberId;
     detailTarget.value = { kind: "member", id: memberId };
     detailsOpen.value = true;
-    syncDraftRouting();
+    composer.value?.selectMember(selectedMemberId.value);
     await loadRoom();
     await nextTick();
     timeline.value?.scrollToEnd();
@@ -603,8 +651,6 @@
       refreshingSessions.value = false;
     }
     if (roomId !== currentRoomId.value || !(await loadRoom())) return;
-    const newest = visibleMessages.value.at(-1);
-    if (newest) selectMessage(newest.id);
     await nextTick();
     if (roomId === currentRoomId.value) timeline.value?.scrollToEnd();
   }
@@ -727,6 +773,7 @@
         if (version !== loadVersion) return;
         selectedTopicId.value = undefined;
         selectedMemberId.value = undefined;
+        resetSearch();
         if (!(await loadRoom(message.seq + 1))) return;
       } catch (caught) {
         if (version === loadVersion)
@@ -742,8 +789,15 @@
   }
 
   onBeforeUnmount(() => {
+    clearTimeout(searchTimer);
     cancelQueries();
     sessionsVersion++;
+  });
+
+  watch(searchText, (value) => {
+    clearTimeout(searchTimer);
+    if (!value.trim()) void applySearch();
+    else searchTimer = setTimeout(() => void applySearch(), 300);
   });
 
   watch(

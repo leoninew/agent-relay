@@ -146,6 +146,18 @@ describe("room state", () => {
     ]);
   });
 
+  it("only appends messages containing the literal search keyword", () => {
+    const store = useRoomsStore();
+    const initial = roomFixture();
+    store.sync({ ...initial, messages: [] });
+    const matching = { ...initial.messages[0], content: "接口%_ 已确认" };
+    const unrelated = { ...initial.messages[1], content: "接口变更" };
+
+    store.applyMessages(initial.room.id, [matching, unrelated], { keyword: "接口%_" });
+
+    expect(store.snapshots[initial.room.id].messages).toEqual([matching]);
+  });
+
   it.each([
     { query: {}, expected: [3, 4, 5, 6, 7] },
     { query: { topicId: "backend" }, expected: [3, 4] },

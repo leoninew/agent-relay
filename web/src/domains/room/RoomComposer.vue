@@ -57,49 +57,60 @@
               :aria-invalid="showRecipientError"
               :aria-describedby="showRecipientError ? 'routing-error' : undefined"
             >
-              <span>@ {{ member.name }}</span>
+              <MemberIdentity
+                :member="member"
+                :session-name="memberSessionName(member, members, sessions)"
+                appearance="text"
+              />
             </AppCheckbox>
           </AppCheckboxGroup>
         </div>
-        <p v-if="showRecipientError" id="routing-error" class="field-error" role="alert">
+        <p
+          v-if="showRecipientError"
+          id="routing-error"
+          class="field-error routing-error"
+          role="alert"
+          :title="routingError"
+        >
           {{ routingError }}
         </p>
       </fieldset>
       <label for="message-content" class="sr-only">消息内容</label>
-      <AppInput
-        id="message-content"
-        ref="textarea"
-        v-model="content"
-        name="content"
-        maxlength="6000"
-        rows="3"
-        placeholder="发送消息…"
-        clear-label="清空消息内容"
-        multiline
-        :disabled="sending || locked"
-        :invalid="showContentError"
-        aria-describedby="content-error"
-        @keydown.enter="onEnter"
-      />
+      <div class="composer-editor">
+        <AppInput
+          id="message-content"
+          ref="textarea"
+          v-model="content"
+          name="content"
+          maxlength="6000"
+          rows="2"
+          placeholder="发送消息…"
+          clear-label="清空消息内容"
+          multiline
+          autoresize
+          :disabled="sending || locked"
+          :invalid="showContentError"
+          aria-describedby="content-error"
+          @keydown.enter="onEnter"
+        />
+        <AppButton
+          type="submit"
+          class="composer-send-button"
+          title="Enter 发送，Shift+Enter 换行"
+          aria-keyshortcuts="Enter"
+          :aria-label="sending ? '正在发送' : '发送消息'"
+          :loading="sending"
+          :disabled="locked"
+          loading-label="发送中…"
+        >
+          <template #icon><AppIcon name="enter" /></template>
+          发送
+        </AppButton>
+      </div>
       <p v-if="showContentError" id="content-error" class="field-error" role="alert">
         请输入消息内容
       </p>
       <p v-if="error" class="field-error send-error" role="alert">{{ error }}</p>
-      <div class="composer-footer">
-        <div class="composer-actions">
-          <AppButton
-            type="submit"
-            class="composer-send-button"
-            :aria-label="sending ? '正在发送' : '发送消息'"
-            :loading="sending"
-            :disabled="locked"
-            loading-label="发送中…"
-          >
-            <template #icon><AppIcon name="enter" /></template>
-            发送
-          </AppButton>
-        </div>
-      </div>
     </div>
   </form>
 </template>
@@ -112,17 +123,23 @@
   import AppCheckboxGroup from "@/components/AppCheckboxGroup.vue";
   import AppIcon from "@/components/AppIcon.vue";
   import AppInput from "@/components/AppInput.vue";
-  import type { MessageDraft, Member, RoomMessage, Topic } from "@/services/roomApi";
+  import MemberIdentity from "@/domains/room/MemberIdentity.vue";
+  import { memberSessionName } from "@/domains/room/memberSessionName";
+  import type { MessageDraft, Member, RoomMessage, Session, Topic } from "@/services/roomApi";
 
-  const props = defineProps<{
-    roomId: string;
-    topics: Topic[];
-    members: Member[];
-    replyTo?: RoomMessage;
-    sending: boolean;
-    locked?: boolean;
-    error: string | null;
-  }>();
+  const props = withDefaults(
+    defineProps<{
+      roomId: string;
+      topics: Topic[];
+      members: Member[];
+      sessions: Session[];
+      replyTo?: RoomMessage;
+      sending: boolean;
+      locked?: boolean;
+      error: string | null;
+    }>(),
+    { replyTo: undefined },
+  );
   const emit = defineEmits<{
     send: [message: MessageDraft];
     cancelReply: [];
@@ -186,6 +203,32 @@
     { immediate: true },
   );
 
+  function addTopic(topicId: string): void {
+    if (props.sending || props.locked || topicIds.value.includes(topicId)) return;
+    if (!props.topics.some((topic) => topic.id === topicId && !topic.deletedAt)) return;
+    topicIds.value = [...topicIds.value, topicId];
+  }
+
+  function addMember(memberId: string): void {
+    if (props.sending || props.locked || mentionedMemberIds.value.includes(memberId)) return;
+    if (!agentMembers.value.some((member) => member.id === memberId)) return;
+    mentionedMemberIds.value = [...mentionedMemberIds.value, memberId];
+  }
+
+  function selectTopic(topicId?: string): void {
+    if (props.sending || props.locked) return;
+    topicIds.value =
+      topicId && props.topics.some((topic) => topic.id === topicId && !topic.deletedAt)
+        ? [topicId]
+        : [];
+  }
+
+  function selectMember(memberId?: string): void {
+    if (props.sending || props.locked) return;
+    mentionedMemberIds.value =
+      memberId && agentMembers.value.some((member) => member.id === memberId) ? [memberId] : [];
+  }
+
   async function quote(message: RoomMessage): Promise<void> {
     draft.value = {
       ...draft.value,
@@ -211,10 +254,9 @@
   }
 
   function onEnter(event: KeyboardEvent): void {
-    if ((event.ctrlKey || event.metaKey) && !event.isComposing) {
-      event.preventDefault();
-      submit();
-    }
+    if (event.shiftKey || event.isComposing || event.keyCode === 229) return;
+    event.preventDefault();
+    submit();
   }
 
   function reset(): void {
@@ -223,5 +265,5 @@
     textarea.value?.focus();
   }
 
-  defineExpose({ reset, quote });
+  defineExpose({ reset, quote, addTopic, addMember, selectTopic, selectMember });
 </script>

@@ -93,6 +93,7 @@ export type RoomSnapshot = RoomMetadata & MessagePage;
 export type MessageQuery = {
   topicId?: string;
   memberId?: string;
+  keyword?: string;
   beforeSeq?: number;
   limit?: number;
 };
@@ -166,6 +167,7 @@ function queryParams(query: MessageQuery) {
   return {
     topic_id: query.topicId,
     member_id: query.memberId,
+    keyword: query.keyword,
     before_seq: query.beforeSeq,
     limit: query.limit,
   };

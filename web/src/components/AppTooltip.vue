@@ -1,10 +1,15 @@
 <template>
-  <TooltipProvider :delay-duration="200">
+  <TooltipProvider v-if="text" :delay-duration="200">
     <TooltipRoot>
       <TooltipTrigger as-child><slot /></TooltipTrigger>
       <TooltipPortal>
         <div class="app-tooltip-layer">
-          <TooltipContent class="app-tooltip" :side-offset="6" :collision-padding="12">
+          <TooltipContent
+            class="app-tooltip"
+            :aria-label="text"
+            :side-offset="6"
+            :collision-padding="12"
+          >
             {{ text }}
             <TooltipArrow class="app-tooltip-arrow" />
           </TooltipContent>
@@ -12,6 +17,7 @@
       </TooltipPortal>
     </TooltipRoot>
   </TooltipProvider>
+  <slot v-else />
 </template>
 
 <script setup lang="ts">
@@ -24,7 +30,7 @@
     TooltipTrigger,
   } from "reka-ui";
 
-  defineProps<{ text: string }>();
+  defineProps<{ text?: string }>();
 </script>
 
 <style>

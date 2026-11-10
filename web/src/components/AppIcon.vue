@@ -16,6 +16,7 @@
     ChevronDown,
     ChevronRight,
     CornerDownLeft,
+    Copy,
     GripVertical,
     Hash,
     Info,
@@ -23,6 +24,7 @@
     Plus,
     RefreshCw,
     Reply,
+    Search,
     Trash2,
     Waypoints,
     X,
@@ -38,6 +40,7 @@
     check: Check,
     chevron: ChevronRight,
     close: X,
+    copy: Copy,
     enter: CornerDownLeft,
     grip: GripVertical,
     hash: Hash,
@@ -46,6 +49,7 @@
     refresh: RefreshCw,
     relay: Waypoints,
     reply: Reply,
+    search: Search,
     trash: Trash2,
   };
 </script>

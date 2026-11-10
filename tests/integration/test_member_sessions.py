@@ -134,7 +134,7 @@ def test_presence_worker_updates_joined_members_and_emits_events_without_listing
     cursor = queries.events(room_id, 0).next_event_id
     driver.inspected.clear()
     worker = MemberPresenceService(members, logging.getLogger("tests.member-presence"))
-    driver.sessions["one"] = replace(driver.sessions["one"], status="idle")
+    driver.sessions["one"] = replace(driver.sessions["one"], status="idle", name="Renamed session")
 
     worker.refresh()
 
@@ -142,6 +142,7 @@ def test_presence_worker_updates_joined_members_and_emits_events_without_listing
     assert current.presence == "available"
     assert current.name == "Renamed" and current.topic_ids == [topic_id]
     assert queries.metadata(room_id).sessions[0].presence == "available"
+    assert queries.metadata(room_id).sessions[0].name == "Renamed session"
     assert {event.kind for event in queries.events(room_id, cursor).events} == {"member", "session"}
     assert driver.inspected == ["one"] and driver.listed == 0
     driver.sessions["one"] = replace(driver.sessions["one"], status="active")
@@ -202,6 +203,28 @@ def test_unchanged_observations_checkpoint_without_emitting_events_on_every_poll
     members.record_observations(room_id, list(driver.sessions.values()), checkpoint)
     assert {event.kind for event in queries.events(room_id, cursor).events} == {"member", "session"}
     assert queries.metadata(room_id).members[0].observed_at == checkpoint
+
+
+def test_session_renames_sync_without_overwriting_member_aliases_and_survive_restart(
+    tmp_path: Path,
+) -> None:
+    members, rooms, driver, room_id, topic_id = setup(tmp_path)
+    member = members.add(room_id, request(topic_id))
+    rooms.update_member(room_id, member.id, UpdateMember(name="Alias", topic_ids=[topic_id]))
+    assert member.observed_at is not None
+    queries = RoomQueries(rooms.store)
+    cursor = queries.events(room_id, 0).next_event_id
+    driver.sessions["one"] = replace(driver.sessions["one"], name="Renamed Codex session")
+    members.record_observations(
+        room_id, list(driver.sessions.values()), member.observed_at + timedelta(seconds=1)
+    )
+    assert {event.kind for event in queries.events(room_id, cursor).events} == {"session"}
+    metadata = RoomQueries(create_room_store(tmp_path / "rooms.sqlite3")).metadata(room_id)
+    assert metadata.sessions[0].name == "Renamed Codex session"
+    assert metadata.members[0].name == "Alias"
+    assert metadata.members[0].topic_ids == [topic_id]
+    members.record_observations(room_id, [], member.observed_at + timedelta(seconds=2))
+    assert queries.metadata(room_id).sessions[0].name == "Renamed Codex session"
 
 
 @pytest.mark.parametrize("fail_first", [False, True])

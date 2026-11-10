@@ -95,7 +95,8 @@ export const useRoomsStore = defineStore("rooms", () => {
           (!query.topicId || message.topicIds.includes(query.topicId)) &&
           (!query.memberId ||
             message.senderId === query.memberId ||
-            message.recipientIds.includes(query.memberId))),
+            message.recipientIds.includes(query.memberId)) &&
+          (!query.keyword || message.content.includes(query.keyword))),
     );
     snapshot.messages = orderedMessages([...snapshot.messages, ...updates]);
   }

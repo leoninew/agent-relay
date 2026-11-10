@@ -49,6 +49,7 @@ describe("room API", () => {
     await fetchRoom("agent-relay", {
       topicId: "frontend",
       memberId: "frontend-worker",
+      keyword: "接口%_",
       beforeSeq: 80,
       limit: 25,
     });
@@ -56,18 +57,24 @@ describe("room API", () => {
       expect.objectContaining({
         method: "get",
         url: "/api/room/agent-relay",
-        params: { topic_id: "frontend", member_id: "frontend-worker", before_seq: 80, limit: 25 },
+        params: {
+          topic_id: "frontend",
+          member_id: "frontend-worker",
+          keyword: "接口%_",
+          before_seq: 80,
+          limit: 25,
+        },
       }),
     );
   });
 
   it("loads history, exact references, metadata and event catchup independently", async () => {
     const signal = new AbortController().signal;
-    await fetchRoomMessages("room/one", { beforeSeq: 50 }, signal);
+    await fetchRoomMessages("room/one", { keyword: "接口", beforeSeq: 50 }, signal);
     expect(adapterMock).toHaveBeenLastCalledWith(
       expect.objectContaining({
         url: "/api/room/room%2Fone/message",
-        params: expect.objectContaining({ before_seq: 50 }),
+        params: expect.objectContaining({ keyword: "接口", before_seq: 50 }),
         signal,
       }),
     );
