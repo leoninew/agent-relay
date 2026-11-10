@@ -11,8 +11,7 @@ FORMAT_SCRIPT := $(if $(filter 1,$(fix)),format:write,format)
 help:
 	@printf "Available targets:\n"
 	@printf "  make deps             Install locked frontend dependencies\n"
-	@printf "  make check            Check types, lint, and format\n"
-	@printf "  make check fix=1      Check types, then fix lint and format\n"
+	@printf "  make check [fix=1]    Check types, lint, and format; fix=1 applies fixes\n"
 	@printf "  make test             Run frontend unit tests\n"
 
 check:

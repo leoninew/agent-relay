@@ -6,21 +6,17 @@ profile ?= dev
 RUFF_CHECK_ARGS := $(if $(filter 1,$(fix)),--fix,)
 RUFF_FORMAT_ARGS := $(if $(filter 1,$(fix)),.,--check .)
 
-.PHONY: help deps install check test test-unit test-integration web migrate webapi
+.PHONY: help deps install check test web migrate webapi
 
 help:
 	@printf "Available targets:\n"
 	@printf "  make deps             Install locked backend and frontend dependencies\n"
 	@printf "  make install          Install CLI and publish MCP/skill to Codex\n"
-	@printf "  make check            Check backend and frontend types, lint, and format\n"
-	@printf "  make check fix=1      Apply backend and frontend lint and format fixes\n"
-	@printf "  make test             Run all backend and frontend tests\n"
-	@printf "  make test-unit        Run isolated backend business tests\n"
-	@printf "  make test-integration Run backend adapter and lifecycle tests\n"
+	@printf "  make check [fix=1]    Check backend and frontend types, lint, and format; fix=1 applies fixes\n"
+	@printf "  make test             Run backend and frontend unit tests\n"
 	@printf "  make web              Start the Vite development server on port 9081\n"
 	@printf "  make migrate          Upgrade the configured database schema\n"
 	@printf "  make webapi           Start the FastAPI development server on port 9080\n"
-	@printf "  profile=dev           Select .env.dev (default); use profile=qa for .env.qa\n"
 
 deps:
 	uv sync --all-groups --locked
@@ -40,14 +36,8 @@ check:
 	$(MAKE) -C web check fix=$(fix)
 
 test:
-	uv run --locked pytest tests
-	$(MAKE) -C web test
-
-test-unit:
 	uv run --locked pytest tests/unit
-
-test-integration:
-	uv run --locked pytest tests/integration
+	$(MAKE) -C web test
 
 web:
 	cd web && corepack pnpm dev --mode $(profile)

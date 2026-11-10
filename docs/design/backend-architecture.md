@@ -51,9 +51,9 @@ src/agent_relay/
 
 ## 测试与运行入口
 
-- `uv run --locked pytest` 或 `make test-unit`：默认纯业务测试，不建 SQLite、不启动 FastAPI 或协议子进程。
-- `make test-integration`：SQLite、HTTP/WebSocket、CLI/MCP、Codex fixture 协议子进程及后台生命周期。测试只使用临时数据库和自有模拟协议进程。
-- `make test`：全部后端和前端测试；`make check`：既有类型、lint 和格式入口。
+- `uv run --locked pytest`：默认纯业务测试，不建 SQLite、不启动 FastAPI 或协议子进程。
+- `uv run --locked pytest tests/integration`：显式运行 SQLite、HTTP/WebSocket、CLI/MCP、Codex fixture 协议子进程及后台生命周期测试，只使用临时数据库和自有模拟协议进程。
+- `make test`：后端与前端单元测试；`make check`：既有类型、lint 和格式入口，可用 `fix=1` 自动修复。
 - `python -m agent_relay.server`、`python -m agent_relay.cli`、`python -m agent_relay.migrate` 及 `agent-relay` script 保持原调用方式。旧内部 Python 模块路径随职责迁移，仓库内消费者已更新。
 
 协议端口增加类型化回执属于 Python 内部契约，HTTP、CLI 和 MCP 仍返回原有字段。暂无生成协议代码，不创建空 `gen` 层。

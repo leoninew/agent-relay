@@ -37,11 +37,10 @@ make web profile=dev
 
 ```bash
 make check
-make test-unit
-make -C web test
+make test
 ```
 
-依次检查前后端类型、lint 和格式，运行后端与前端单元测试。`make test` 会额外运行后端集成测试。
+依次检查前后端类型、lint 和格式，运行后端与前端单元测试。使用 `make check fix=1` 自动修复 lint 和格式问题。
 
 修改依赖后更新并提交对应的 `uv.lock` 或 `web/pnpm-lock.yaml`。
 
