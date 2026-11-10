@@ -5,7 +5,7 @@ from pathlib import Path
 from alembic import command
 from alembic.config import Config
 
-MIGRATION_HEAD = "baseline_20261109"
+MIGRATION_HEAD = "baseline_20261110"
 
 
 def _configuration(path: Path) -> Config:

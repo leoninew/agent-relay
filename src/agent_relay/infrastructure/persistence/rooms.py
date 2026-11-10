@@ -46,7 +46,7 @@ class SQLiteRoomData:
             (row["room_id"], row["session_id"])
             for row in self.connection.execute(
                 "SELECT room_id, session_id FROM members WHERE deleted_at IS NULL "
-                "AND session_id IS NOT NULL AND json_extract(payload, '$.kind') = 'agent'"
+                "AND session_id IS NOT NULL AND kind = 'agent'"
             )
         ]
 
@@ -56,9 +56,13 @@ class SQLiteRoomData:
     def delete_room(self, room_id: str) -> None:
         for table in (
             "deliveries",
+            "member_context_messages",
             "member_context_queries",
             "member_topic_positions",
             "member_topics",
+            "message_topics",
+            "message_mentions",
+            "message_recipients",
             "messages",
             "members",
             "sessions",

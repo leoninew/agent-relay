@@ -13,7 +13,10 @@ def test_baseline_initializes_database_and_is_repeatable(tmp_path: Path) -> None
     path = tmp_path / "rooms.sqlite3"
     run_migrations(path)
     with closing(sqlite3.connect(path)) as connection:
-        connection.execute("INSERT INTO rooms VALUES ('room', '/project', '{}')")
+        connection.execute(
+            "INSERT INTO rooms(id, project_path, name, description) "
+            "VALUES ('room', '/project', 'Project', '')"
+        )
         connection.commit()
 
     run_migrations(path)

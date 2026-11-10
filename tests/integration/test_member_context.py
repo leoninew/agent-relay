@@ -1,4 +1,3 @@
-import json
 import logging
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
@@ -175,15 +174,17 @@ def test_single_context_records_exact_results_and_advances_each_subscribed_topic
     assert positions(older)["backend"].seq == 4
     with context.service.store.read() as connection:
         record = connection.execute(
-            "SELECT messages, provided_at FROM member_context_queries WHERE id = ?",
+            "SELECT message_id, provided_at FROM member_context_queries WHERE id = ?",
             (result.query_id,),
         ).fetchone()
-    assert json.loads(record["messages"]) == [
-        {
-            "messageId": result.messages[0].id,
-            "seq": 4,
-            "topicIds": ["frontend", "backend"],
-        }
+        provided = connection.execute(
+            "SELECT message_id, position FROM member_context_messages WHERE query_id = ? "
+            "ORDER BY position",
+            (result.query_id,),
+        ).fetchall()
+    assert record["message_id"] == result.messages[0].id
+    assert [(row["message_id"], row["position"]) for row in provided] == [
+        (result.messages[0].id, 0)
     ]
     assert datetime.fromisoformat(record["provided_at"]).tzinfo is not None
     assert RoomQueries(context.service.store).metadata("agent-relay").summary == before

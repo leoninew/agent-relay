@@ -4,7 +4,7 @@ from pathlib import Path
 
 from agent_relay.infrastructure.persistence.migration_sql import execute_sql_file
 
-revision = "baseline_20261109"
+revision = "baseline_20261110"
 down_revision = None
 branch_labels = None
 depends_on = None

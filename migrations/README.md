@@ -1,35 +1,34 @@
-# 数据库迁移
+# 数据库迁移指南
 
-使用 SQL-first Alembic，配置为根目录 `alembic.ini`。
+使用 SQL-first Alembic，配置入口为仓库根目录的 `alembic.ini`。
 
-```text
-alembic.ini
-migrations/
-  sqlite/
-    env.py
-    versions/                  # 薄 revision，显式列出 SQL
-    sql/<批次>/                # 实际 .up.sql
-```
+## 执行迁移
 
-## 执行
-
-在项目根目录运行：
+在仓库根目录运行，目标数据库取自对应环境的 `database.path`：
 
 ```bash
 make migrate profile=dev
 ```
 
-PowerShell 等价入口：
+PowerShell 等价命令：
 
 ```powershell
 $env:AGENT_RELAY_PROFILE = 'dev'
 uv run --locked python -m agent_relay.migrate
 ```
 
-迁移使用配置中的 `database.path`。`.env.dev` 已开启启动迁移，运行 `make webapi` 时自动执行；其他环境可设置 `AGENT_RELAY_DATABASE__MIGRATE_ON_STARTUP=true`，或使用上面的命令手动执行。
-
-运行目录为项目根目录，需包含 `alembic.ini`、`migrations/` 和 `config/`。
+默认数据库为 `data/agent-relay.sqlite3`。`.env.dev` 已启用启动迁移；其他环境可配置 `AGENT_RELAY_DATABASE__MIGRATE_ON_STARTUP=true`。
 
 ## 修改结构
 
-在 `versions/` 中添加 revision，通过 `down_revision` 连接当前 head，并在 `upgrade()` 中显式调用对应 SQL 文件。SQL 放在 `sql/<批次>/`，不从模型生成 DDL。
+1. 在 `sqlite/sql/<批次>/` 编写 `.up.sql`，显式定义表、约束和索引。
+2. 在 `sqlite/versions/` 添加 revision，以 `down_revision` 连接当前 head，并在 `upgrade()` 中通过 `execute_sql_file()` 显式调用 SQL 文件。
+3. 同步更新 `src/agent_relay/infrastructure/persistence/migrations.py` 中的 `MIGRATION_HEAD`，以及对应持久化读写实现。
+
+主外键、查询和索引字段使用列或关联表，JSON 仅保存额外元数据。不从业务模型自动生成 DDL。
+
+## 基线与旧库
+
+当前基线为 `baseline_20261110`，不兼容旧版整模型 JSON 存储，不提供旧数据转换或降级。
+
+旧基线数据库需先停止相关服务、核对路径并按需保留数据，再使用空库重新执行迁移。迁移命令不会自动删除或重建旧库。

@@ -11,12 +11,16 @@ from agent_relay.domain.rooms.events import RoomChange
 from agent_relay.domain.rooms.models import (
     USER_MEMBER_ID,
     Delivery,
-    Member,
     Message,
     Room,
 )
 from agent_relay.domain.rooms.state import RoomState
 from agent_relay.infrastructure.persistence.migrations import MIGRATION_HEAD
+from agent_relay.infrastructure.persistence.records import (
+    delivery_from_record,
+    delivery_record,
+    messages_from_rows,
+)
 from agent_relay.infrastructure.persistence.transaction import SQLiteTransaction
 
 
@@ -128,8 +132,7 @@ class SQLiteRoomStore:
                 "SELECT room_id, id, message_id FROM deliveries WHERE status = 'submitting'"
             ).fetchall()
             cursor = connection.execute(
-                "UPDATE deliveries SET status = 'unknown', payload = json_set(payload, "
-                "'$.status', 'unknown', '$.updated_at', ?, '$.error', ?) "
+                "UPDATE deliveries SET status = 'unknown', updated_at = ?, error = ? "
                 "WHERE status = 'submitting'",
                 (datetime.now(UTC).isoformat(), "提交中断，入队结果未知；不会自动重发"),
             )
@@ -150,8 +153,8 @@ class SQLiteRoomStore:
         room_id = state.room.id
         if state.room != original.room:
             connection.execute(
-                "UPDATE rooms SET project_path = ?, payload = ? WHERE id = ?",
-                (state.room.project_path, state.room.model_dump_json(), room_id),
+                "UPDATE rooms SET project_path = ?, name = ?, description = ? WHERE id = ?",
+                (state.room.project_path, state.room.name, state.room.description, room_id),
             )
             self.record_event(connection, RoomChange(room_id, "room", room_id))
         old_topics = {topic.id: topic for topic in original.topics}
@@ -160,12 +163,13 @@ class SQLiteRoomStore:
                 self._upsert(
                     connection,
                     "topics",
-                    ("room_id", "id", "name", "payload", "deleted_at"),
+                    ("room_id", "id", "name", "description", "created_at", "deleted_at"),
                     (
                         room_id,
                         topic.id,
                         topic.name,
-                        topic.model_dump_json(),
+                        topic.description,
+                        topic.created_at.isoformat() if topic.created_at else None,
                         topic.deleted_at.isoformat() if topic.deleted_at else None,
                     ),
                 )
@@ -176,11 +180,23 @@ class SQLiteRoomStore:
                 self._upsert(
                     connection,
                     "sessions",
-                    ("room_id", "id", "payload"),
+                    (
+                        "room_id",
+                        "id",
+                        "name",
+                        "provider",
+                        "project_path",
+                        "presence",
+                        "observed_at",
+                    ),
                     (
                         room_id,
                         session.id,
-                        session.model_dump_json(),
+                        session.name,
+                        session.provider,
+                        session.project_path,
+                        session.presence,
+                        session.observed_at.isoformat() if session.observed_at else None,
                     ),
                 )
                 self.record_event(connection, RoomChange(room_id, "session", session.id))
@@ -192,13 +208,30 @@ class SQLiteRoomStore:
             self._upsert(
                 connection,
                 "members",
-                ("room_id", "id", "name", "session_id", "payload", "deleted_at"),
+                (
+                    "room_id",
+                    "id",
+                    "name",
+                    "session_id",
+                    "kind",
+                    "initials",
+                    "presence",
+                    "activity",
+                    "activity_source",
+                    "observed_at",
+                    "deleted_at",
+                ),
                 (
                     room_id,
                     member.id,
                     member.name,
                     member.session_id,
-                    member.model_copy(update={"topic_ids": []}).model_dump_json(),
+                    member.kind,
+                    member.initials,
+                    member.presence,
+                    member.activity,
+                    member.activity_source,
+                    member.observed_at.isoformat() if member.observed_at else None,
                     member.deleted_at.isoformat() if member.deleted_at else None,
                 ),
             )
@@ -220,62 +253,58 @@ class SQLiteRoomStore:
     @staticmethod
     def insert_room(connection: sqlite3.Connection, room: Room) -> None:
         connection.execute(
-            "INSERT INTO rooms (id, project_path, payload) VALUES (?, ?, ?)",
-            (room.id, room.project_path, room.model_dump_json()),
-        )
-        user = Member(
-            id=USER_MEMBER_ID,
-            kind="human",
-            session_id=None,
-            name="你",
-            initials="你",
-            presence="available",
-            activity="",
-            activity_source="user",
-            topic_ids=[],
+            "INSERT INTO rooms (id, project_path, name, description) VALUES (?, ?, ?, ?)",
+            (room.id, room.project_path, room.name, room.description),
         )
         connection.execute(
-            "INSERT INTO members (room_id, id, name, session_id, payload) "
-            "VALUES (?, ?, ?, NULL, ?)",
-            (room.id, user.id, user.name, user.model_dump_json()),
+            "INSERT INTO members "
+            "(room_id, id, name, kind, initials, presence, activity, activity_source) "
+            "VALUES (?, ?, '你', 'human', '你', 'available', '', 'user')",
+            (room.id, USER_MEMBER_ID),
         )
         SQLiteRoomStore.record_event(connection, RoomChange(room.id, "room", room.id))
-        SQLiteRoomStore.record_event(connection, RoomChange(room.id, "member", user.id))
+        SQLiteRoomStore.record_event(connection, RoomChange(room.id, "member", USER_MEMBER_ID))
 
     @staticmethod
     def insert_message(connection: sqlite3.Connection, room_id: str, message: Message) -> None:
         connection.execute(
             "INSERT INTO messages "
-            "(room_id, id, seq, payload, publisher_id, publication_id) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
+            "(room_id, id, seq, publisher_id, publication_id, content, "
+            "reply_to_message_id, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 room_id,
                 message.id,
                 message.seq,
-                message.model_copy(update={"deliveries": []}).model_dump_json(
-                    exclude={"sender_name"}
-                ),
                 message.sender_id,
                 message.publication_id,
+                message.content,
+                message.reply_to_message_id,
+                message.created_at.isoformat(),
             ),
         )
+        for table, column, targets in (
+            ("message_topics", "topic_id", message.topic_ids),
+            ("message_mentions", "member_id", message.mentioned_member_ids),
+            ("message_recipients", "member_id", message.recipient_ids),
+        ):
+            connection.executemany(
+                f"INSERT INTO {table}(room_id, message_id, {column}, position) VALUES (?, ?, ?, ?)",
+                [
+                    (room_id, message.id, target_id, position)
+                    for position, target_id in enumerate(targets)
+                ],
+            )
         SQLiteRoomStore.record_event(
             connection, RoomChange(room_id, "message", message.id, message.id)
         )
         for delivery in message.deliveries:
+            record = delivery_record(delivery)
+            columns = ("room_id", "message_id", *record)
+            slots = ", ".join("?" for _ in columns)
             connection.execute(
-                "INSERT INTO deliveries "
-                "(room_id, id, message_id, target_member_id, payload, target_session_id, status) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (
-                    room_id,
-                    delivery.id,
-                    message.id,
-                    delivery.target_member_id,
-                    delivery.model_dump_json(),
-                    delivery.target_session_id,
-                    delivery.status,
-                ),
+                f"INSERT INTO deliveries ({', '.join(columns)}) VALUES ({slots})",
+                (room_id, message.id, *record.values()),
             )
             SQLiteRoomStore.record_event(
                 connection,
@@ -295,14 +324,11 @@ class SQLiteRoomStore:
     ) -> None:
         checkpoint_before = (observed_at - timedelta(seconds=30)).isoformat()
         member_cursor = connection.execute(
-            "UPDATE members SET payload = json_set(payload, '$.presence', ?, "
-            "'$.activity', ?, '$.activity_source', 'codex', '$.observed_at', ?) "
+            "UPDATE members SET presence = ?, activity = ?, "
+            "activity_source = 'codex', observed_at = ? "
             "WHERE room_id = ? AND id = ? AND session_id = ? AND deleted_at IS NULL "
-            "AND (json_extract(payload, '$.presence') IS NOT ? "
-            "OR json_extract(payload, '$.activity') IS NOT ? "
-            "OR json_extract(payload, '$.activity_source') IS NOT 'codex' "
-            "OR json_extract(payload, '$.observed_at') IS NULL "
-            "OR julianday(json_extract(payload, '$.observed_at')) <= julianday(?))",
+            "AND (presence IS NOT ? OR activity IS NOT ? OR activity_source IS NOT 'codex' "
+            "OR observed_at IS NULL OR julianday(observed_at) <= julianday(?))",
             (
                 presence,
                 activity,
@@ -318,13 +344,10 @@ class SQLiteRoomStore:
         if member_cursor.rowcount:
             SQLiteRoomStore.record_event(connection, RoomChange(room_id, "member", member_id))
         session_cursor = connection.execute(
-            "UPDATE sessions SET payload = json_set(payload, '$.presence', ?, "
-            "'$.observed_at', ?, '$.name', COALESCE(?, json_extract(payload, '$.name'))) "
+            "UPDATE sessions SET presence = ?, observed_at = ?, name = COALESCE(?, name) "
             "WHERE room_id = ? AND id = ? "
-            "AND (json_extract(payload, '$.presence') IS NOT ? "
-            "OR (? IS NOT NULL AND json_extract(payload, '$.name') IS NOT ?) "
-            "OR json_extract(payload, '$.observed_at') IS NULL "
-            "OR julianday(json_extract(payload, '$.observed_at')) <= julianday(?))",
+            "AND (presence IS NOT ? OR (? IS NOT NULL AND name IS NOT ?) "
+            "OR observed_at IS NULL OR julianday(observed_at) <= julianday(?))",
             (
                 presence,
                 observed_at.isoformat(),
@@ -343,36 +366,39 @@ class SQLiteRoomStore:
     def claim_delivery(self) -> ClaimedDelivery | None:
         with self.write() as connection:
             row = connection.execute(
-                "SELECT d.room_id, d.payload, "
-                "d.id, d.message_id, "
-                "json_set(m.payload, '$.sender_name', sender.name) AS message, r.payload AS room "
-                "FROM deliveries d JOIN messages m ON m.room_id = d.room_id "
-                "AND m.id = d.message_id JOIN rooms r ON r.id = d.room_id "
-                "JOIN members sender ON sender.room_id = m.room_id AND sender.id = m.publisher_id "
-                "JOIN members target ON target.room_id = d.room_id "
+                "SELECT d.* FROM deliveries d JOIN members target ON target.room_id = d.room_id "
                 "AND target.id = d.target_member_id AND target.session_id = d.target_session_id "
-                "AND json_extract(target.payload, '$.kind') = 'agent' "
+                "AND target.kind = 'agent' "
                 "WHERE d.status = 'pending' AND NOT EXISTS (SELECT 1 FROM deliveries active "
                 "WHERE active.target_session_id = d.target_session_id "
                 "AND active.status = 'submitting') ORDER BY d.rowid LIMIT 1"
             ).fetchone()
             if row is None:
                 return None
-            delivery = Delivery.model_validate_json(row["payload"])
+            delivery = delivery_from_record(dict(row))
             delivery.status = "submitting"
             delivery.updated_at = datetime.now(UTC)
             connection.execute(
-                "UPDATE deliveries SET status = ?, payload = ? WHERE room_id = ? AND id = ?",
-                (delivery.status, delivery.model_dump_json(), row["room_id"], delivery.id),
+                "UPDATE deliveries SET status = ?, updated_at = ? WHERE room_id = ? AND id = ?",
+                (delivery.status, delivery.updated_at.isoformat(), row["room_id"], delivery.id),
             )
             self.record_event(
                 connection,
                 RoomChange(row["room_id"], "delivery", row["id"], row["message_id"]),
             )
+            room = connection.execute(
+                "SELECT * FROM rooms WHERE id = ?", (row["room_id"],)
+            ).fetchone()
+            message = connection.execute(
+                "SELECT m.*, sender.name AS sender_name FROM messages m JOIN members sender "
+                "ON sender.room_id = m.room_id AND sender.id = m.publisher_id "
+                "WHERE m.room_id = ? AND m.id = ?",
+                (row["room_id"], row["message_id"]),
+            ).fetchone()
             return ClaimedDelivery(
                 row["room_id"],
-                Room.model_validate_json(row["room"]),
-                Message.model_validate_json(row["message"]),
+                Room.model_validate(dict(room)),
+                messages_from_rows(connection, row["room_id"], [message])[0],
                 delivery,
             )
 
@@ -381,16 +407,19 @@ class SQLiteRoomStore:
             event = connection.execute(
                 "SELECT message_id FROM deliveries WHERE room_id = ? AND id = ? "
                 "AND status = 'submitting' "
-                "AND json_extract(payload, '$.client_message_id') = ?",
+                "AND client_message_id = ?",
                 (room_id, delivery.id, delivery.client_message_id),
             ).fetchone()
+            record = delivery_record(delivery)
+            for field in ("id", "target_member_id", "target_session_id", "client_message_id"):
+                del record[field]
+            assignments = ", ".join(f"{field} = ?" for field in record)
             cursor = connection.execute(
-                "UPDATE deliveries SET status = ?, payload = ? "
+                f"UPDATE deliveries SET {assignments} "
                 "WHERE room_id = ? AND id = ? AND status = 'submitting' "
-                "AND json_extract(payload, '$.client_message_id') = ?",
+                "AND client_message_id = ?",
                 (
-                    delivery.status,
-                    delivery.model_dump_json(),
+                    *record.values(),
                     room_id,
                     delivery.id,
                     delivery.client_message_id,
@@ -409,9 +438,8 @@ class SQLiteRoomStore:
         with self.write() as connection:
             criteria = (
                 "target_session_id = ? AND status = 'queued' "
-                "AND json_extract(payload, '$.queued_submission_id') = ? "
-                "AND json_extract(payload, '$.client_message_id') = ? "
-                "AND json_extract(payload, '$.activation_attempted_at') IS NULL"
+                "AND queued_submission_id = ? AND client_message_id = ? "
+                "AND activation_attempted_at IS NULL"
             )
             parameters = (session_id, head.id, head.client_message_id)
             events = connection.execute(
@@ -419,8 +447,7 @@ class SQLiteRoomStore:
                 parameters,
             ).fetchall()
             cursor = connection.execute(
-                "UPDATE deliveries SET payload = json_set(payload, '$.activation_attempted_at', ?) "
-                "WHERE " + criteria,
+                "UPDATE deliveries SET activation_attempted_at = ? WHERE " + criteria,
                 (datetime.now(UTC).isoformat(), *parameters),
             )
             if cursor.rowcount:
@@ -436,13 +463,13 @@ class SQLiteRoomStore:
             events = connection.execute(
                 "SELECT room_id, id, message_id FROM deliveries "
                 "WHERE target_session_id = ? AND status = 'queued' "
-                "AND json_extract(payload, '$.client_message_id') = ?",
+                "AND client_message_id = ?",
                 (session_id, client_message_id),
             ).fetchall()
             cursor = connection.execute(
-                "UPDATE deliveries SET payload = json_set(payload, '$.note', ?) "
+                "UPDATE deliveries SET note = ? "
                 "WHERE target_session_id = ? AND status = 'queued' "
-                "AND json_extract(payload, '$.client_message_id') = ?",
+                "AND client_message_id = ?",
                 (note, session_id, client_message_id),
             )
             if cursor.rowcount:
@@ -456,11 +483,10 @@ class SQLiteRoomStore:
         with self.read() as connection:
             result: dict[str, set[str]] = {}
             for row in connection.execute(
-                "SELECT target_session_id, "
-                "json_extract(payload, '$.client_message_id') AS client_id "
+                "SELECT target_session_id, client_message_id "
                 "FROM deliveries WHERE status IN ('queued', 'unknown') ORDER BY rowid"
             ):
-                result.setdefault(row["target_session_id"], set()).add(row["client_id"])
+                result.setdefault(row["target_session_id"], set()).add(row["client_message_id"])
             return result
 
     def confirm_input(self, session_id: str, received: ReceivedInput) -> None:
@@ -469,16 +495,14 @@ class SQLiteRoomStore:
             events = connection.execute(
                 "SELECT room_id, id, message_id FROM deliveries "
                 "WHERE target_session_id = ? AND status IN ('queued', 'unknown') "
-                "AND json_extract(payload, '$.client_message_id') = ?",
+                "AND client_message_id = ?",
                 (session_id, received.client_message_id),
             ).fetchall()
             cursor = connection.execute(
-                "UPDATE deliveries SET status = 'received', payload = json_set(payload, "
-                "'$.status', 'received', '$.updated_at', ?, '$.received_at', ?, "
-                "'$.received_item_id', ?, '$.received_turn_id', ?, "
-                "'$.note', NULL, '$.error', NULL) "
+                "UPDATE deliveries SET status = 'received', updated_at = ?, received_at = ?, "
+                "received_item_id = ?, received_turn_id = ?, note = NULL, error = NULL "
                 "WHERE target_session_id = ? AND status IN ('queued', 'unknown') "
-                "AND json_extract(payload, '$.client_message_id') = ?",
+                "AND client_message_id = ?",
                 (
                     now,
                     now,

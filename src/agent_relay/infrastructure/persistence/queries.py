@@ -20,6 +20,11 @@ from agent_relay.domain.rooms.models import (
 )
 from agent_relay.domain.rooms.state import RoomState
 from agent_relay.infrastructure.persistence.positions import read_topic_positions
+from agent_relay.infrastructure.persistence.records import (
+    delivery_from_record,
+    member_from_record,
+    messages_from_rows,
+)
 from agent_relay.infrastructure.persistence.store import SQLiteRoomStore
 
 
@@ -29,29 +34,36 @@ class SQLiteRoomQueries:
 
     @staticmethod
     def room_in(connection: sqlite3.Connection, room_id: str) -> Room:
-        row = connection.execute("SELECT payload FROM rooms WHERE id = ?", (room_id,)).fetchone()
+        row = connection.execute("SELECT * FROM rooms WHERE id = ?", (room_id,)).fetchone()
         if row is None:
             raise RoomNotFoundError("聊天室不存在")
-        return Room.model_validate_json(row["payload"])
+        return Room.model_validate(dict(row))
 
     def rooms(self) -> list[Room]:
         with self.store.read() as connection:
             return [
-                Room.model_validate_json(row["payload"])
-                for row in connection.execute("SELECT payload FROM rooms ORDER BY rowid")
+                Room.model_validate(dict(row))
+                for row in connection.execute("SELECT * FROM rooms ORDER BY rowid")
             ]
 
     def member_for_session(self, room_id: str, session_id: str) -> Member:
         with self.store.read() as connection:
             self.room_in(connection, room_id)
             row = connection.execute(
-                "SELECT payload FROM members WHERE room_id = ? AND session_id = ? "
-                "AND deleted_at IS NULL",
+                "SELECT * FROM members WHERE room_id = ? AND session_id = ? AND deleted_at IS NULL",
                 (room_id, session_id),
             ).fetchone()
             if row is None:
                 raise RoomNotFoundError("该 Codex 会话尚未加入此聊天室")
-            return Member.model_validate_json(row["payload"])
+            topic_ids = [
+                topic[0]
+                for topic in connection.execute(
+                    "SELECT topic_id FROM member_topics WHERE room_id = ? AND member_id = ? "
+                    "ORDER BY position",
+                    (room_id, row["id"]),
+                )
+            ]
+            return member_from_record(dict(row), topic_ids)
 
     @staticmethod
     def project_exists_in(connection: sqlite3.Connection, project_path: str) -> bool:
@@ -65,12 +77,20 @@ class SQLiteRoomQueries:
     @staticmethod
     def publisher_in(connection: sqlite3.Connection, room_id: str, member_id: str | None) -> Member:
         row = connection.execute(
-            "SELECT payload FROM members WHERE room_id = ? AND id = ? AND deleted_at IS NULL",
+            "SELECT * FROM members WHERE room_id = ? AND id = ? AND deleted_at IS NULL",
             (room_id, member_id if member_id is not None else USER_MEMBER_ID),
         ).fetchone()
         if row is None:
             raise RoomNotFoundError("聊天室成员不存在")
-        return Member.model_validate_json(row["payload"])
+        topic_ids = [
+            topic[0]
+            for topic in connection.execute(
+                "SELECT topic_id FROM member_topics WHERE room_id = ? AND member_id = ? "
+                "ORDER BY position",
+                (room_id, row["id"]),
+            )
+        ]
+        return member_from_record(dict(row), topic_ids)
 
     @staticmethod
     def joined_members_in(connection: sqlite3.Connection, room_id: str) -> dict[str, str]:
@@ -78,7 +98,7 @@ class SQLiteRoomQueries:
             row["session_id"]: row["id"]
             for row in connection.execute(
                 "SELECT id, session_id FROM members WHERE room_id = ? AND deleted_at IS NULL "
-                "AND session_id IS NOT NULL AND json_extract(payload, '$.kind') = 'agent'",
+                "AND session_id IS NOT NULL AND kind = 'agent'",
                 (room_id,),
             )
         }
@@ -111,9 +131,9 @@ class SQLiteRoomQueries:
     def resources_in(self, connection: sqlite3.Connection, room_id: str) -> RoomState:
         room = self.room_in(connection, room_id)
         topics = [
-            Topic.model_validate_json(row["payload"])
+            Topic.model_validate(dict(row))
             for row in connection.execute(
-                "SELECT id, payload FROM topics WHERE room_id = ? ORDER BY rowid", (room_id,)
+                "SELECT * FROM topics WHERE room_id = ? ORDER BY rowid", (room_id,)
             )
         ]
         subscriptions: dict[str, list[str]] = {}
@@ -124,17 +144,15 @@ class SQLiteRoomQueries:
             subscriptions.setdefault(row["member_id"], []).append(row["topic_id"])
         members = []
         for row in connection.execute(
-            "SELECT id, payload FROM members WHERE room_id = ? ORDER BY session_id IS NULL, rowid",
+            "SELECT * FROM members WHERE room_id = ? ORDER BY session_id IS NULL, rowid",
             (room_id,),
         ):
-            member = Member.model_validate_json(row["payload"]).model_copy(
-                update={"topic_ids": subscriptions.get(row["id"], [])}
-            )
+            member = member_from_record(dict(row), subscriptions.get(row["id"], []))
             members.append(member)
         sessions = [
-            Session.model_validate_json(row["payload"])
+            Session.model_validate(dict(row))
             for row in connection.execute(
-                "SELECT payload FROM sessions WHERE room_id = ? ORDER BY rowid", (room_id,)
+                "SELECT * FROM sessions WHERE room_id = ? ORDER BY rowid", (room_id,)
             )
         ]
         return RoomState(room=room, topics=topics, members=members, sessions=sessions)
@@ -143,8 +161,7 @@ class SQLiteRoomQueries:
         state = self.resources_in(connection, room_id)
         counts = dict(
             connection.execute(
-                "SELECT j.value, COUNT(*) FROM messages m, json_each(m.payload, '$.topic_ids') j "
-                "WHERE m.room_id = ? GROUP BY j.value",
+                "SELECT topic_id, COUNT(*) FROM message_topics WHERE room_id = ? GROUP BY topic_id",
                 (room_id,),
             ).fetchall()
         )
@@ -182,19 +199,17 @@ class SQLiteRoomQueries:
     def _messages(
         connection: sqlite3.Connection, room_id: str, rows: list[sqlite3.Row]
     ) -> list[Message]:
-        messages = [Message.model_validate_json(row["payload"]) for row in rows]
+        messages = messages_from_rows(connection, room_id, rows)
         if not messages:
             return messages
         deliveries: dict[str, list[Delivery]] = {}
         slots = ",".join("?" for _ in messages)
         for row in connection.execute(
-            f"SELECT message_id, payload FROM deliveries WHERE room_id = ? "
+            f"SELECT * FROM deliveries WHERE room_id = ? "
             f"AND message_id IN ({slots}) ORDER BY rowid",
             (room_id, *(message.id for message in messages)),
         ):
-            deliveries.setdefault(row["message_id"], []).append(
-                Delivery.model_validate_json(row["payload"])
-            )
+            deliveries.setdefault(row["message_id"], []).append(delivery_from_record(dict(row)))
         for message in messages:
             message.deliveries = deliveries.get(message.id, [])
         return messages
@@ -221,7 +236,8 @@ class SQLiteRoomQueries:
             ):
                 raise RoomNotFoundError("话题不存在")
             clauses.append(
-                "EXISTS (SELECT 1 FROM json_each(m.payload, '$.topic_ids') WHERE value = ?)"
+                "EXISTS (SELECT 1 FROM message_topics mt WHERE mt.room_id = m.room_id "
+                "AND mt.message_id = m.id AND mt.topic_id = ?)"
             )
             args.append(topic_id)
         if member_id is not None:
@@ -234,11 +250,12 @@ class SQLiteRoomQueries:
                 raise RoomNotFoundError("成员不存在")
             clauses.append(
                 "(m.publisher_id = ? OR EXISTS "
-                "(SELECT 1 FROM json_each(m.payload, '$.recipient_ids') WHERE value = ?))"
+                "(SELECT 1 FROM message_recipients recipient WHERE recipient.room_id = m.room_id "
+                "AND recipient.message_id = m.id AND recipient.member_id = ?))"
             )
             args.extend([member_id, member_id])
         if keyword and keyword.strip():
-            clauses.append("instr(json_extract(m.payload, '$.content'), ?) > 0")
+            clauses.append("instr(m.content, ?) > 0")
             args.append(keyword.strip())
         where = " AND ".join(clauses)
         newer = (
@@ -253,7 +270,7 @@ class SQLiteRoomQueries:
             clauses.append("m.seq < ?")
             args.append(before_seq)
         rows = connection.execute(
-            "SELECT json_set(m.payload, '$.sender_name', sender.name) AS payload "
+            "SELECT m.*, sender.name AS sender_name "
             "FROM messages m JOIN members sender "
             "ON sender.room_id = m.room_id AND sender.id = m.publisher_id "
             f"WHERE {' AND '.join(clauses)} "
@@ -322,7 +339,7 @@ class SQLiteRoomQueries:
         with self.store.read() as connection:
             self.room_in(connection, room_id)
             rows = connection.execute(
-                "SELECT json_set(m.payload, '$.sender_name', sender.name) AS payload "
+                "SELECT m.*, sender.name AS sender_name "
                 "FROM messages m JOIN members sender "
                 "ON sender.room_id = m.room_id AND sender.id = m.publisher_id "
                 "WHERE m.room_id = ? AND m.id = ?",
@@ -340,7 +357,7 @@ class SQLiteRoomQueries:
         publication_id: str,
     ) -> Message | None:
         row = connection.execute(
-            "SELECT json_set(m.payload, '$.sender_name', sender.name) AS payload "
+            "SELECT m.*, sender.name AS sender_name "
             "FROM messages m JOIN members sender "
             "ON sender.room_id = m.room_id AND sender.id = m.publisher_id "
             "WHERE m.room_id = ? AND m.publisher_id = ? AND m.publication_id = ?",

@@ -1,4 +1,3 @@
-import json
 import sqlite3
 from datetime import UTC, datetime
 from uuid import uuid4
@@ -16,6 +15,7 @@ from agent_relay.domain.rooms.events import RoomChange
 from agent_relay.domain.rooms.models import Room, TopicPosition
 from agent_relay.domain.rooms.positions import position_updates, require_subscribed_topic
 from agent_relay.infrastructure.persistence.positions import read_topic_positions
+from agent_relay.infrastructure.persistence.records import messages_from_rows
 from agent_relay.infrastructure.persistence.store import SQLiteRoomStore
 
 
@@ -44,19 +44,18 @@ class SQLiteMemberContext:
     def catalog(self, room_id: str, member_id: str) -> MemberCatalog:
         with self.store.read() as connection:
             subscriptions = self._subscriptions(connection, room_id, member_id)
-            room = Room.model_validate_json(
-                connection.execute(
-                    "SELECT payload FROM rooms WHERE id = ?",
-                    (room_id,),
-                ).fetchone()[0]
+            room = Room.model_validate(
+                dict(connection.execute("SELECT * FROM rooms WHERE id = ?", (room_id,)).fetchone())
             )
             topics = [
                 CatalogTopic(
-                    **json.loads(row["payload"]),
+                    id=row["id"],
+                    name=row["name"],
+                    description=row["description"],
                     subscribed=row["id"] in subscriptions,
                 )
                 for row in connection.execute(
-                    "SELECT id, payload FROM topics WHERE room_id = ? "
+                    "SELECT id, name, description FROM topics WHERE room_id = ? "
                     "AND deleted_at IS NULL ORDER BY rowid",
                     (room_id,),
                 )
@@ -70,12 +69,12 @@ class SQLiteMemberContext:
             members = [
                 CatalogMember(
                     id=row["id"],
-                    kind=json.loads(row["payload"])["kind"],
+                    kind=row["kind"],
                     name=row["name"],
                     topic_ids=member_topics.get(row["id"], []),
                 )
                 for row in connection.execute(
-                    "SELECT id, name, payload FROM members WHERE room_id = ? "
+                    "SELECT id, name, kind FROM members WHERE room_id = ? "
                     "AND deleted_at IS NULL ORDER BY rowid",
                     (room_id,),
                 )
@@ -110,10 +109,11 @@ class SQLiteMemberContext:
                 "(m.publisher_id = ? OR EXISTS "
                 "(SELECT 1 FROM deliveries d WHERE d.room_id = m.room_id "
                 "AND d.message_id = m.id AND d.target_member_id = ?) OR EXISTS "
-                "(SELECT 1 FROM json_each(m.payload, '$.topic_ids') j JOIN member_topics mt "
-                "ON mt.room_id = m.room_id AND mt.topic_id = j.value "
+                "(SELECT 1 FROM message_topics message_topic JOIN member_topics mt "
+                "ON mt.room_id = message_topic.room_id AND mt.topic_id = message_topic.topic_id "
                 "JOIN topics t ON t.room_id = mt.room_id AND t.id = mt.topic_id "
-                "AND t.deleted_at IS NULL WHERE mt.member_id = ?))"
+                "AND t.deleted_at IS NULL WHERE message_topic.room_id = m.room_id "
+                "AND message_topic.message_id = m.id AND mt.member_id = ?))"
             ),
         ]
         args: list[str | int] = [room_id, member_id, member_id, member_id]
@@ -122,11 +122,12 @@ class SQLiteMemberContext:
             args.append(request.message_id)
         if request.topic_id is not None:
             clauses.append(
-                "EXISTS (SELECT 1 FROM json_each(m.payload, '$.topic_ids') WHERE value = ?)"
+                "EXISTS (SELECT 1 FROM message_topics mt WHERE mt.room_id = m.room_id "
+                "AND mt.message_id = m.id AND mt.topic_id = ?)"
             )
             args.append(request.topic_id)
         if request.keyword is not None:
-            clauses.append("instr(json_extract(m.payload, '$.content'), ?) > 0")
+            clauses.append("instr(m.content, ?) > 0")
             args.append(request.keyword)
         if request.before_seq is not None:
             clauses.append("m.seq < ?")
@@ -136,7 +137,7 @@ class SQLiteMemberContext:
             args.append(request.after_seq)
         direction = "ASC" if request.after_seq is not None else "DESC"
         rows = connection.execute(
-            "SELECT json_set(m.payload, '$.sender_name', sender.name) AS payload "
+            "SELECT m.*, sender.name AS sender_name "
             "FROM messages m JOIN members sender "
             "ON sender.room_id = m.room_id AND sender.id = m.publisher_id "
             f"WHERE {' AND '.join(clauses)} "
@@ -146,7 +147,8 @@ class SQLiteMemberContext:
         if request.message_id is not None and not rows:
             raise RoomNotFoundError("消息不存在或不在查阅范围内")
         messages = [
-            ContextMessage.model_validate_json(row["payload"]) for row in rows[: request.limit]
+            ContextMessage.model_validate(message.model_dump())
+            for message in messages_from_rows(connection, room_id, rows[: request.limit])
         ]
         if direction == "DESC":
             messages.reverse()
@@ -165,22 +167,30 @@ class SQLiteMemberContext:
             return None
         query_id = str(uuid4())
         now = datetime.now(UTC).isoformat()
-        records = [
-            {"messageId": message.id, "seq": message.seq, "topicIds": message.topic_ids}
-            for message in messages
-        ]
         connection.execute(
             "INSERT INTO member_context_queries"
-            "(id, room_id, member_id, request, messages, provided_at) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
+            "(id, room_id, member_id, message_id, topic_id, keyword, before_seq, after_seq, "
+            "page_limit, provided_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 query_id,
                 room_id,
                 member_id,
-                request.model_dump_json(),
-                json.dumps(records, ensure_ascii=False),
+                request.message_id,
+                request.topic_id,
+                request.keyword,
+                request.before_seq,
+                request.after_seq,
+                request.limit,
                 now,
             ),
+        )
+        connection.executemany(
+            "INSERT INTO member_context_messages(room_id, query_id, message_id, position) "
+            "VALUES (?, ?, ?, ?)",
+            [
+                (room_id, query_id, message.id, position)
+                for position, message in enumerate(messages)
+            ],
         )
         positions = position_updates(
             subscriptions,

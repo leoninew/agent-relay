@@ -78,9 +78,8 @@ def seed_history(service: DemoRoomService) -> None:
             service.store.insert_message(connection, state.room.id, message)
 
 
-@pytest.mark.parametrize("legacy_name", [None, "旧名称"])
 def test_message_names_follow_members_across_history_context_and_delivery(
-    service: DemoRoomService, client: TestClient, legacy_name: str | None
+    service: DemoRoomService, client: TestClient
 ) -> None:
     request = CreateMessage(
         publication_id=str(uuid4()),
@@ -88,19 +87,6 @@ def test_message_names_follow_members_across_history_context_and_delivery(
         mentioned_member_ids=["backend-worker"],
     )
     message = service.post_message("agent-relay", request, member_id="frontend-worker")
-    with service.store.write() as connection:
-        assert (
-            connection.execute(
-                "SELECT json_extract(payload, '$.sender_name') FROM messages WHERE id = ?",
-                (message.id,),
-            ).fetchone()[0]
-            is None
-        )
-        if legacy_name is not None:
-            connection.execute(
-                "UPDATE messages SET payload = json_set(payload, '$.sender_name', ?) WHERE id = ?",
-                (legacy_name, message.id),
-            )
     renamed = service.update_member(
         "agent-relay", "frontend-worker", UpdateMember(name="界面开发", topic_ids=["frontend"])
     )
