@@ -305,12 +305,12 @@
 .message {
   position: relative;
   width: fit-content;
-  max-width: calc(100% + 24px);
-  margin: 0 auto 8px -12px;
+  max-width: 88%;
+  margin: 0 auto 8px 0;
   padding-bottom: 12px;
 }
 .message.is-user {
-  margin-right: -12px;
+  margin-right: 0;
   margin-left: auto;
 }
 .message-main {
@@ -318,7 +318,9 @@
   border: 1px solid hsl(var(--primary) / 0.14);
   border-radius: 8px;
   background: hsl(var(--muted) / 0.6);
-  transition: background 150ms;
+  transition:
+    background 150ms,
+    border-color 150ms;
 }
 .message.is-user .message-main {
   background: hsl(var(--primary) / 0.06);
@@ -330,11 +332,12 @@
   outline: 1px solid hsl(var(--primary));
   outline-offset: -1px;
 }
-.message.is-selected .message-main,
+.message.is-selected .message-main {
+  border-color: hsl(var(--primary) / 0.55);
+}
 .message:hover .message-main {
   background: hsl(var(--muted));
 }
-.message.is-user.is-selected .message-main,
 .message.is-user:hover .message-main {
   background: hsl(var(--primary) / 0.12);
 }
@@ -1096,15 +1099,10 @@ button.topic-chip:hover:not(:disabled) {
     padding-inline: 12px;
   }
   .message {
-    max-width: calc(100% + 16px);
-    margin-left: -8px;
+    max-width: 92%;
   }
   .message-main {
     padding: 11px 7px;
-  }
-  .message.is-user {
-    margin-right: -8px;
-    margin-left: auto;
   }
   .message-heading,
   .message-heading-main {
