@@ -5,12 +5,14 @@ from fastapi import APIRouter, Query
 from agent_relay.application.rooms.contracts import (
     ChangedMember,
     ChangedTopic,
+    ClearedMessageQueue,
     CreatedMember,
     CreateMember,
     CreateMessage,
     CreateRoom,
     CreateTopic,
     MessagePage,
+    MessageQueuePage,
     RoomEventPage,
     RoomMetadata,
     RoomSnapshot,
@@ -87,9 +89,33 @@ def list_messages(
     )
 
 
+@router.get("/{room_id}/queue")
+def get_message_queue(
+    room_id: str,
+    queries: RoomQueriesDependency,
+    topic_id: Annotated[str | None, Query()] = None,
+    member_id: Annotated[str | None, Query()] = None,
+    before_seq: Annotated[int | None, Query(ge=1)] = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> MessageQueuePage:
+    return queries.queue(
+        room_id, topic_id=topic_id, member_id=member_id, before_seq=before_seq, limit=limit
+    )
+
+
 @router.get("/{room_id}/message/{message_id}")
 def get_message(room_id: str, message_id: str, queries: RoomQueriesDependency) -> Message:
     return queries.message(room_id, message_id)
+
+
+@router.delete("/{room_id}/queue")
+def clear_message_queue(
+    room_id: str,
+    service: RoomServiceDependency,
+    topic_id: Annotated[str | None, Query()] = None,
+    member_id: Annotated[str | None, Query()] = None,
+) -> ClearedMessageQueue:
+    return service.clear_queue(room_id, topic_id=topic_id, member_id=member_id)
 
 
 @router.get("/{room_id}/event")

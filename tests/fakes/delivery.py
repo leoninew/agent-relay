@@ -15,9 +15,11 @@ class MemoryDeliveryStore:
     def claim_delivery(self) -> ClaimedDelivery | None:
         return None
 
-    def finish_delivery(self, room_id: str, delivery: Delivery) -> None:
-        if self.saved.status == "submitting":
+    def finish_delivery(self, room_id: str, delivery: Delivery) -> bool:
+        if self.saved.status == "submitting" and self.saved.deleted_at is None:
             self.saved = delivery.model_copy(deep=True)
+            return True
+        return False
 
     def claim_activation(self, session_id: str, head: QueueHead) -> bool:
         if self.activated or head.client_message_id != self.saved.client_message_id:

@@ -18,6 +18,7 @@ def delivery_record(delivery: Delivery) -> dict[str, str | None]:
         "client_message_id": delivery.client_message_id,
         "status": delivery.status,
         "updated_at": delivery.updated_at.isoformat(),
+        "deleted_at": delivery.deleted_at.isoformat() if delivery.deleted_at else None,
         "queued_at": delivery.queued_at.isoformat() if delivery.queued_at else None,
         "received_at": delivery.received_at.isoformat() if delivery.received_at else None,
         "received_item_id": delivery.received_item_id,

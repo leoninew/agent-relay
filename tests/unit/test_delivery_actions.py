@@ -79,3 +79,19 @@ def test_activation_rejection_preserves_the_saved_queue_receipt() -> None:
     assert store.saved.status == "queued" and store.saved.queued_submission_id is not None
     assert store.saved.receipt is not None and store.activated
     assert len(driver.calls) == 1
+
+
+def test_removed_submission_does_not_trigger_activation_or_overwrite_the_marker() -> None:
+    work = work_item()
+    store = MemoryDeliveryStore(work)
+    store.saved.deleted_at = datetime.now(UTC)
+    deleted_at = store.saved.deleted_at
+    driver = FakeQueueDriver()
+    driver.heads[work.delivery.target_session_id] = QueueHead(
+        "queued", work.delivery.client_message_id
+    )
+    DeliveryService(store, driver, logging.getLogger("tests.delivery.removed")).submit(work)
+    assert store.saved.deleted_at == deleted_at
+    assert store.saved.status == "submitting"
+    assert not store.activated
+    assert driver.activations == []

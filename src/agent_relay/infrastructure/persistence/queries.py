@@ -2,6 +2,7 @@ import sqlite3
 
 from agent_relay.application.rooms.contracts import (
     MessagePage,
+    MessageQueuePage,
     RoomEvent,
     RoomEventPage,
     RoomMetadata,
@@ -167,7 +168,8 @@ class SQLiteRoomQueries:
         )
         statuses = dict(
             connection.execute(
-                "SELECT status, COUNT(*) FROM deliveries WHERE room_id = ? GROUP BY status",
+                "SELECT status, COUNT(*) FROM deliveries "
+                "WHERE room_id = ? AND deleted_at IS NULL GROUP BY status",
                 (room_id,),
             ).fetchall()
         )
@@ -214,17 +216,14 @@ class SQLiteRoomQueries:
             message.deliveries = deliveries.get(message.id, [])
         return messages
 
-    def _page(
+    def message_scope_in(
         self,
         connection: sqlite3.Connection,
         room_id: str,
         *,
         topic_id: str | None,
         member_id: str | None,
-        keyword: str | None,
-        before_seq: int | None,
-        limit: int,
-    ) -> MessagePage:
+    ) -> tuple[list[str], list[str | int]]:
         clauses = ["m.room_id = ?"]
         args: list[str | int] = [room_id]
         if topic_id is not None:
@@ -254,6 +253,22 @@ class SQLiteRoomQueries:
                 "AND recipient.message_id = m.id AND recipient.member_id = ?))"
             )
             args.extend([member_id, member_id])
+        return clauses, args
+
+    def _page(
+        self,
+        connection: sqlite3.Connection,
+        room_id: str,
+        *,
+        topic_id: str | None,
+        member_id: str | None,
+        keyword: str | None,
+        before_seq: int | None,
+        limit: int,
+    ) -> MessagePage:
+        clauses, args = self.message_scope_in(
+            connection, room_id, topic_id=topic_id, member_id=member_id
+        )
         if keyword and keyword.strip():
             clauses.append("instr(m.content, ?) > 0")
             args.append(keyword.strip())
@@ -333,6 +348,48 @@ class SQLiteRoomQueries:
                 keyword=keyword,
                 before_seq=before_seq,
                 limit=limit,
+            )
+
+    def queue(
+        self,
+        room_id: str,
+        *,
+        topic_id: str | None = None,
+        member_id: str | None = None,
+        before_seq: int | None = None,
+        limit: int = 50,
+    ) -> MessageQueuePage:
+        with self.store.read() as connection:
+            self.room_in(connection, room_id)
+            clauses, args = self.message_scope_in(
+                connection, room_id, topic_id=topic_id, member_id=member_id
+            )
+            clauses.append(
+                "EXISTS (SELECT 1 FROM deliveries d WHERE d.room_id = m.room_id "
+                "AND d.message_id = m.id AND d.deleted_at IS NULL "
+                "AND d.status IN ('pending', 'submitting', 'queued'))"
+            )
+            total = connection.execute(
+                f"SELECT COUNT(*) FROM messages m WHERE {' AND '.join(clauses)}", args
+            ).fetchone()[0]
+            if before_seq is not None:
+                clauses.append("m.seq < ?")
+                args.append(before_seq)
+            rows = connection.execute(
+                "SELECT m.*, sender.name AS sender_name "
+                "FROM messages m JOIN members sender "
+                "ON sender.room_id = m.room_id AND sender.id = m.publisher_id "
+                f"WHERE {' AND '.join(clauses)} "
+                "ORDER BY m.seq DESC LIMIT ?",
+                (*args, limit + 1),
+            ).fetchall()
+            more = len(rows) > limit
+            messages = self._messages(connection, room_id, list(rows[:limit]))
+            return MessageQueuePage(
+                messages=messages,
+                total_messages=total,
+                has_more=more,
+                next_before_seq=messages[-1].seq if more else None,
             )
 
     def message(self, room_id: str, message_id: str) -> Message:

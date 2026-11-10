@@ -129,11 +129,12 @@ class SQLiteRoomStore:
         """Called only while holding the exclusive local submitter lock."""
         with self.write() as connection:
             events = connection.execute(
-                "SELECT room_id, id, message_id FROM deliveries WHERE status = 'submitting'"
+                "SELECT room_id, id, message_id FROM deliveries "
+                "WHERE status = 'submitting' AND deleted_at IS NULL"
             ).fetchall()
             cursor = connection.execute(
                 "UPDATE deliveries SET status = 'unknown', updated_at = ?, error = ? "
-                "WHERE status = 'submitting'",
+                "WHERE status = 'submitting' AND deleted_at IS NULL",
                 (datetime.now(UTC).isoformat(), "提交中断，入队结果未知；不会自动重发"),
             )
             if cursor.rowcount:
@@ -369,9 +370,11 @@ class SQLiteRoomStore:
                 "SELECT d.* FROM deliveries d JOIN members target ON target.room_id = d.room_id "
                 "AND target.id = d.target_member_id AND target.session_id = d.target_session_id "
                 "AND target.kind = 'agent' "
-                "WHERE d.status = 'pending' AND NOT EXISTS (SELECT 1 FROM deliveries active "
+                "WHERE d.status = 'pending' AND d.deleted_at IS NULL "
+                "AND NOT EXISTS (SELECT 1 FROM deliveries active "
                 "WHERE active.target_session_id = d.target_session_id "
-                "AND active.status = 'submitting') ORDER BY d.rowid LIMIT 1"
+                "AND active.status = 'submitting' AND active.deleted_at IS NULL) "
+                "ORDER BY d.rowid LIMIT 1"
             ).fetchone()
             if row is None:
                 return None
@@ -402,11 +405,11 @@ class SQLiteRoomStore:
                 delivery,
             )
 
-    def finish_delivery(self, room_id: str, delivery: Delivery) -> None:
+    def finish_delivery(self, room_id: str, delivery: Delivery) -> bool:
         with self.write() as connection:
             event = connection.execute(
                 "SELECT message_id FROM deliveries WHERE room_id = ? AND id = ? "
-                "AND status = 'submitting' "
+                "AND status = 'submitting' AND deleted_at IS NULL "
                 "AND client_message_id = ?",
                 (room_id, delivery.id, delivery.client_message_id),
             ).fetchone()
@@ -416,7 +419,7 @@ class SQLiteRoomStore:
             assignments = ", ".join(f"{field} = ?" for field in record)
             cursor = connection.execute(
                 f"UPDATE deliveries SET {assignments} "
-                "WHERE room_id = ? AND id = ? AND status = 'submitting' "
+                "WHERE room_id = ? AND id = ? AND status = 'submitting' AND deleted_at IS NULL "
                 "AND client_message_id = ?",
                 (
                     *record.values(),
@@ -430,6 +433,7 @@ class SQLiteRoomStore:
                     connection,
                     RoomChange(room_id, "delivery", delivery.id, event["message_id"]),
                 )
+            return cursor.rowcount == 1
 
     def claim_activation(self, session_id: str, head: QueueHead) -> bool:
         """A fresh submission may start a confirmed Relay FIFO head at most once."""
@@ -437,7 +441,7 @@ class SQLiteRoomStore:
             return False
         with self.write() as connection:
             criteria = (
-                "target_session_id = ? AND status = 'queued' "
+                "target_session_id = ? AND status = 'queued' AND deleted_at IS NULL "
                 "AND queued_submission_id = ? AND client_message_id = ? "
                 "AND activation_attempted_at IS NULL"
             )
@@ -462,13 +466,13 @@ class SQLiteRoomStore:
         with self.write() as connection:
             events = connection.execute(
                 "SELECT room_id, id, message_id FROM deliveries "
-                "WHERE target_session_id = ? AND status = 'queued' "
+                "WHERE target_session_id = ? AND status = 'queued' AND deleted_at IS NULL "
                 "AND client_message_id = ?",
                 (session_id, client_message_id),
             ).fetchall()
             cursor = connection.execute(
                 "UPDATE deliveries SET note = ? "
-                "WHERE target_session_id = ? AND status = 'queued' "
+                "WHERE target_session_id = ? AND status = 'queued' AND deleted_at IS NULL "
                 "AND client_message_id = ?",
                 (note, session_id, client_message_id),
             )
@@ -484,7 +488,8 @@ class SQLiteRoomStore:
             result: dict[str, set[str]] = {}
             for row in connection.execute(
                 "SELECT target_session_id, client_message_id "
-                "FROM deliveries WHERE status IN ('queued', 'unknown') ORDER BY rowid"
+                "FROM deliveries WHERE status IN ('queued', 'unknown') "
+                "AND deleted_at IS NULL ORDER BY rowid"
             ):
                 result.setdefault(row["target_session_id"], set()).add(row["client_message_id"])
             return result
@@ -495,6 +500,7 @@ class SQLiteRoomStore:
             events = connection.execute(
                 "SELECT room_id, id, message_id FROM deliveries "
                 "WHERE target_session_id = ? AND status IN ('queued', 'unknown') "
+                "AND deleted_at IS NULL "
                 "AND client_message_id = ?",
                 (session_id, received.client_message_id),
             ).fetchall()
@@ -502,6 +508,7 @@ class SQLiteRoomStore:
                 "UPDATE deliveries SET status = 'received', updated_at = ?, received_at = ?, "
                 "received_item_id = ?, received_turn_id = ?, note = NULL, error = NULL "
                 "WHERE target_session_id = ? AND status IN ('queued', 'unknown') "
+                "AND deleted_at IS NULL "
                 "AND client_message_id = ?",
                 (
                     now,

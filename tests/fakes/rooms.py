@@ -124,6 +124,16 @@ class MemoryRoomData:
     def insert_message(self, room_id: str, message: Message) -> None:
         self.messages[room_id].append(deepcopy(message))
 
+    def clear_queue(
+        self,
+        room_id: str,
+        *,
+        topic_id: str | None,
+        member_id: str | None,
+        deleted_at: datetime,
+    ) -> int:
+        raise NotImplementedError
+
     def save_observation(
         self,
         room_id: str,

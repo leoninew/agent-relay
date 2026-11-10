@@ -5,6 +5,7 @@ from uuid import uuid4
 from agent_relay.application.rooms.contracts import (
     ChangedMember,
     ChangedTopic,
+    ClearedMessageQueue,
     CreateMessage,
     CreateRoom,
     CreateTopic,
@@ -58,6 +59,16 @@ class RoomService:
         with self.store.write_rooms() as rooms:
             rooms.room(room_id)
             rooms.delete_room(room_id)
+
+    def clear_queue(
+        self, room_id: str, *, topic_id: str | None = None, member_id: str | None = None
+    ) -> ClearedMessageQueue:
+        with self.store.write_rooms() as rooms:
+            rooms.room(room_id)
+            removed = rooms.clear_queue(
+                room_id, topic_id=topic_id, member_id=member_id, deleted_at=datetime.now(UTC)
+            )
+            return ClearedMessageQueue(removed_messages=removed)
 
     def update_member(self, room_id: str, member_id: str, request: UpdateMember) -> ChangedMember:
         with self.store.write_rooms() as rooms:

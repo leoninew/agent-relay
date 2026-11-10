@@ -34,6 +34,28 @@ def test_baseline_initializes_database_and_is_repeatable(tmp_path: Path) -> None
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
 
 
+def test_queue_marker_upgrade_preserves_existing_baseline_data(tmp_path: Path) -> None:
+    path = tmp_path / "baseline.sqlite3"
+    schema = Path("migrations/sqlite/sql/0001_baseline/01_schema.up.sql").read_text()
+    with closing(sqlite3.connect(path)) as connection:
+        connection.executescript(schema)
+        connection.execute("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)")
+        connection.execute("INSERT INTO alembic_version VALUES ('baseline_20261110')")
+        connection.execute(
+            "INSERT INTO rooms(id, project_path, name, description) "
+            "VALUES ('room', '/project', 'Project', '')"
+        )
+        connection.commit()
+    run_migrations(path)
+    SQLiteRoomStore(path)
+    with closing(sqlite3.connect(path)) as connection:
+        assert connection.execute("SELECT id FROM rooms").fetchall() == [("room",)]
+        assert "deleted_at" in {
+            column[1] for column in connection.execute("PRAGMA table_info(deliveries)")
+        }
+        assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
+
+
 def test_legacy_revision_is_rejected_without_changing_data(tmp_path: Path) -> None:
     path = tmp_path / "legacy.sqlite3"
     with closing(sqlite3.connect(path)) as connection:

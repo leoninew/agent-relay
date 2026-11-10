@@ -4,6 +4,7 @@ from typing import Protocol
 
 from agent_relay.application.rooms.contracts import (
     MessagePage,
+    MessageQueuePage,
     RoomEventPage,
     RoomMetadata,
     RoomSnapshot,
@@ -29,6 +30,14 @@ class RoomData(Protocol):
     def delete_room(self, room_id: str) -> None: ...
     def save_resources(self, state: RoomState, original: RoomState) -> None: ...
     def insert_message(self, room_id: str, message: Message) -> None: ...
+    def clear_queue(
+        self,
+        room_id: str,
+        *,
+        topic_id: str | None,
+        member_id: str | None,
+        deleted_at: datetime,
+    ) -> int: ...
     def save_observation(
         self,
         room_id: str,
@@ -66,6 +75,15 @@ class RoomQueries(Protocol):
         limit: int = 50,
     ) -> MessagePage: ...
     def message(self, room_id: str, message_id: str) -> Message: ...
+    def queue(
+        self,
+        room_id: str,
+        *,
+        topic_id: str | None = None,
+        member_id: str | None = None,
+        before_seq: int | None = None,
+        limit: int = 50,
+    ) -> MessageQueuePage: ...
     def events(self, room_id: str, after_event_id: int, limit: int = 200) -> RoomEventPage: ...
 
 

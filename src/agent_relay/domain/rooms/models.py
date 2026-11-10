@@ -65,6 +65,7 @@ class Delivery(RoomModel):
     client_message_id: str
     status: Literal["pending", "submitting", "queued", "received", "rejected", "unknown"]
     updated_at: datetime
+    deleted_at: datetime | None = None
     queued_at: datetime | None = None
     received_at: datetime | None = None
     received_item_id: str | None = None

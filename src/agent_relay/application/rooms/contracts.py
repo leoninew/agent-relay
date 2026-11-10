@@ -40,6 +40,17 @@ class MessagePage(RoomModel):
     has_newer: bool
 
 
+class MessageQueuePage(RoomModel):
+    messages: list[Message]
+    total_messages: int
+    has_more: bool
+    next_before_seq: int | None
+
+
+class ClearedMessageQueue(RoomModel):
+    removed_messages: int
+
+
 class RoomMetadata(RoomModel):
     room: Room
     topics: list[Topic]

@@ -2,6 +2,7 @@ import sqlite3
 from datetime import datetime
 
 from agent_relay.application.rooms.contracts import RoomMetadata
+from agent_relay.domain.rooms.events import RoomChange
 from agent_relay.domain.rooms.models import Member, Message, Room
 from agent_relay.domain.rooms.state import RoomState
 from agent_relay.infrastructure.persistence.queries import SQLiteRoomQueries
@@ -77,6 +78,36 @@ class SQLiteRoomData:
 
     def insert_message(self, room_id: str, message: Message) -> None:
         self.store.insert_message(self.connection, room_id, message)
+
+    def clear_queue(
+        self,
+        room_id: str,
+        *,
+        topic_id: str | None,
+        member_id: str | None,
+        deleted_at: datetime,
+    ) -> int:
+        clauses, args = self.queries.message_scope_in(
+            self.connection, room_id, topic_id=topic_id, member_id=member_id
+        )
+        criteria = (
+            "room_id = ? AND deleted_at IS NULL "
+            "AND status IN ('pending', 'submitting', 'queued') "
+            f"AND message_id IN (SELECT m.id FROM messages m WHERE {' AND '.join(clauses)})"
+        )
+        parameters = (room_id, *args)
+        events = self.connection.execute(
+            f"SELECT id, message_id FROM deliveries WHERE {criteria}", parameters
+        ).fetchall()
+        self.connection.execute(
+            f"UPDATE deliveries SET deleted_at = ?, updated_at = ? WHERE {criteria}",
+            (deleted_at.isoformat(), deleted_at.isoformat(), *parameters),
+        )
+        for event in events:
+            self.store.record_event(
+                self.connection, RoomChange(room_id, "delivery", event["id"], event["message_id"])
+            )
+        return len({event["message_id"] for event in events})
 
     def save_observation(
         self,

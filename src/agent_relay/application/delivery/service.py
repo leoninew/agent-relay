@@ -61,8 +61,8 @@ class DeliveryService:
             delivery.error = "无法确认入队结果；不会自动重发"
             self.logger.exception("Queue result unknown delivery=%s", delivery.id)
         delivery.updated_at = datetime.now(UTC)
-        self.store.finish_delivery(work.room_id, delivery)
-        if delivery.status == "queued":
+        saved = self.store.finish_delivery(work.room_id, delivery)
+        if saved and delivery.status == "queued":
             self.activate_after_submission(delivery.target_session_id, delivery.client_message_id)
 
     def activate_after_submission(self, session_id: str, client_message_id: str) -> None:
