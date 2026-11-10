@@ -9,14 +9,30 @@ describe("TopicSidebar", () => {
   beforeEach(() => localStorage.clear());
   afterEach(cleanup);
 
-  it("selects topics", async () => {
+  it("defaults to all topics and emits explicit selection changes", async () => {
     const snapshot = roomFixture();
     const topic = snapshot.topics[1];
-    const { emitted } = render(TopicSidebar, { props: { snapshot, busy: false } });
+    const { emitted, rerender } = render(TopicSidebar, { props: { snapshot, busy: false } });
+    const allTopics = screen.getByRole("button", { name: "筛选话题：全部话题" });
+    const frontend = screen.getByRole("button", { name: "筛选话题：前端" });
 
     expect(screen.getByRole("heading", { level: 2, name: "话题" })).toBeTruthy();
-    await fireEvent.click(screen.getByRole("button", { name: "筛选话题：前端" }));
-    expect(emitted().select).toEqual([[topic.id]]);
+    expect(screen.getAllByRole("button", { name: /^筛选话题：/ })[0]).toBe(allTopics);
+    expect(allTopics.getAttribute("aria-pressed")).toBe("true");
+    expect(frontend.getAttribute("aria-pressed")).toBe("false");
+    expect(allTopics.closest(".sidebar-sortable-list")).toBeNull();
+    expect(screen.queryByRole("button", { name: "调整话题顺序：全部话题" })).toBeNull();
+    await fireEvent.click(allTopics);
+    await fireEvent.click(frontend);
+    await rerender({ selectedTopicId: topic.id });
+    expect(allTopics.getAttribute("aria-pressed")).toBe("false");
+    expect(frontend.getAttribute("aria-pressed")).toBe("true");
+    await fireEvent.click(frontend);
+    await fireEvent.click(allTopics);
+    await rerender({ selectedTopicId: undefined });
+    expect(allTopics.getAttribute("aria-pressed")).toBe("true");
+    expect(frontend.getAttribute("aria-pressed")).toBe("false");
+    expect(emitted().select).toEqual([[undefined], [topic.id], [topic.id], [undefined]]);
   });
 
   it("reorders topics and restores the order after reopening", async () => {
@@ -30,7 +46,7 @@ describe("TopicSidebar", () => {
       screen
         .getAllByRole("button", { name: /^筛选话题：/ })
         .map((button) => button.getAttribute("aria-label")),
-    ).toEqual(["筛选话题：前端", "筛选话题：汇总", "筛选话题：后端"]);
+    ).toEqual(["筛选话题：全部话题", "筛选话题：前端", "筛选话题：汇总", "筛选话题：后端"]);
     expect(emitted().select).toBeUndefined();
 
     unmount();
@@ -39,6 +55,6 @@ describe("TopicSidebar", () => {
       screen
         .getAllByRole("button", { name: /^筛选话题：/ })
         .map((button) => button.getAttribute("aria-label")),
-    ).toEqual(["筛选话题：前端", "筛选话题：汇总", "筛选话题：后端"]);
+    ).toEqual(["筛选话题：全部话题", "筛选话题：前端", "筛选话题：汇总", "筛选话题：后端"]);
   });
 });

@@ -4,12 +4,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { apiClient } from "@/services/api";
 import {
   addRoomMember,
+  clearMessageQueue,
   deleteRoom,
   fetchRoom,
   fetchRoomEvents,
   fetchRoomMessage,
   fetchRoomMessages,
   fetchRoomMetadata,
+  fetchMessageQueue,
   fetchRoomSessions,
   fetchRooms,
   postRoomMessage,
@@ -118,6 +120,54 @@ describe("room API", () => {
         method: "post",
         url: "/api/room/agent-relay/message",
         data: JSON.stringify(request),
+      }),
+    );
+  });
+
+  it("loads a detail queue with resource filters and an older-message cursor", async () => {
+    const signal = new AbortController().signal;
+    await fetchMessageQueue(
+      "room/one",
+      { topicId: "frontend", memberId: "test-worker", beforeSeq: 50, limit: 25 },
+      signal,
+    );
+    expect(adapterMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        method: "get",
+        url: "/api/room/room%2Fone/queue",
+        params: {
+          topic_id: "frontend",
+          member_id: "test-worker",
+          before_seq: 50,
+          limit: 25,
+        },
+        signal,
+      }),
+    );
+    await fetchMessageQueue("room/one");
+    expect(adapterMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        params: { topic_id: undefined, member_id: undefined, before_seq: undefined, limit: 50 },
+      }),
+    );
+  });
+
+  it("clears the entire resource queue without a page cursor", async () => {
+    adapterMock.mockImplementationOnce(async (config: InternalAxiosRequestConfig) => ({
+      config,
+      data: { removedMessages: 80 },
+      headers: { "content-type": "application/json" },
+      status: 200,
+      statusText: "",
+    }));
+    await expect(
+      clearMessageQueue("room/one", { topicId: "frontend", memberId: "test-worker" }),
+    ).resolves.toEqual({ removedMessages: 80 });
+    expect(adapterMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        method: "delete",
+        url: "/api/room/room%2Fone/queue",
+        params: { topic_id: "frontend", member_id: "test-worker" },
       }),
     );
   });

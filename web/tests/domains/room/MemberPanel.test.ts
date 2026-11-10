@@ -9,25 +9,35 @@ describe("MemberPanel", () => {
   beforeEach(() => localStorage.clear());
   afterEach(cleanup);
 
-  it("pins the fixed user and reflects filtering selection and cancellation", async () => {
+  it("defaults to all members and keeps explicit member selections", async () => {
     const snapshot = roomFixture();
     const { emitted, rerender } = render(MemberPanel, {
-      props: { snapshot, busy: false, selectedMemberId: "user" },
+      props: { snapshot, busy: false },
     });
+    const allMembers = screen.getByRole("button", { name: "筛选成员：全部成员" });
     const user = screen.getByRole("button", { name: "筛选成员：你" });
-    expect(screen.getAllByRole("button", { name: /^筛选成员：/ })[0]).toBe(user);
+    expect(screen.getAllByRole("button", { name: /^筛选成员：/ }).slice(0, 2)).toEqual([
+      allMembers,
+      user,
+    ]);
+    expect(allMembers.getAttribute("aria-pressed")).toBe("true");
+    expect(user.getAttribute("aria-pressed")).toBe("false");
+    expect(allMembers.closest(".sidebar-sortable-list")).toBeNull();
+    expect(screen.queryByRole("button", { name: "调整成员顺序：全部成员" })).toBeNull();
     expect(user.textContent).not.toContain("空闲");
-    expect(user.getAttribute("aria-pressed")).toBe("true");
     expect(screen.queryByRole("button", { name: "调整成员顺序：你" })).toBeNull();
     expect(screen.queryByText("管理员")).toBeNull();
+    await fireEvent.click(allMembers);
     await fireEvent.click(user);
-    expect(emitted().select).toEqual([["user"]]);
-    await rerender({ selectedMemberId: undefined });
-    expect(user.getAttribute("aria-pressed")).toBe("false");
-    await fireEvent.click(user);
-    expect(emitted().select).toEqual([["user"], ["user"]]);
     await rerender({ selectedMemberId: "user" });
+    expect(allMembers.getAttribute("aria-pressed")).toBe("false");
     expect(user.getAttribute("aria-pressed")).toBe("true");
+    await fireEvent.click(user);
+    await fireEvent.click(allMembers);
+    await rerender({ selectedMemberId: undefined });
+    expect(allMembers.getAttribute("aria-pressed")).toBe("true");
+    expect(user.getAttribute("aria-pressed")).toBe("false");
+    expect(emitted().select).toEqual([[undefined], ["user"], ["user"], [undefined]]);
   });
 
   it("lists active senders independently of subscriptions", async () => {
@@ -67,7 +77,12 @@ describe("MemberPanel", () => {
       screen
         .getAllByRole("button", { name: /^筛选成员：/ })
         .map((button) => button.getAttribute("aria-label")),
-    ).toEqual(["筛选成员：你", "筛选成员：后端更新", "筛选成员：前端 Worker"]);
+    ).toEqual([
+      "筛选成员：全部成员",
+      "筛选成员：你",
+      "筛选成员：后端更新",
+      "筛选成员：前端 Worker",
+    ]);
     expect(screen.getByRole("button", { name: "筛选成员：后端更新" }).textContent).toContain(
       "离线",
     );

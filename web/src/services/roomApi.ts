@@ -29,6 +29,7 @@ export type Delivery = {
   targetSessionId: string;
   clientMessageId: string;
   status: "pending" | "submitting" | "queued" | "received" | "rejected" | "unknown";
+  deletedAt?: string | null;
   updatedAt: string;
   queuedAt: string | null;
   receivedAt: string | null;
@@ -90,6 +91,24 @@ export type MessagePage = {
 };
 
 export type RoomSnapshot = RoomMetadata & MessagePage;
+export type MessageQueuePage = {
+  messages: RoomMessage[];
+  totalMessages: number;
+  hasMore: boolean;
+  nextBeforeSeq: number | null;
+};
+export type MessageQueueScope = {
+  topicId?: string;
+  memberId?: string;
+};
+export type ClearMessageQueueResult = {
+  removedMessages: number;
+};
+export type MessageQueueQuery = MessageQueueScope & {
+  beforeSeq?: number;
+  limit?: number;
+};
+
 export type MessageQuery = {
   topicId?: string;
   memberId?: string;
@@ -205,6 +224,37 @@ export async function fetchRoomMessage(
   const { data } = await apiClient.get<RoomMessage>(
     `/api/room/${encodeURIComponent(roomId)}/message/${encodeURIComponent(messageId)}`,
     { signal },
+  );
+  return data;
+}
+
+export async function fetchMessageQueue(
+  roomId: string,
+  query: MessageQueueQuery = {},
+  signal?: AbortSignal,
+): Promise<MessageQueuePage> {
+  const { data } = await apiClient.get<MessageQueuePage>(
+    `/api/room/${encodeURIComponent(roomId)}/queue`,
+    {
+      params: {
+        topic_id: query.topicId,
+        member_id: query.memberId,
+        before_seq: query.beforeSeq,
+        limit: query.limit ?? 50,
+      },
+      signal,
+    },
+  );
+  return data;
+}
+
+export async function clearMessageQueue(
+  roomId: string,
+  scope: MessageQueueScope = {},
+): Promise<ClearMessageQueueResult> {
+  const { data } = await apiClient.delete<ClearMessageQueueResult>(
+    `/api/room/${encodeURIComponent(roomId)}/queue`,
+    { params: { topic_id: scope.topicId, member_id: scope.memberId } },
   );
   return data;
 }

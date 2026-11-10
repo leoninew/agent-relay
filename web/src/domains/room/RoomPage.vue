@@ -17,19 +17,19 @@
       <AppButton @click="roomsStore.createOpen = true"> 新建聊天室 </AppButton>
     </template>
   </div>
-  <div v-else class="room-workbench" :class="{ 'has-hidden-details': !detailsOpen }">
+  <div v-else class="room-workbench">
     <TopicSidebar
       :snapshot="snapshot"
       :busy="sending || saving"
       :selected-topic-id="selectedTopicId"
-      @select="selectTopic"
+      @select="selectSidebar('topic', $event)"
       @create-topic="openSetup('topic')"
     >
       <MemberPanel
         :snapshot="snapshot"
         :busy="sending || saving"
         :selected-member-id="selectedMemberId"
-        @select="selectMember"
+        @select="selectSidebar('member', $event)"
         @add-member="openSetup('member')"
       />
     </TopicSidebar>
@@ -39,6 +39,14 @@
         <header class="room-panel-heading conversation-heading">
           <div class="conversation-title">
             <h2 class="room-panel-title">聊天室</h2>
+            <AppButton
+              variant="plain"
+              class="details-toggle"
+              :aria-expanded="drawerOpen"
+              @click="roomPanel.openDrawer"
+            >
+              详情
+            </AppButton>
           </div>
           <form
             class="conversation-search"
@@ -86,7 +94,7 @@
           :sessions="snapshot.sessions"
           :topics="snapshot.topics"
           :selected-message-id="detailMessage?.id"
-          :details-open="detailsOpen"
+          details-open
           :loading="loading"
           :searching="Boolean(keyword)"
           @load-older="loadOlder"
@@ -96,7 +104,6 @@
           @select="selectMessage"
           @add-topic="composer?.addTopic($event)"
           @add-member="composer?.addMember($event)"
-          @show-details="detailsOpen = true"
         />
       </div>
       <RoomComposer
@@ -120,21 +127,40 @@
       </div>
     </section>
 
-    <MessageDetails
-      v-if="detailsOpen"
-      :message="detailMessage"
-      :topic="detailTopic"
-      :member="detailMember"
-      :topics="snapshot.topics"
-      :members="snapshot.members"
-      :sessions="snapshot.sessions"
-      :busy="sending || saving"
-      @close="detailsOpen = false"
-      @edit-topic="editTopic"
-      @delete-topic="openDelete({ kind: 'topic', node: $event })"
-      @edit-member="editMember"
-      @delete-member="openDelete({ kind: 'member', node: $event })"
-    />
+    <div class="room-context-panel" :class="{ 'is-open': drawerOpen }">
+      <MessageDetails
+        :message="detailMessage"
+        :topic="detailTopic"
+        :member="detailMember"
+        :topics="snapshot.topics"
+        :members="snapshot.members"
+        :sessions="snapshot.sessions"
+        :busy="sending || saving"
+        @close="roomPanel.closeDetails"
+        @collapse="drawerOpen = false"
+        @edit-topic="editTopic"
+        @delete-topic="openDelete({ kind: 'topic', node: $event })"
+        @edit-member="editMember"
+        @delete-member="openDelete({ kind: 'member', node: $event })"
+      >
+        <template #queue>
+          <MessageQueue
+            :messages="queueMessages"
+            :total-messages="queueTotal"
+            :has-more="queueHasMore"
+            :loading="queueLoading"
+            :loading-more="queueLoadingMore"
+            :clearing="queueClearing"
+            :error="queueError"
+            :clear-error="queueClearError"
+            @select="selectQueueMessage"
+            @refresh="messageQueue.refresh"
+            @clear="messageQueue.clear"
+            @load-more="messageQueue.loadMore"
+          />
+        </template>
+      </MessageDetails>
+    </div>
   </div>
   <RoomSetupDialog
     :mode="setupMode"
@@ -182,12 +208,15 @@
   import MemberEditDialog from "@/domains/room/MemberEditDialog.vue";
   import MemberPanel from "@/domains/room/MemberPanel.vue";
   import MessageDetails from "@/domains/room/MessageDetails.vue";
+  import MessageQueue from "@/domains/room/MessageQueue.vue";
   import MessageTimeline from "@/domains/room/MessageTimeline.vue";
   import RoomComposer from "@/domains/room/RoomComposer.vue";
   import RoomDeleteDialog from "@/domains/room/RoomDeleteDialog.vue";
   import type { DeleteTarget } from "@/domains/room/RoomDeleteDialog.vue";
   import RoomSetupDialog from "@/domains/room/RoomSetupDialog.vue";
   import TopicSidebar from "@/domains/room/TopicSidebar.vue";
+  import { useMessageQueue } from "@/domains/room/useMessageQueue";
+  import { useRoomPanel } from "@/domains/room/useRoomPanel";
   import { ApiClientError, describeApiError } from "@/services/api";
   import {
     addRoomMember,
@@ -224,8 +253,6 @@
 
   import "./room.css";
 
-  type DetailTarget =
-    { kind: "message" } | { kind: "topic"; id: string } | { kind: "member"; id: string };
   type ResourceDeleteTarget = Exclude<DeleteTarget, { kind: "room" }>;
 
   const props = defineProps<{ roomId?: string }>();
@@ -236,8 +263,6 @@
   const snapshot = computed(() =>
     currentRoomId.value ? roomsStore.snapshots[currentRoomId.value] : undefined,
   );
-  const selectedTopicId = ref<string>();
-  const selectedMemberId = ref<string>();
   const searchText = ref("");
   const keyword = ref("");
   const activeTopics = computed(
@@ -247,28 +272,41 @@
     () => snapshot.value?.members.filter((member) => !member.deletedAt) ?? [],
   );
   const visibleMessages = computed(() => snapshot.value?.messages ?? []);
-  const selectedMessageId = ref<string>();
-  const selectedMessage = computed(() => {
-    const messages = visibleMessages.value;
-    return messages.find((message) => message.id === selectedMessageId.value) ?? messages.at(-1);
-  });
-  const detailTarget = ref<DetailTarget>({ kind: "message" });
-  const detailMessage = computed(() =>
-    detailTarget.value.kind === "message" ? selectedMessage.value : undefined,
+  const roomPanel = useRoomPanel(() => visibleMessages.value);
+  const {
+    selectedTopicId,
+    selectedMemberId,
+    target: detailTarget,
+    message: detailMessage,
+    drawerOpen,
+    queueScope,
+  } = roomPanel;
+  const messageQueue = useMessageQueue(
+    () => currentRoomId.value,
+    () => queueScope.value,
   );
+  const {
+    messages: queueMessages,
+    totalMessages: queueTotal,
+    hasMore: queueHasMore,
+    loading: queueLoading,
+    loadingMore: queueLoadingMore,
+    clearing: queueClearing,
+    error: queueError,
+    clearError: queueClearError,
+  } = messageQueue;
   const detailTopic = computed(() => {
     const target = detailTarget.value;
-    return target.kind === "topic"
+    return target?.kind === "topic"
       ? activeTopics.value.find((topic) => topic.id === target.id)
       : undefined;
   });
   const detailMember = computed(() => {
     const target = detailTarget.value;
-    return target.kind === "member"
+    return target?.kind === "member"
       ? activeMembers.value.find((member) => member.id === target.id)
       : undefined;
   });
-  const detailsOpen = ref(true);
   const loading = ref(true);
   const refreshingSessions = ref(false);
   const loadingOlder = ref(false);
@@ -365,12 +403,10 @@
       const wasAtEnd = timeline.value?.isAtEnd();
       const previousSeq = current.messages.at(-1)?.seq ?? 0;
       roomsStore.applyMessages(roomId, messages, filters());
+      roomPanel.syncMessages(messages);
       current.eventId = page.nextEventId;
       const newest = current.messages.at(-1);
       if (wasAtEnd && newest && newest.seq > previousSeq) {
-        if (detailTarget.value.kind === "message" && detailsOpen.value) {
-          selectedMessageId.value = newest.id;
-        }
         await nextTick();
         if (version === loadVersion) timeline.value?.scrollToEnd();
       }
@@ -380,13 +416,13 @@
   function clearDeletedFilters(): boolean {
     let changed = false;
     const target = detailTarget.value;
-    if (target.kind === "topic" && !activeTopics.value.some((topic) => topic.id === target.id)) {
-      detailTarget.value = { kind: "message" };
+    if (target?.kind === "topic" && !activeTopics.value.some((topic) => topic.id === target.id)) {
+      roomPanel.closeDetails();
     } else if (
-      target.kind === "member" &&
+      target?.kind === "member" &&
       !activeMembers.value.some((member) => member.id === target.id)
     ) {
-      detailTarget.value = { kind: "message" };
+      roomPanel.closeDetails();
     }
     if (
       selectedTopicId.value &&
@@ -415,8 +451,10 @@
       const result = await fetchRoom(roomId, { ...filters(), beforeSeq }, queryController?.signal);
       if (version !== loadVersion) return false;
       roomsStore.sync(result);
-      selectedMessageId.value = selectedMessage.value?.id;
+      roomPanel.syncMessages(result.messages);
       if (clearDeletedFilters()) return await loadRoom();
+      await refreshDetailMessage(roomId, version);
+      if (version !== loadVersion) return false;
       startEvents(roomId, version);
       return true;
     } catch (caught) {
@@ -427,6 +465,19 @@
       return false;
     } finally {
       if (version === loadVersion) loading.value = false;
+    }
+  }
+
+  async function refreshDetailMessage(roomId: string, version: number): Promise<void> {
+    const target = detailTarget.value;
+    if (target?.kind !== "message") return;
+    const selected = target.message;
+    try {
+      const message = await fetchRoomMessage(roomId, selected.id, queryController?.signal);
+      if (version === loadVersion) roomPanel.syncMessages([message]);
+    } catch (caught) {
+      if (version === loadVersion)
+        toasts.error(describeApiError(caught, "消息详情更新失败，请重新打开。"));
     }
   }
 
@@ -493,11 +544,8 @@
     sessions.value = [];
     sessionsLoading.value = false;
     sessionsError.value = null;
-    selectedTopicId.value = undefined;
-    selectedMemberId.value = undefined;
-    selectedMessageId.value = undefined;
-    detailTarget.value = { kind: "message" };
-    detailsOpen.value = true;
+    roomPanel.reset();
+    messageQueue.reset();
     replyTo.value = undefined;
     sendError.value = null;
     const saved = sessionStorage.getItem(`relay-publication:${roomId}`);
@@ -513,30 +561,26 @@
     else await initialize();
   }
 
-  async function selectTopic(topicId: string): Promise<void> {
-    selectedTopicId.value = selectedTopicId.value === topicId ? undefined : topicId;
-    detailTarget.value = { kind: "topic", id: topicId };
-    detailsOpen.value = true;
-    composer.value?.selectTopic(selectedTopicId.value);
-    await loadRoom();
-    await nextTick();
-    timeline.value?.scrollToEnd();
-  }
-
-  async function selectMember(memberId: string): Promise<void> {
-    selectedMemberId.value = selectedMemberId.value === memberId ? undefined : memberId;
-    detailTarget.value = { kind: "member", id: memberId };
-    detailsOpen.value = true;
-    composer.value?.selectMember(selectedMemberId.value);
-    await loadRoom();
-    await nextTick();
-    timeline.value?.scrollToEnd();
+  async function selectSidebar(
+    kind: "topic" | "member",
+    resourceId: string | undefined,
+  ): Promise<void> {
+    if (!roomPanel.selectSidebar(kind, resourceId)) return;
+    if (kind === "topic") composer.value?.selectTopic(resourceId);
+    else composer.value?.selectMember(resourceId);
+    await loadLatest();
   }
 
   function selectMessage(messageId: string): void {
-    selectedMessageId.value = messageId;
-    detailTarget.value = { kind: "message" };
-    detailsOpen.value = true;
+    const message =
+      visibleMessages.value.find((message) => message.id === messageId) ??
+      queueMessages.value.find((message) => message.id === messageId);
+    if (message) roomPanel.showMessage(message);
+  }
+
+  function selectQueueMessage(messageId: string): void {
+    selectMessage(messageId);
+    timeline.value?.scrollToMessage(messageId);
   }
 
   function quoteMessage(message: RoomMessage): void {
@@ -594,9 +638,7 @@
       sending.value = false;
       return;
     }
-    selectedMessageId.value = sentMessage.id;
-    detailTarget.value = { kind: "message" };
-    detailsOpen.value = true;
+    roomPanel.showMessage(sentMessage);
     pendingPublication.value = undefined;
     composer.value?.reset();
     replyTo.value = undefined;
@@ -781,9 +823,7 @@
         return;
       }
     }
-    selectedMessageId.value = messageId;
-    detailTarget.value = { kind: "message" };
-    detailsOpen.value = true;
+    selectMessage(messageId);
     await nextTick();
     timeline.value?.scrollToMessage(messageId);
   }
@@ -791,6 +831,7 @@
   onBeforeUnmount(() => {
     clearTimeout(searchTimer);
     cancelQueries();
+    messageQueue.cancel();
     sessionsVersion++;
   });
 
@@ -801,12 +842,28 @@
   });
 
   watch(
+    [
+      currentRoomId,
+      () => queueScope.value.topicId,
+      () => queueScope.value.memberId,
+      () => snapshot.value?.eventId,
+    ],
+    ([roomId, topicId, memberId], [previousRoomId, previousTopicId, previousMemberId]) => {
+      if (roomId !== previousRoomId || topicId !== previousTopicId || memberId !== previousMemberId)
+        messageQueue.reset();
+      if (roomId && snapshot.value) void messageQueue.refresh();
+    },
+  );
+
+  watch(
     () => props.roomId,
     (roomId) => {
       if (roomId) {
         void openRoom(roomId);
       } else {
         cancelQueries();
+        messageQueue.reset();
+        roomPanel.reset();
         sessionsVersion++;
         currentRoomId.value = undefined;
         pendingPublication.value = undefined;

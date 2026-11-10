@@ -3,12 +3,39 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import MessageDetails from "@/domains/room/MessageDetails.vue";
 import type { RoomMessage } from "@/services/roomApi";
-import { formatMinute } from "@/utils/time";
 
 import { roomFixture } from "../../fixtures/room";
 
 describe("MessageDetails", () => {
   afterEach(cleanup);
+
+  it("keeps the queue inside each detail view and exposes the drawer collapse action", async () => {
+    const room = roomFixture();
+    const { container, emitted, rerender } = render(MessageDetails, {
+      props: {
+        message: room.messages[0],
+        topics: room.topics,
+        members: room.members,
+        sessions: room.sessions,
+      },
+      slots: { queue: '<section aria-label="队列">队列内容</section>' },
+    });
+    const queue = screen.getByRole("region", { name: "队列" });
+    expect(container.querySelector(".message-details-content")?.contains(queue)).toBe(true);
+    await rerender({ message: undefined, topic: room.topics[1] });
+    expect(
+      within(screen.getByRole("complementary", { name: "话题详情" })).getByText("队列内容"),
+    ).toBeTruthy();
+    await rerender({ topic: undefined, member: room.members[0] });
+    expect(
+      within(screen.getByRole("complementary", { name: "成员详情" })).getByText("队列内容"),
+    ).toBeTruthy();
+    await rerender({ member: undefined });
+    expect(screen.getByText("暂无详情")).toBeTruthy();
+    expect(screen.getByText("队列内容")).toBeTruthy();
+    await fireEvent.click(screen.getByRole("button", { name: "收起右侧面板" }));
+    expect(emitted().collapse).toEqual([[]]);
+  });
 
   it("manages the displayed topic and disables actions while saving", async () => {
     const room = roomFixture();
@@ -48,8 +75,10 @@ describe("MessageDetails", () => {
     expect(emitted().editMember).toEqual([[member]]);
     expect(emitted().deleteMember).toEqual([[member]]);
     const memberIdentity = screen.getByText(member.name).closest(".detail-object-identity");
+    const subscribedTopic = screen.getByText("# 前端");
     expect(memberIdentity?.classList.contains("is-active")).toBe(false);
     expect(memberIdentity?.querySelector(".member-identity")).not.toBeNull();
+    expect(subscribedTopic.classList.contains("topic-chip")).toBe(false);
     expect(memberIdentity?.querySelector(".sidebar-member-status")?.textContent?.trim()).toBe(
       "忙碌",
     );
@@ -62,16 +91,13 @@ describe("MessageDetails", () => {
     expect(screen.queryByRole("button", { name: /^删除成员/ })).toBeNull();
   });
 
-  it("shows queue and receipt timestamps for recipients", () => {
+  it("shows one stage column for the recorded recipients", () => {
     const room = roomFixture();
-    const queuedAt = "2026-11-06T10:02:00Z";
     const message: RoomMessage = {
       ...room.messages[1],
       topicIds: ["frontend", "backend"],
       recipientIds: ["frontend-worker", "test-worker"],
-      deliveries: room.messages[0].deliveries.map((delivery) =>
-        delivery.targetMemberId === "test-worker" ? { ...delivery, queuedAt } : delivery,
-      ),
+      deliveries: room.messages[0].deliveries,
     };
     render(MessageDetails, {
       props: { message, topics: room.topics, members: room.members, sessions: room.sessions },
@@ -79,24 +105,16 @@ describe("MessageDetails", () => {
 
     expect(screen.getByText("# 前端")).toBeTruthy();
     expect(screen.getByText("# 后端")).toBeTruthy();
-    const mentionedMembers = within(screen.getByRole("list", { name: "成员" }));
-    expect(mentionedMembers.getAllByRole("listitem")).toHaveLength(1);
-    expect(mentionedMembers.queryByText("前端 Worker")).toBeNull();
-    expect(mentionedMembers.getByText("测试 Worker")).toBeTruthy();
-    const deliveries = within(screen.getByRole("table", { name: "分发状态" }));
+    expect(screen.getAllByRole("heading", { name: "成员", level: 3 })).toHaveLength(1);
+    const deliveries = within(screen.getByRole("table", { name: "成员" }));
     expect(deliveries.getAllByRole("columnheader").map((header) => header.textContent)).toEqual([
-      "成员",
-      "入队",
-      "接收",
+      "名称",
+      "状态",
     ]);
     const submitting = within(deliveries.getByRole("row", { name: /前端 Worker/ }));
-    expect(submitting.getAllByRole("cell")[1].textContent?.trim()).toBe("—");
+    expect(submitting.getAllByRole("cell")[1].textContent?.trim()).toBe("入队中");
     const enqueued = within(deliveries.getByRole("row", { name: /测试 Worker/ }));
-    const enqueuedCells = enqueued.getAllByRole("cell");
-    expect(enqueuedCells[1].querySelector("time")?.getAttribute("datetime")).toBe(queuedAt);
-    expect(enqueuedCells[1].textContent?.trim()).toBe(formatMinute(queuedAt));
-    expect(enqueuedCells[2].textContent?.trim()).toBe("—");
-    expect(screen.getByText(message.content)).toBeTruthy();
+    expect(enqueued.getAllByRole("cell")[1].textContent?.trim()).toBe("接收中");
   });
 
   it("shows topic-free messages using saved delivery targets rather than current subscriptions", () => {
@@ -113,20 +131,16 @@ describe("MessageDetails", () => {
     });
 
     expect(screen.getByText("未选择话题")).toBeTruthy();
-    const deliveries = within(screen.getByRole("table", { name: "分发状态" }));
+    const deliveries = within(screen.getByRole("table", { name: "成员" }));
     expect(deliveries.getByRole("row", { name: /前端 Worker/ })).toBeTruthy();
     expect(deliveries.queryByRole("row", { name: /测试 Worker/ })).toBeNull();
   });
 
-  it("shows the recorded queue and receipt times separately", () => {
+  it("shows received after receipt confirmation", () => {
     const room = roomFixture();
-    const queuedAt = "2026-11-06T10:03:00Z";
-    const receivedAt = "2026-11-06T10:03:04Z";
     const delivery = {
       ...room.messages[0].deliveries[0],
       status: "received" as const,
-      queuedAt,
-      receivedAt,
     };
     const message = {
       ...room.messages[0],
@@ -137,17 +151,37 @@ describe("MessageDetails", () => {
       props: { message, topics: room.topics, members: room.members, sessions: room.sessions },
     });
     const recipient = within(screen.getByRole("row", { name: /前端 Worker/ }));
-    const cells = recipient.getAllByRole("cell");
-    expect(cells[1].querySelector("time")?.getAttribute("datetime")).toBe(queuedAt);
-    expect(cells[2].querySelector("time")?.getAttribute("datetime")).toBe(receivedAt);
-    expect(cells[1].textContent?.trim()).toBe(formatMinute(queuedAt));
-    expect(cells[2].textContent?.trim()).toBe(formatMinute(receivedAt));
+    expect(recipient.getAllByRole("cell")[1].textContent?.trim()).toBe("已接收");
+  });
+
+  it("does not present manually removed deliveries as active", () => {
+    const room = roomFixture();
+    const delivery = {
+      ...room.messages[0].deliveries[0],
+      status: "queued" as const,
+      deletedAt: "2026-11-06T10:04:00Z",
+    };
+    render(MessageDetails, {
+      props: {
+        message: {
+          ...room.messages[0],
+          recipientIds: [delivery.targetMemberId],
+          deliveries: [delivery],
+        },
+        topics: room.topics,
+        members: room.members,
+        sessions: room.sessions,
+      },
+    });
+    const recipient = within(screen.getByRole("row", { name: /前端 Worker/ }));
+    expect(screen.queryByText("人为删除")).toBeNull();
+    expect(recipient.getAllByRole("cell")[1].textContent?.trim()).toBe("-");
   });
 
   it.each([
-    { status: "pending", error: null },
     { status: "rejected", error: "队列拒绝接收" },
-  ] as const)("does not invent timestamps for $status deliveries", ({ status, error }) => {
+    { status: "unknown", error: "入队结果待确认" },
+  ] as const)("keeps the failure explanation for $status deliveries", ({ status, error }) => {
     const room = roomFixture();
     const delivery = { ...room.messages[0].deliveries[0], status, error };
     const message = {
@@ -160,13 +194,11 @@ describe("MessageDetails", () => {
     });
 
     const recipient = within(screen.getByRole("row", { name: /前端 Worker/ }));
-    const cells = recipient.getAllByRole("cell");
-    expect(cells[1].querySelector(".dispatch-time")?.textContent?.trim()).toBe("—");
-    expect(cells[2].textContent?.trim()).toBe("—");
-    if (error) expect(within(cells[1]).getByText(error)).toBeTruthy();
+    expect(recipient.getByText("入队中")).toBeTruthy();
+    expect(recipient.getByText(error)).toBeTruthy();
   });
 
-  it("shows the user as a member without inventing an agent delivery", () => {
+  it("omits the Agent delivery table for messages addressed only to the room user", () => {
     const room = roomFixture();
     const message: RoomMessage = {
       ...room.messages[1],
@@ -179,9 +211,7 @@ describe("MessageDetails", () => {
       props: { message, topics: room.topics, members: room.members, sessions: room.sessions },
     });
 
-    expect(within(screen.getByRole("list", { name: "成员" })).getByText("你")).toBeTruthy();
-    expect(screen.queryByText("分发状态")).toBeNull();
-    expect(screen.queryByText("暂无分发")).toBeNull();
+    expect(screen.queryByRole("table", { name: "成员" })).toBeNull();
     expect(screen.getByText("未选择话题")).toBeTruthy();
   });
 });

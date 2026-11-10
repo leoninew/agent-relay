@@ -153,7 +153,6 @@ describe("MessageTimeline history", () => {
       true,
     );
     expect(emitted().select).toBeUndefined();
-    expect(emitted().showDetails).toBeUndefined();
   });
 
   it("identifies messages addressed to the room user", () => {
@@ -186,7 +185,7 @@ describe("MessageTimeline history", () => {
     expect(userRecipientMessage.querySelector(".message-delivery-summary")).toBeNull();
   });
 
-  it("completes each delivery label and tone only when all deliveries reach that stage", async () => {
+  it("shows one stage based on the earliest unfinished delivery", async () => {
     const snapshot = roomFixture();
     const queuedAt = "2026-11-06T10:02:00Z";
     const receivedAt = "2026-11-06T10:02:04Z";
@@ -214,12 +213,12 @@ describe("MessageTimeline history", () => {
     });
 
     expect(screen.getByText("入队中").getAttribute("data-tone")).toBe("info");
-    expect(screen.getByText("接收中").getAttribute("data-tone")).toBe("info");
+    expect(screen.getByLabelText("分发状态").textContent?.trim()).toBe("入队中");
 
     await rerender({ messages: [message] });
 
-    expect(screen.getByText("已入队").getAttribute("data-tone")).toBe("success");
     expect(screen.getByText("接收中").getAttribute("data-tone")).toBe("info");
+    expect(screen.getByLabelText("分发状态").textContent?.trim()).toBe("接收中");
     expect(screen.getByLabelText("分发状态").classList.contains("is-complete")).toBe(false);
 
     await rerender({
@@ -235,26 +234,56 @@ describe("MessageTimeline history", () => {
       ],
     });
 
-    expect(screen.getByText("已入队").getAttribute("data-tone")).toBe("success");
     expect(screen.getByText("已接收").getAttribute("data-tone")).toBe("success");
+    expect(screen.getByLabelText("分发状态").textContent?.trim()).toBe("已接收");
     expect(screen.getByLabelText("分发状态").classList.contains("is-complete")).toBe(true);
+  });
+
+  it("omits manually removed deliveries from queue and receipt summaries", () => {
+    const snapshot = roomFixture();
+    render(MessageTimeline, {
+      props: {
+        messages: [
+          {
+            ...snapshot.messages[0],
+            deliveries: snapshot.messages[0].deliveries.map((delivery) => ({
+              ...delivery,
+              deletedAt: "2026-11-10T13:00:00Z",
+            })),
+          },
+        ],
+        members: snapshot.members,
+        sessions: snapshot.sessions,
+        topics: snapshot.topics,
+        hasMore: false,
+        hasNewer: false,
+        loadingOlder: false,
+        loading: false,
+        unavailable: false,
+        detailsOpen: false,
+      },
+    });
+    expect(screen.queryByLabelText("分发状态")).toBeNull();
+    expect(screen.queryByText("人为删除")).toBeNull();
+    expect(screen.queryByText("入队中")).toBeNull();
+    expect(screen.queryByText("接收中")).toBeNull();
   });
 
   it.each<{
     statuses: Delivery["status"][];
-    labels: string[];
+    label: string;
     tone: string;
   }>([
-    { statuses: ["rejected"], labels: ["入队失败", "接收未完成"], tone: "error" },
-    { statuses: ["unknown"], labels: ["入队待确认", "接收待确认"], tone: "warning" },
-    { statuses: ["received", "rejected"], labels: ["入队失败", "接收未完成"], tone: "error" },
+    { statuses: ["rejected"], label: "入队失败", tone: "error" },
+    { statuses: ["unknown"], label: "入队待确认", tone: "warning" },
+    { statuses: ["received", "rejected"], label: "入队失败", tone: "error" },
     {
       statuses: ["received", "unknown"],
-      labels: ["入队待确认", "接收待确认"],
+      label: "入队待确认",
       tone: "warning",
     },
-    { statuses: ["rejected", "unknown"], labels: ["入队失败", "接收未完成"], tone: "error" },
-  ])("reports abnormal delivery outcomes for $statuses", ({ statuses, labels, tone }) => {
+    { statuses: ["rejected", "unknown"], label: "入队失败", tone: "error" },
+  ])("reports abnormal delivery outcomes for $statuses", ({ statuses, label, tone }) => {
     const snapshot = roomFixture();
     const message = {
       ...snapshot.messages[0],
@@ -278,9 +307,8 @@ describe("MessageTimeline history", () => {
       },
     });
 
-    for (const label of labels) {
-      expect(screen.getByText(label).getAttribute("data-tone")).toBe(tone);
-    }
+    expect(screen.getByText(label).getAttribute("data-tone")).toBe(tone);
+    expect(screen.getByLabelText("分发状态").textContent?.trim()).toBe(label);
     expect(screen.queryByText("入队中")).toBeNull();
     expect(screen.queryByText("接收中")).toBeNull();
     expect(screen.getByLabelText("分发状态").classList.contains("is-complete")).toBe(false);

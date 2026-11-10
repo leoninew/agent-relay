@@ -7,6 +7,21 @@
     @create="$emit('addMember')"
   >
     <div class="sidebar-list">
+      <div class="sidebar-node sidebar-node-fixed">
+        <button
+          type="button"
+          class="sidebar-list-item"
+          :class="{ 'is-active': selectedMemberId === undefined }"
+          :aria-pressed="selectedMemberId === undefined"
+          aria-label="筛选成员：全部成员"
+          @click="$emit('select', undefined)"
+        >
+          <span class="member-identity">
+            <AppIcon name="at" class="member-marker" />
+            <span class="member-name">全部成员</span>
+          </span>
+        </button>
+      </div>
       <div v-if="humanMember" class="sidebar-node sidebar-node-fixed">
         <button
           type="button"
@@ -86,7 +101,7 @@
   }>();
   defineEmits<{
     addMember: [];
-    select: [memberId: string];
+    select: [memberId: string | undefined];
   }>();
 
   const humanMember = computed(() =>

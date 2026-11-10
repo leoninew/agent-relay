@@ -17,7 +17,7 @@
           加载更早消息
         </AppButton>
       </div>
-      <template v-for="(message, index) in messages" :key="message.id">
+      <template v-for="({ message, status }, index) in rows" :key="message.id">
         <div v-if="startsNewDay(index)" class="timeline-date">
           <span>{{ formatDate(message.createdAt) }}</span>
         </div>
@@ -90,17 +90,12 @@
                   </div>
                 </div>
                 <div
-                  v-if="message.deliveries.length"
+                  v-if="status"
                   class="message-delivery-summary"
-                  :class="{ 'is-complete': message.deliveries.every(isReceived) }"
+                  :class="{ 'is-complete': status.label === '已接收' }"
                   aria-label="分发状态"
                 >
-                  <span
-                    v-for="status in deliverySummary(message)"
-                    :key="status.label"
-                    class="message-delivery-status"
-                    :data-tone="status.tone"
-                  >
+                  <span class="message-delivery-status" :data-tone="status.tone">
                     {{ status.label }}
                   </span>
                 </div>
@@ -143,7 +138,7 @@
                 :aria-label="`查看消息 #${message.seq} 详情`"
                 :aria-expanded="message.id === selectedMessageId && detailsOpen"
                 title="查看详情"
-                @click.stop="showDetails(message.id)"
+                @click.stop="$emit('select', message.id)"
               >
                 <AppIcon name="info" />
               </button>
@@ -159,14 +154,15 @@
 </template>
 
 <script setup lang="ts">
-  import { ref } from "vue";
+  import { computed, ref } from "vue";
 
   import AppIcon from "@/components/AppIcon.vue";
   import AppButton from "@/components/AppButton.vue";
   import AppLoading from "@/components/AppLoading.vue";
   import MemberIdentity from "@/domains/room/MemberIdentity.vue";
+  import { deliveryStage } from "@/domains/room/deliveryStage";
   import { memberSessionName } from "@/domains/room/memberSessionName";
-  import type { Delivery, Member, RoomMessage, Session, Topic } from "@/services/roomApi";
+  import type { Member, RoomMessage, Session, Topic } from "@/services/roomApi";
   import { useToastsStore } from "@/stores/toasts";
   import { formatDate, formatMinute } from "@/utils/time";
 
@@ -187,19 +183,21 @@
     }>(),
     { selectedMessageId: undefined, searching: false },
   );
-  const emit = defineEmits<{
+  defineEmits<{
     reply: [message: RoomMessage];
     reference: [messageId: string];
     select: [messageId: string];
     addTopic: [topicId: string];
     addMember: [memberId: string];
-    showDetails: [];
     loadOlder: [];
     latest: [];
   }>();
 
   const timeline = ref<HTMLElement>();
   const toasts = useToastsStore();
+  const rows = computed(() =>
+    props.messages.map((message) => ({ message, status: deliverySummary(message) })),
+  );
   let previousScroll = 0;
   let previousHeight = 0;
 
@@ -238,48 +236,18 @@
     return memberSessionName({ id: memberId }, props.members, props.sessions);
   }
 
-  function deliverySummary(message: RoomMessage): {
-    label: string;
-    tone: "info" | "success" | "error" | "warning";
-  }[] {
-    const deliveries = message.deliveries;
+  function deliverySummary(
+    message: RoomMessage,
+  ): { label: string; tone: "info" | "success" | "error" | "warning" } | undefined {
+    const deliveries = message.deliveries.filter((delivery) => !delivery.deletedAt);
     if (deliveries.some((delivery) => delivery.status === "rejected")) {
-      return [
-        { label: "入队失败", tone: "error" },
-        { label: "接收未完成", tone: "error" },
-      ];
+      return { label: "入队失败", tone: "error" };
     }
     if (deliveries.some((delivery) => delivery.status === "unknown")) {
-      return [
-        { label: "入队待确认", tone: "warning" },
-        { label: "接收待确认", tone: "warning" },
-      ];
+      return { label: "入队待确认", tone: "warning" };
     }
-    const enqueued = deliveries.every(isEnqueued);
-    const received = deliveries.every(isReceived);
-    return [
-      {
-        label: enqueued ? "已入队" : "入队中",
-        tone: enqueued ? "success" : "info",
-      },
-      {
-        label: received ? "已接收" : "接收中",
-        tone: received ? "success" : "info",
-      },
-    ];
-  }
-
-  function isEnqueued(delivery: Delivery): boolean {
-    return delivery.status === "queued" || isReceived(delivery);
-  }
-
-  function isReceived(delivery: Delivery): boolean {
-    return delivery.status === "received";
-  }
-
-  function showDetails(messageId: string): void {
-    emit("select", messageId);
-    emit("showDetails");
+    const stage = deliveryStage(deliveries);
+    return stage ? { label: stage, tone: stage === "已接收" ? "success" : "info" } : undefined;
   }
 
   async function copyMessage(message: RoomMessage): Promise<void> {

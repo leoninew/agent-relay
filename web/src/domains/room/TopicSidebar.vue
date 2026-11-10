@@ -7,6 +7,21 @@
       @create="$emit('createTopic')"
     >
       <nav class="sidebar-list" aria-label="筛选话题">
+        <div class="sidebar-node sidebar-node-fixed">
+          <button
+            type="button"
+            class="sidebar-list-item"
+            :class="{ 'is-active': selectedTopicId === undefined }"
+            :aria-pressed="selectedTopicId === undefined"
+            aria-label="筛选话题：全部话题"
+            @click="$emit('select', undefined)"
+          >
+            <span class="topic-identity">
+              <AppIcon name="hash" class="sidebar-item-icon" />
+              <span class="sidebar-node-name">全部话题</span>
+            </span>
+          </button>
+        </div>
         <VueDraggable
           v-model="topics"
           class="sidebar-sortable-list"
@@ -65,7 +80,7 @@
     selectedTopicId?: string;
   }>();
   defineEmits<{
-    select: [topicId: string];
+    select: [topicId: string | undefined];
     createTopic: [];
   }>();
   const { orderedItems: topics, moveItem: moveTopic } = useSidebarOrder(
