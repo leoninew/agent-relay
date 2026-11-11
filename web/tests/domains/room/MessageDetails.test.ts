@@ -47,9 +47,7 @@ describe("MessageDetails", () => {
     expect(topicIdentity?.classList.contains("is-active")).toBe(false);
     expect(topicIdentity?.querySelector(".topic-identity")).not.toBeNull();
     expect(container.querySelector(".detail-stats")).toBeNull();
-    expect(topicIdentity?.querySelector(".sidebar-item-meta")?.textContent).toBe(
-      String(topic.messageCount),
-    );
+    expect(topicIdentity?.querySelector(".sidebar-item-meta")).toBeNull();
     expect(topicIdentity?.querySelector("time")).toBeNull();
     await fireEvent.click(screen.getByRole("button", { name: "编辑话题：前端" }));
     await fireEvent.click(screen.getByRole("button", { name: "删除话题：前端" }));
@@ -89,6 +87,43 @@ describe("MessageDetails", () => {
     await rerender({ member: { ...member, deletedAt: "2026-11-10T00:00:00Z" } });
     expect(screen.queryByRole("button", { name: /^编辑成员/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /^删除成员/ })).toBeNull();
+  });
+
+  it("shows the message sequence, sender and sent time before topics", async () => {
+    const room = roomFixture();
+    const { container, rerender } = render(MessageDetails, {
+      props: {
+        message: room.messages[0],
+        topics: room.topics,
+        members: room.members,
+        sessions: room.sessions,
+      },
+    });
+
+    expect(
+      screen.getAllByRole("heading", { level: 3 }).map((heading) => heading.textContent),
+    ).toEqual(["消息", "话题", "成员"]);
+    expect(screen.getByText("序号").nextElementSibling?.textContent).toBe(
+      `#${room.messages[0].seq}`,
+    );
+    expect(screen.getByText("发送人").nextElementSibling?.textContent).toContain("你");
+    expect(screen.getByText("发送时间").nextElementSibling?.textContent).toContain(
+      new Date(room.messages[0].createdAt).toLocaleString("zh-CN"),
+    );
+    expect(container.querySelector("time")?.getAttribute("datetime")).toBe(
+      room.messages[0].createdAt,
+    );
+
+    const message = room.messages[1];
+    await rerender({ message });
+    expect(screen.getByText("序号").nextElementSibling?.textContent).toBe(`#${message.seq}`);
+    expect(screen.getByText("发送人").nextElementSibling?.textContent).toContain("后端 Worker");
+    expect(container.querySelector("time")?.getAttribute("datetime")).toBe(message.createdAt);
+
+    await rerender({ members: [] });
+    expect(screen.getByText("发送人").nextElementSibling?.textContent).toContain(
+      message.senderName,
+    );
   });
 
   it("shows one stage column for the recorded recipients", () => {

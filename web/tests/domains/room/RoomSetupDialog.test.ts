@@ -88,7 +88,6 @@ describe("RoomSetupDialog form", () => {
       id: "review",
       name: "代码审查",
       description: "",
-      messageCount: 0,
       createdAt: "2026-11-06T10:00:00Z",
       deletedAt: null,
     };
@@ -257,5 +256,21 @@ describe("RoomSetupDialog form", () => {
     expect(emitted().updateTopic).toEqual([
       [topic.id, { name: "界面讨论", description: "交互和界面实现" }],
     ]);
+  });
+
+  it("renames a room without exposing or submitting its project path", async () => {
+    const room = roomFixture().room;
+    const { rerender, emitted } = renderForm();
+    await rerender({ mode: "room", room });
+
+    expect(screen.getByRole("heading", { name: "编辑聊天室" })).toBeTruthy();
+    expect((screen.getByLabelText(/项目名称/) as HTMLInputElement).value).toBe(room.name);
+    expect(screen.queryByLabelText(/项目路径/)).toBeNull();
+
+    await fireEvent.update(screen.getByLabelText(/项目名称/), "  新名称  ");
+    await fireEvent.click(screen.getByRole("button", { name: "保存名称" }));
+
+    expect(emitted().updateRoom).toEqual([[{ name: "新名称" }]]);
+    expect(emitted().createRoom).toBeUndefined();
   });
 });

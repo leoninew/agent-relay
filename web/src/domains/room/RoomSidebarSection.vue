@@ -1,5 +1,5 @@
 <template>
-  <section class="sidebar-section">
+  <section class="sidebar-section" :aria-label="title">
     <header class="room-panel-heading sidebar-section-heading">
       <h2 class="room-panel-title">{{ title }}</h2>
       <button

@@ -1,7 +1,7 @@
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { addRoomTopic, deleteRoom } from "@/services/roomApi";
+import { addRoomTopic, deleteRoom, updateRoom } from "@/services/roomApi";
 import { useRoomsStore } from "@/stores/rooms";
 
 import { roomFixture } from "../fixtures/room";
@@ -11,6 +11,7 @@ vi.mock("@/services/roomApi", () => ({
   createRoom: vi.fn(),
   deleteRoom: vi.fn(),
   fetchRooms: vi.fn(),
+  updateRoom: vi.fn(),
 }));
 
 describe("room state", () => {
@@ -48,6 +49,23 @@ describe("room state", () => {
     expect(store.snapshots[snapshot.room.id]).toEqual(snapshot);
   });
 
+  it("updates the visible room name without changing its path", async () => {
+    const store = useRoomsStore();
+    const snapshot = roomFixture();
+    store.rooms = [snapshot.room];
+    store.sync(snapshot);
+    vi.mocked(updateRoom).mockResolvedValue({ ...snapshot.room, name: "Renamed" });
+
+    await store.rename(snapshot.room.id, "Renamed");
+
+    expect(updateRoom).toHaveBeenCalledWith(snapshot.room.id, { name: "Renamed" });
+    expect(store.rooms[0]).toEqual({
+      ...snapshot.room,
+      name: "Renamed",
+    });
+    expect(store.rooms[0].projectPath).toBe(snapshot.room.projectPath);
+  });
+
   it("applies saved resources in one room while keeping messages and the applied cursor", async () => {
     const store = useRoomsStore();
     const first = roomFixture();
@@ -63,7 +81,6 @@ describe("room state", () => {
       id: "review",
       name: "审查",
       description: "",
-      messageCount: 0,
       createdAt: "2026-11-06T10:00:00Z",
       deletedAt: null,
     };

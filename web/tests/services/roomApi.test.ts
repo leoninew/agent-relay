@@ -15,6 +15,7 @@ import {
   fetchRoomSessions,
   fetchRooms,
   postRoomMessage,
+  updateRoom,
 } from "@/services/roomApi";
 
 import { roomFixture } from "../fixtures/room";
@@ -219,6 +220,27 @@ describe("room API", () => {
     await expect(deleteRoom("room/one")).resolves.toBeUndefined();
     expect(adapterMock).toHaveBeenLastCalledWith(
       expect.objectContaining({ method: "delete", url: "/api/room/room%2Fone" }),
+    );
+  });
+
+  it("renames a room without sending its project path", async () => {
+    adapterMock.mockImplementationOnce(async (config: InternalAxiosRequestConfig) => ({
+      config,
+      data: { ...roomFixture().room, name: "Renamed" },
+      headers: { "content-type": "application/json" },
+      status: 200,
+      statusText: "OK",
+    }));
+
+    await expect(updateRoom("room/one", { name: "Renamed" })).resolves.toMatchObject({
+      name: "Renamed",
+    });
+    expect(adapterMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        method: "patch",
+        url: "/api/room/room%2Fone",
+        data: JSON.stringify({ name: "Renamed" }),
+      }),
     );
   });
 });

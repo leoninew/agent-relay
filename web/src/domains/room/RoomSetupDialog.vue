@@ -41,7 +41,7 @@
                   <div v-for="session in availableSessions" :key="session.id" class="relative">
                     <RadioGroupItem
                       :value="session.id"
-                      class="group flex w-full items-start gap-3 rounded-lg border border-border bg-card p-3 text-start outline-none transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset disabled:opacity-60 data-[state=checked]:border-primary/60 data-[state=checked]:bg-primary/5 motion-reduce:transition-none"
+                      class="group flex w-full items-start gap-3 rounded-lg border border-border bg-card p-3 text-start outline-none transition-colors hover:bg-muted/50 focus-visible:bg-muted disabled:opacity-60 data-[state=checked]:border-input data-[state=checked]:bg-primary/5 motion-reduce:transition-none"
                       :aria-invalid="!!errors.session"
                     >
                       <span
@@ -100,7 +100,7 @@
                 class="border-t border-border pt-2"
               >
                 <CollapsibleTrigger
-                  class="group flex w-full items-center gap-2 rounded-md px-2 py-2 text-start text-xs text-muted-foreground hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                  class="group flex w-full items-center gap-2 rounded-md px-2 py-2 text-start text-xs text-muted-foreground hover:bg-muted/50 focus-visible:bg-muted"
                 >
                   <AppIcon
                     name="chevron"
@@ -131,7 +131,7 @@
                         >
                           <button
                             type="button"
-                            class="shrink-0 cursor-help rounded-sm text-xs underline decoration-dotted underline-offset-2 focus-visible:outline-2 focus-visible:outline-ring"
+                            class="shrink-0 cursor-help rounded-sm text-xs underline decoration-dotted underline-offset-2 focus-visible:outline-1 focus-visible:outline-dashed focus-visible:outline-muted-foreground"
                           >
                             {{ sessionStatus(session) }}
                           </button>
@@ -154,7 +154,7 @@
         </div>
         <div class="setup-field">
           <label for="setup-name">
-            {{ mode === "room" ? "项目名称" : mode === "member" ? "成员名称" : "话题名称" }}
+            {{ nameLabel }}
             <span class="required-mark">*</span>
           </label>
           <AppInput
@@ -169,7 +169,7 @@
           />
           <p v-if="errors.name" id="setup-name-error" class="field-error">{{ errors.name }}</p>
         </div>
-        <div v-if="mode === 'room'" class="setup-field">
+        <div v-if="mode === 'room' && !room" class="setup-field">
           <label for="setup-path">项目路径 <span class="required-mark">*</span></label>
           <AppInput
             id="setup-path"
@@ -217,7 +217,7 @@
           loading-label="保存中…"
           :disabled="topicSaving || (mode === 'member' && (sessionsLoading || !!sessionsError))"
         >
-          {{ topic ? "保存话题" : title }}
+          {{ topic ? "保存话题" : mode === "room" && room ? "保存名称" : title }}
         </AppButton>
       </footer>
     </form>
@@ -248,13 +248,16 @@
     CreateRoom,
     CreateTopic,
     SessionCandidate,
+    Room,
     Topic,
+    UpdateRoom,
   } from "@/services/roomApi";
 
   import "./member-session.css";
 
   const props = defineProps<{
     mode: "room" | "member" | "topic" | undefined;
+    room?: Room;
     topics: Topic[];
     saving: boolean;
     error: string | null;
@@ -267,6 +270,7 @@
   const emit = defineEmits<{
     close: [];
     createRoom: [request: CreateRoom];
+    updateRoom: [request: UpdateRoom];
     createMember: [request: CreateMember];
     createTopic: [request: CreateTopic];
     updateTopic: [topicId: string, request: CreateTopic];
@@ -290,12 +294,17 @@
   );
   const title = computed(() =>
     props.mode === "room"
-      ? "新建聊天室"
+      ? props.room
+        ? "编辑聊天室"
+        : "新建聊天室"
       : props.mode === "member"
         ? "添加成员"
         : props.topic
           ? "编辑话题"
           : "新建话题",
+  );
+  const nameLabel = computed(() =>
+    props.mode === "room" ? "项目名称" : props.mode === "member" ? "成员名称" : "话题名称",
   );
 
   function sessionStatus(session: SessionCandidate): string {
@@ -310,8 +319,8 @@
     return session.memberId ? "此会话已加入当前聊天室。" : "此会话暂不可加入，请刷新后重试。";
   }
 
-  watch([() => props.mode, () => props.topic?.id, () => props.roomId], () => {
-    name.value = props.topic?.name ?? "";
+  watch([() => props.mode, () => props.topic?.id, () => props.roomId, () => props.room?.id], () => {
+    name.value = props.room?.name ?? props.topic?.name ?? "";
     sessionId.value = "";
     unavailableOpen.value = false;
     projectPath.value = "";
@@ -362,7 +371,7 @@
     if (props.mode === "member" && (props.sessionsLoading || props.sessionsError)) return;
     errors.value = {};
     if (!name.value.trim()) errors.value.name = "请输入名称";
-    if (props.mode === "room") {
+    if (props.mode === "room" && !props.room) {
       if (!projectPath.value.trim()) errors.value.projectPath = "请输入项目路径";
       else if (!/^([a-zA-Z]:[\\/]|\/|\\\\)/.test(projectPath.value.trim()))
         errors.value.projectPath = "请输入项目的绝对路径";
@@ -376,7 +385,8 @@
         errors.value.session = "请选择要加入的会话";
     }
     if (Object.keys(errors.value).length) return;
-    if (props.mode === "room")
+    if (props.mode === "room" && props.room) emit("updateRoom", { name: name.value.trim() });
+    else if (props.mode === "room")
       emit("createRoom", { name: name.value.trim(), projectPath: projectPath.value.trim() });
     if (props.mode === "member") {
       const request = {

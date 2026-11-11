@@ -4,7 +4,6 @@ export type Topic = {
   id: string;
   name: string;
   description: string;
-  messageCount: number;
   createdAt: string | null;
   deletedAt: string | null;
 };
@@ -147,6 +146,7 @@ export type Room = {
 };
 
 export type CreateRoom = { name: string; projectPath: string };
+export type UpdateRoom = { name: string };
 export type UpdateMember = { name: string; topicIds: string[] };
 export type CreateMember = UpdateMember & { sessionId: string };
 export type Session = {
@@ -175,6 +175,11 @@ export async function fetchRooms(): Promise<Room[]> {
 
 export async function createRoom(request: CreateRoom): Promise<Room> {
   const { data } = await apiClient.post<Room>("/api/room", request);
+  return data;
+}
+
+export async function updateRoom(roomId: string, request: UpdateRoom): Promise<Room> {
+  const { data } = await apiClient.patch<Room>(`/api/room/${encodeURIComponent(roomId)}`, request);
   return data;
 }
 

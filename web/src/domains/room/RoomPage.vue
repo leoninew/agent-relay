@@ -17,22 +17,25 @@
       <AppButton @click="roomsStore.createOpen = true"> 新建聊天室 </AppButton>
     </template>
   </div>
-  <div v-else class="room-workbench">
-    <TopicSidebar
-      :snapshot="snapshot"
-      :busy="sending || saving"
-      :selected-topic-id="selectedTopicId"
-      @select="selectSidebar('topic', $event)"
-      @create-topic="openSetup('topic')"
-    >
-      <MemberPanel
-        :snapshot="snapshot"
-        :busy="sending || saving"
-        :selected-member-id="selectedMemberId"
-        @select="selectSidebar('member', $event)"
-        @add-member="openSetup('member')"
-      />
-    </TopicSidebar>
+  <RoomWorkbench v-else :details-open="drawerOpen" @collapse-details="drawerOpen = false">
+    <template #sidebar>
+      <aside class="room-sidebar" aria-label="话题与成员导航">
+        <TopicSidebar
+          :snapshot="snapshot"
+          :busy="sending || saving"
+          :selected-topic-id="selectedTopicId"
+          @select="selectSidebar('topic', $event)"
+          @create-topic="openSetup('topic')"
+        />
+        <MemberPanel
+          :snapshot="snapshot"
+          :busy="sending || saving"
+          :selected-member-id="selectedMemberId"
+          @select="selectSidebar('member', $event)"
+          @add-member="openSetup('member')"
+        />
+      </aside>
+    </template>
 
     <section class="conversation-panel" aria-label="聊天室">
       <div class="conversation-messages">
@@ -69,6 +72,7 @@
             </div>
             <AppButton
               type="submit"
+              variant="primary"
               class="conversation-search-button"
               :title="searchText.trim() ? '搜索消息' : '刷新聊天室'"
               :loading="loading || refreshingSessions"
@@ -127,7 +131,7 @@
       </div>
     </section>
 
-    <div class="room-context-panel" :class="{ 'is-open': drawerOpen }">
+    <template #details="{ collapse }">
       <MessageDetails
         :message="detailMessage"
         :topic="detailTopic"
@@ -137,7 +141,7 @@
         :sessions="snapshot.sessions"
         :busy="sending || saving"
         @close="roomPanel.closeDetails"
-        @collapse="drawerOpen = false"
+        @collapse="collapse"
         @edit-topic="editTopic"
         @delete-topic="openDelete({ kind: 'topic', node: $event })"
         @edit-member="editMember"
@@ -160,8 +164,8 @@
           />
         </template>
       </MessageDetails>
-    </div>
-  </div>
+    </template>
+  </RoomWorkbench>
   <RoomSetupDialog
     :mode="setupMode"
     :topics="activeTopics"
@@ -214,6 +218,7 @@
   import RoomDeleteDialog from "@/domains/room/RoomDeleteDialog.vue";
   import type { DeleteTarget } from "@/domains/room/RoomDeleteDialog.vue";
   import RoomSetupDialog from "@/domains/room/RoomSetupDialog.vue";
+  import RoomWorkbench from "@/domains/room/RoomWorkbench.vue";
   import TopicSidebar from "@/domains/room/TopicSidebar.vue";
   import { useMessageQueue } from "@/domains/room/useMessageQueue";
   import { useRoomPanel } from "@/domains/room/useRoomPanel";

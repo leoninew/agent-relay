@@ -1,77 +1,103 @@
 <template>
-  <DropdownMenuRoot v-model:open="open" :modal="false">
-    <DropdownMenuTrigger as-child>
-      <button
-        type="button"
-        class="room-switcher-trigger"
-        :aria-label="selectedRoom ? `选择聊天室：${selectedRoom.name}` : '选择聊天室'"
-        :title="selectedRoom?.name"
+  <div class="room-navigation">
+    <div class="room-navigation-projects">
+      <NavigationMenuRoot
+        v-if="!loading && !loadError && roomsStore.rooms.length"
+        class="room-navigation-menu"
+        :disable-hover-trigger="true"
+        aria-label="项目"
       >
-        <span>{{ selectedRoom?.name ?? "选择聊天室" }}</span>
-        <AppIcon name="chevron-down" />
-      </button>
-    </DropdownMenuTrigger>
-    <DropdownMenuPortal>
-      <DropdownMenuContent
-        class="room-switcher-menu"
-        aria-label="选择聊天室"
-        align="end"
-        :side-offset="8"
-        :collision-padding="12"
-        loop
-      >
-        <AppLoading v-if="loading" class="switcher-state" />
-        <template v-else-if="loadError">
-          <p class="field-error" role="alert">{{ loadError }}</p>
-          <DropdownMenuItem class="room-menu-action" @select.prevent="load">
-            <AppIcon name="refresh" />重试
-          </DropdownMenuItem>
-        </template>
-        <div v-else class="room-options">
-          <p v-if="!roomsStore.rooms.length" class="switcher-state">暂无聊天室</p>
-          <div v-for="room in roomsStore.rooms" :key="room.id" class="room-option-row">
-            <DropdownMenuItem
-              class="room-option"
-              :class="{ 'is-selected': route.params.roomId === room.id }"
-              :aria-current="route.params.roomId === room.id ? 'page' : undefined"
-              @select="select(room.id)"
-            >
-              <span class="room-option-icon"><AppIcon name="chat" /></span>
-              <span class="room-option-label">
-                <span>{{ room.name }}</span>
-                <span class="room-option-path" :title="room.projectPath">{{
-                  room.projectPath
-                }}</span>
-              </span>
-              <AppIcon v-if="route.params.roomId === room.id" name="check" />
-            </DropdownMenuItem>
-            <DropdownMenuItem as-child @select="startDelete(room)">
-              <button
-                type="button"
-                class="room-delete-button"
-                :aria-label="`删除聊天室：${room.name}`"
-                :title="`删除聊天室：${room.name}`"
-                :disabled="deleting"
+        <NavigationMenuList class="room-tab-list">
+          <NavigationMenuItem
+            v-for="room in roomsStore.rooms"
+            :key="room.id"
+            class="room-tab-row"
+            :class="{ 'is-current': route.params.roomId === room.id }"
+          >
+            <NavigationMenuLink as-child :active="route.params.roomId === room.id">
+              <RouterLink
+                :to="{ name: 'room-detail', params: { roomId: room.id } }"
+                class="room-tab"
+                :aria-label="`切换项目：${room.name}`"
+                :title="room.name"
               >
-                <AppIcon name="trash" />
-              </button>
-            </DropdownMenuItem>
-          </div>
-        </div>
-        <DropdownMenuSeparator class="room-menu-separator" />
-        <DropdownMenuItem class="room-menu-action" @select="startCreate">
-          <AppIcon name="plus" />新建聊天室
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenuPortal>
-  </DropdownMenuRoot>
+                <span class="room-tab-name">{{ room.name }}</span>
+              </RouterLink>
+            </NavigationMenuLink>
+            <DropdownMenuRoot :modal="false">
+              <DropdownMenuTrigger as-child>
+                <button
+                  type="button"
+                  class="room-tab-menu-button"
+                  :aria-label="`管理项目：${room.name}`"
+                  :title="`管理项目：${room.name}`"
+                >
+                  <span aria-hidden="true">...</span>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuPortal>
+                <DropdownMenuContent
+                  class="room-switcher-menu"
+                  :aria-label="`管理项目：${room.name}`"
+                  side="bottom"
+                  align="start"
+                  :side-offset="8"
+                  :collision-padding="12"
+                >
+                  <DropdownMenuItem class="room-menu-action" @select="startEdit(room)">
+                    <AppIcon name="edit" />编辑名称
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    class="room-menu-action room-menu-danger"
+                    @select="startDelete(room)"
+                  >
+                    <AppIcon name="trash" />删除
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenuPortal>
+            </DropdownMenuRoot>
+          </NavigationMenuItem>
+          <NavigationMenuItem class="room-tab-add">
+            <button
+              type="button"
+              class="room-navigation-action"
+              aria-label="新建聊天室"
+              title="新建聊天室"
+              @click="startCreate"
+            >
+              <AppIcon name="plus" />
+            </button>
+          </NavigationMenuItem>
+        </NavigationMenuList>
+      </NavigationMenuRoot>
+      <p v-else-if="loading" class="room-navigation-state" role="status">加载中…</p>
+      <div v-else-if="loadError" class="room-navigation-state">
+        <span role="alert">{{ loadError }}</span>
+        <button type="button" class="room-navigation-retry" @click="load">重试</button>
+      </div>
+      <div v-else class="room-navigation-state">
+        <span>暂无聊天室</span>
+        <button
+          type="button"
+          class="room-navigation-action"
+          aria-label="新建聊天室"
+          title="新建聊天室"
+          @click="startCreate"
+        >
+          <AppIcon name="plus" />
+        </button>
+      </div>
+    </div>
+  </div>
   <RoomSetupDialog
-    :mode="roomsStore.createOpen ? 'room' : undefined"
+    :mode="roomDialogMode"
+    :room="editingRoom"
     :topics="[]"
     :saving="saving"
-    :error="createError"
-    @close="roomsStore.createOpen = false"
+    :error="roomDialogError"
+    @close="closeRoomDialog"
     @create-room="saveRoom"
+    @update-room="renameRoom"
   />
   <RoomDeleteDialog
     :target="roomToDelete ? { kind: 'room', node: roomToDelete } : undefined"
@@ -88,18 +114,20 @@
     DropdownMenuItem,
     DropdownMenuPortal,
     DropdownMenuRoot,
-    DropdownMenuSeparator,
     DropdownMenuTrigger,
+    NavigationMenuItem,
+    NavigationMenuLink,
+    NavigationMenuList,
+    NavigationMenuRoot,
   } from "reka-ui";
-  import { computed, nextTick, ref, watch } from "vue";
-  import { useRoute, useRouter } from "vue-router";
+  import { computed, nextTick, onMounted, ref, watch } from "vue";
+  import { RouterLink, useRoute, useRouter } from "vue-router";
 
   import AppIcon from "@/components/AppIcon.vue";
-  import AppLoading from "@/components/AppLoading.vue";
   import RoomDeleteDialog from "@/domains/room/RoomDeleteDialog.vue";
   import RoomSetupDialog from "@/domains/room/RoomSetupDialog.vue";
   import { describeApiError } from "@/services/api";
-  import type { CreateRoom, Room } from "@/services/roomApi";
+  import type { CreateRoom, Room, UpdateRoom } from "@/services/roomApi";
   import { useRoomsStore } from "@/stores/rooms";
   import { useToastsStore } from "@/stores/toasts";
 
@@ -107,17 +135,21 @@
   const router = useRouter();
   const roomsStore = useRoomsStore();
   const toasts = useToastsStore();
-  const selectedRoom = computed(() =>
-    roomsStore.rooms.find((room) => room.id === route.params.roomId),
-  );
-  const open = ref(false);
   const loading = ref(false);
   const saving = ref(false);
   const loadError = ref<string | null>(null);
   const createError = ref<string | null>(null);
+  const editingRoom = ref<Room>();
+  const renameError = ref<string | null>(null);
   const roomToDelete = ref<Room>();
   const deleting = ref(false);
   const deleteError = ref<string | null>(null);
+  const roomDialogMode = computed(() =>
+    roomsStore.createOpen || editingRoom.value ? "room" : undefined,
+  );
+  const roomDialogError = computed(() =>
+    editingRoom.value ? renameError.value : createError.value,
+  );
 
   async function load(): Promise<void> {
     loading.value = true;
@@ -131,13 +163,9 @@
     }
   }
 
-  async function select(roomId: string): Promise<void> {
-    await router.push({ name: "room-detail", params: { roomId } });
-    open.value = false;
-  }
-
   async function startCreate(): Promise<void> {
-    open.value = false;
+    editingRoom.value = undefined;
+    renameError.value = null;
     await nextTick();
     roomsStore.createOpen = true;
   }
@@ -159,8 +187,37 @@
     }
   }
 
+  async function startEdit(room: Room): Promise<void> {
+    roomsStore.createOpen = false;
+    await nextTick();
+    renameError.value = null;
+    editingRoom.value = room;
+  }
+
+  async function renameRoom(request: UpdateRoom): Promise<void> {
+    const room = editingRoom.value;
+    if (!room || saving.value) return;
+    saving.value = true;
+    renameError.value = null;
+    try {
+      await roomsStore.rename(room.id, request.name);
+      editingRoom.value = undefined;
+      toasts.success("聊天室名称已更新");
+    } catch (caught) {
+      renameError.value = describeApiError(caught, "保存失败，请重试。");
+      toasts.error(renameError.value);
+    } finally {
+      saving.value = false;
+    }
+  }
+
+  function closeRoomDialog(): void {
+    roomsStore.createOpen = false;
+    editingRoom.value = undefined;
+    renameError.value = null;
+  }
+
   async function startDelete(room: Room): Promise<void> {
-    open.value = false;
     await nextTick();
     deleteError.value = null;
     roomToDelete.value = room;
@@ -189,13 +246,13 @@
     }
   }
 
-  watch(open, (value) => {
-    if (value) void load();
+  onMounted(() => {
+    if (!roomsStore.loaded) void load();
   });
   watch(
     () => roomsStore.createOpen,
-    () => {
-      createError.value = null;
+    (open) => {
+      if (open) createError.value = null;
     },
   );
 </script>

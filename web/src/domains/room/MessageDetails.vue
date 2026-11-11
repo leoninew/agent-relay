@@ -71,7 +71,6 @@
         <div class="detail-object-summary">
           <div class="sidebar-list-item detail-object-identity">
             <TopicIdentity :topic="topic" />
-            <span class="sidebar-item-meta">{{ topic.messageCount }}</span>
           </div>
           <p v-if="topic.description" class="detail-description">{{ topic.description }}</p>
         </div>
@@ -119,6 +118,21 @@
         </section>
       </template>
       <template v-else-if="message">
+        <section v-if="sender" class="message-detail-section">
+          <h3>消息</h3>
+          <dl class="detail-message-meta">
+            <dt>序号</dt>
+            <dd>#{{ message.seq }}</dd>
+            <dt>发送人</dt>
+            <dd>
+              <MemberIdentity :member="sender" :session-name="sessionName(sender)" />
+            </dd>
+            <dt>发送时间</dt>
+            <dd>
+              <time :datetime="message.createdAt">{{ formatDateTime(message.createdAt) }}</time>
+            </dd>
+          </dl>
+        </section>
         <section class="message-detail-section">
           <h3>话题</h3>
           <div v-if="message.topicIds.length" class="detail-topics">
@@ -166,6 +180,7 @@
   import { deliveryStage } from "@/domains/room/deliveryStage";
   import { memberSessionName } from "@/domains/room/memberSessionName";
   import type { Member, RoomMessage, Session, Topic } from "@/services/roomApi";
+  import { formatDateTime } from "@/utils/time";
 
   const props = withDefaults(
     defineProps<{
@@ -193,6 +208,16 @@
   }
 
   const detailLabel = computed(() => (props.topic ? "话题" : props.member ? "成员" : "消息"));
+
+  const sender = computed(() => {
+    const message = props.message;
+    return message
+      ? (props.members.find((member) => member.id === message.senderId) ?? {
+          id: message.senderId,
+          name: message.senderName || message.senderId,
+        })
+      : undefined;
+  });
 
   const topicMembers = computed(() => {
     const topic = props.topic;
