@@ -48,6 +48,46 @@ describe("MessageTimeline history", () => {
     expect(emitted().select).toBeUndefined();
   });
 
+  it("renders Markdown structure in message bodies", () => {
+    const snapshot = roomFixture();
+    const message = {
+      ...snapshot.messages[0],
+      content: [
+        "## 发布摘要",
+        "",
+        "完成 **登录流程** 和 `member_context`。",
+        "",
+        "- 支持话题消息",
+        "- 保留原始正文",
+        "",
+        "```ts",
+        "const ready = true;",
+        "```",
+      ].join("\n"),
+    };
+    const { container } = render(MessageTimeline, {
+      props: {
+        messages: [message],
+        members: snapshot.members,
+        sessions: snapshot.sessions,
+        topics: snapshot.topics,
+        hasMore: false,
+        hasNewer: false,
+        loadingOlder: false,
+        loading: false,
+        unavailable: false,
+        detailsOpen: false,
+      },
+    });
+
+    const body = container.querySelector(".message-content");
+    expect(body?.querySelector("h2")?.textContent).toBe("发布摘要");
+    expect(body?.querySelector("strong")?.textContent).toBe("登录流程");
+    expect(body?.querySelector("code")?.textContent).toBe("member_context");
+    expect(body?.querySelectorAll("li")).toHaveLength(2);
+    expect(body?.querySelector("pre code")?.textContent).toBe("const ready = true;\n");
+  });
+
   it("reports a clipboard failure without claiming the message was copied", async () => {
     const snapshot = roomFixture();
     const writeText = vi.fn().mockRejectedValue(new Error("Clipboard denied"));

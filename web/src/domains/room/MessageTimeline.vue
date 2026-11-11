@@ -17,7 +17,7 @@
           加载更早消息
         </AppButton>
       </div>
-      <template v-for="({ message, status }, index) in rows" :key="message.id">
+      <template v-for="({ message, status, renderedContent }, index) in rows" :key="message.id">
         <div v-if="startsNewDay(index)" class="timeline-date">
           <span>{{ formatDate(message.createdAt) }}</span>
         </div>
@@ -109,9 +109,7 @@
                 <AppIcon name="reply" />
                 <span>引用 {{ referenceLabel(message.replyToMessageId) }}</span>
               </button>
-              <p class="message-content">
-                {{ message.content }}
-              </p>
+              <div class="message-content" v-html="renderedContent"></div>
             </div>
             <div class="message-actions">
               <button
@@ -155,6 +153,7 @@
 
 <script setup lang="ts">
   import { computed, ref } from "vue";
+  import MarkdownIt from "markdown-it";
 
   import AppIcon from "@/components/AppIcon.vue";
   import AppButton from "@/components/AppButton.vue";
@@ -195,8 +194,13 @@
 
   const timeline = ref<HTMLElement>();
   const toasts = useToastsStore();
+  const markdown = new MarkdownIt({ breaks: true });
   const rows = computed(() =>
-    props.messages.map((message) => ({ message, status: deliverySummary(message) })),
+    props.messages.map((message) => ({
+      message,
+      status: deliverySummary(message),
+      renderedContent: markdown.render(message.content),
+    })),
   );
   let previousScroll = 0;
   let previousHeight = 0;

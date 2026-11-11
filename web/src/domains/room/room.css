@@ -280,21 +280,19 @@
   flex: 1;
   min-width: 0;
   max-width: 360px;
-  gap: 4px;
-  padding: 2px;
-  border: 1px solid hsl(var(--input));
-  border-radius: 9999px;
-  background: hsl(var(--muted) / 0.5);
-  transition: border-color 150ms;
 }
-.conversation-search:focus-within {
+.conversation-search:focus-within .conversation-search-field {
   border-color: hsl(var(--muted-foreground) / 0.65);
-  background: hsl(var(--card));
 }
 .conversation-search-field {
   position: relative;
   flex: 1;
   min-width: 0;
+  border: 1px solid hsl(var(--input));
+  border-right: 0;
+  border-radius: 6px 0 0 6px;
+  background: hsl(var(--card));
+  transition: border-color 150ms;
 }
 .conversation-search-field > svg {
   position: absolute;
@@ -309,12 +307,12 @@
 }
 .conversation-search .app-input {
   border: 0;
-  border-radius: 9999px;
+  border-radius: 5px 0 0 5px;
   background: transparent;
 }
 .conversation-search .app-input-control {
-  min-height: 30px;
-  padding: 3px 32px;
+  min-height: 34px;
+  padding: 5px 32px;
 }
 .conversation-search .app-input-control::-webkit-search-cancel-button {
   appearance: none;
@@ -326,10 +324,10 @@
 }
 .conversation-search-button {
   flex-shrink: 0;
-  min-height: 30px;
-  padding: 3px 14px;
-  border: 0;
-  border-radius: 9999px;
+  min-height: 36px;
+  padding: 5px 14px;
+  border: 1px solid hsl(var(--primary));
+  border-radius: 0 6px 6px 0;
 }
 .icon-button {
   display: inline-flex;
@@ -574,8 +572,91 @@ button.topic-chip:hover:not(:disabled) {
   font-size: var(--font-size-body);
   line-height: var(--line-height-body);
   color: hsl(var(--foreground) / 0.88);
-  white-space: pre-wrap;
+  white-space: normal;
   overflow-wrap: anywhere;
+}
+.message-content > :not(:first-child) {
+  margin-top: 0.7em;
+}
+.message-content p,
+.message-content h1,
+.message-content h2,
+.message-content h3,
+.message-content h4,
+.message-content h5,
+.message-content h6,
+.message-content ul,
+.message-content ol,
+.message-content blockquote,
+.message-content pre {
+  margin-bottom: 0;
+}
+.message-content h1,
+.message-content h2,
+.message-content h3,
+.message-content h4,
+.message-content h5,
+.message-content h6 {
+  color: hsl(var(--foreground));
+  font-size: var(--font-size-body);
+  font-weight: 600;
+  line-height: var(--line-height-body);
+}
+.message-content h1 {
+  font-size: var(--font-size-title);
+}
+.message-content h2 {
+  font-size: 15px;
+}
+.message-content ul,
+.message-content ol {
+  padding-left: 1.5em;
+}
+.message-content li + li {
+  margin-top: 0.25em;
+}
+.message-content blockquote {
+  margin-left: 0;
+  padding-left: 0.8em;
+  border-left: 2px solid hsl(var(--border));
+  color: hsl(var(--muted-foreground));
+}
+.message-content pre {
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 8px 10px;
+  background: hsl(var(--muted));
+  font-size: 12px;
+  line-height: 1.5;
+}
+.message-content :not(pre) > code {
+  padding: 1px 4px;
+  background: hsl(var(--muted));
+  font-size: 0.92em;
+}
+.message-content pre code {
+  padding: 0;
+  background: transparent;
+  font-size: inherit;
+}
+.message-content table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+.message-content th,
+.message-content td {
+  padding: 4px 8px;
+  border-bottom: 1px solid hsl(var(--border));
+}
+.message-content hr {
+  border: 0;
+  border-top: 1px solid hsl(var(--border));
+}
+.message-content a {
+  color: hsl(var(--primary));
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 .message-delivery-summary {
   display: flex;
