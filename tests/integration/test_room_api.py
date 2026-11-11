@@ -30,7 +30,7 @@ def client(tmp_path: Path) -> Iterator[TestClient]:
     test_client = TestClient(
         create_app(
             logging.getLogger("tests.agent_relay.room"),
-            store=service.store,
+            database=service.store.database,
             queue_driver=queue,
             session_driver=FakeSessionDriver(
                 [
@@ -115,6 +115,33 @@ def test_deleting_an_absent_room_uses_the_standard_error_contract(client: TestCl
         "requestId": "delete-room-request",
     }
     assert response.headers["X-Request-Id"] == "delete-room-request"
+
+
+def test_room_rename_keeps_project_path_and_rejects_other_fields(client: TestClient) -> None:
+    original = client.get(ROOM_ROUTE).json()["room"]
+
+    response = client.patch(ROOM_ROUTE, json={"name": "  Renamed Room  "})
+
+    assert response.status_code == 200
+    renamed = response.json()
+    assert renamed["name"] == "Renamed Room"
+    assert renamed["projectPath"] == original["projectPath"]
+    assert client.get(ROOM_ROUTE).json()["room"]["name"] == "Renamed Room"
+    assert (
+        client.post(
+            "/api/room",
+            json={"name": "Duplicate", "projectPath": original["projectPath"]},
+        ).status_code
+        == 409
+    )
+    assert client.patch(ROOM_ROUTE, json={"name": "   "}).status_code == 422
+    assert (
+        client.patch(
+            ROOM_ROUTE,
+            json={"name": "Renamed Room", "projectPath": "D:/elsewhere"},
+        ).status_code
+        == 422
+    )
 
 
 def test_topic_filter_keeps_cross_topic_message_once_and_global_counts(client: TestClient) -> None:
@@ -357,7 +384,7 @@ def test_create_room_add_topic_and_invite_member(client: TestClient) -> None:
     topics = client.get(room_route).json()["topics"]
     assert [topic["name"] for topic in topics] == ["产品", "架构", "开发", "测试"]
     assert len({topic["id"] for topic in topics}) == 4
-    assert all(topic["createdAt"] and topic["messageCount"] == 0 for topic in topics)
+    assert all(topic["createdAt"] and "messageCount" not in topic for topic in topics)
     assert [s["id"] for s in client.get(f"{room_route}/session").json()] == ["acme-1"]
 
     member_response = client.post(

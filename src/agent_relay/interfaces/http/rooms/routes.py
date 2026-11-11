@@ -18,6 +18,7 @@ from agent_relay.application.rooms.contracts import (
     RoomSnapshot,
     SessionCandidate,
     UpdateMember,
+    UpdateRoom,
 )
 from agent_relay.domain.rooms.models import Member, Message, Room
 from agent_relay.interfaces.http.members.dependencies import MemberSessionsDependency
@@ -44,6 +45,11 @@ def create_room(request: CreateRoom, service: RoomServiceDependency) -> Room:
 @router.delete("/{room_id}", status_code=204)
 def delete_room(room_id: str, service: RoomServiceDependency) -> None:
     service.delete_room(room_id)
+
+
+@router.patch("/{room_id}")
+def update_room(room_id: str, request: UpdateRoom, service: RoomServiceDependency) -> Room:
+    return service.update_room(room_id, request)
 
 
 @router.get("/{room_id}")

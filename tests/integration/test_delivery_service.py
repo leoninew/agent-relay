@@ -4,7 +4,7 @@ from time import monotonic, sleep
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
-from room_fixtures import DemoRoomService, create_room_store
+from room_fixtures import DemoRoomService, create_room_store, open_room_store
 from session_fixtures import FakeQueueDriver, FakeSessionDriver
 
 from agent_relay.application.delivery.ports import InputPage, QueueHead, QueueReceipt, ReceivedInput
@@ -21,7 +21,6 @@ from agent_relay.application.rooms.contracts import (
 from agent_relay.application.rooms.service import RoomService
 from agent_relay.bootstrap.http import create_app
 from agent_relay.infrastructure.dispatch.lock import SubmitterLock
-from agent_relay.infrastructure.persistence.store import SQLiteRoomStore
 
 
 def test_publication_replay_and_lookup_keep_frozen_recipients(tmp_path: Path) -> None:
@@ -38,7 +37,7 @@ def test_publication_replay_and_lookup_keep_frozen_recipients(tmp_path: Path) ->
         "agent-relay", "backend-worker", UpdateMember(name="后端成员", topic_ids=["frontend"])
     )
     service.delete_member("agent-relay", "frontend-worker")
-    reopened = RoomService(SQLiteRoomStore(store.path))
+    reopened = RoomService(open_room_store(store.path))
     assert reopened.post_message("agent-relay", request) == published
     assert reopened.publication("agent-relay", request.publication_id) == published
     assert len(reopened.snapshot("agent-relay").messages) == 7
@@ -63,7 +62,9 @@ def test_web_publications_reach_original_sessions_and_results_survive_restart(
     while work := store.claim_delivery():
         submitter.submit(work)
     driver.calls.clear()
-    app = create_app(logger, store=store, session_driver=FakeSessionDriver(), queue_driver=driver)
+    app = create_app(
+        logger, database=store.database, session_driver=FakeSessionDriver(), queue_driver=driver
+    )
     publications: list[dict[str, object]] = []
     with TestClient(app) as client:
         for topics, mentions in [
@@ -100,7 +101,7 @@ def test_web_publications_reach_original_sessions_and_results_survive_restart(
     lock = SubmitterLock(store.path)
     assert lock.acquire()
     lock.release()
-    reopened = RoomService(SQLiteRoomStore(store.path))
+    reopened = RoomService(open_room_store(store.path))
     for result in results:
         saved = reopened.publication("agent-relay", result["publicationId"])
         assert saved.model_dump(mode="json", by_alias=True) == result
@@ -162,7 +163,7 @@ def test_human_message_to_the_only_topic_member_reaches_its_original_session(
     assert work is not None
     submitter.submit(work)
     submitter.observe("original", {published.deliveries[0].client_message_id})
-    saved = RoomService(SQLiteRoomStore(store.path)).publication(
+    saved = RoomService(open_room_store(store.path)).publication(
         room.id, published.publication_id or ""
     )
     assert len(saved.deliveries) == len(driver.calls) == len(driver.activations) == 1
@@ -209,7 +210,7 @@ def test_older_original_input_is_confirmed_across_history_pages(tmp_path: Path) 
     assert store.unconfirmed_inputs() == {"original": {client_id}}
     submitter.observe("original", {client_id})
     saved = (
-        RoomService(SQLiteRoomStore(store.path))
+        RoomService(open_room_store(store.path))
         .publication(room.id, message.publication_id or "")
         .deliveries[0]
     )

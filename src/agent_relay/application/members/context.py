@@ -88,7 +88,11 @@ class ContextResult(RoomModel):
     positions: list[TopicPosition]
 
 
-class MemberContext(Protocol):
+class ContextRepository(Protocol):
     def catalog(self, room_id: str, member_id: str) -> MemberCatalog: ...
     def positions(self, room_id: str, member_id: str) -> list[TopicPosition]: ...
     def query(self, room_id: str, member_id: str, request: ContextQuery) -> ContextResult: ...
+
+
+class MemberContext(ContextRepository, Protocol):
+    pass

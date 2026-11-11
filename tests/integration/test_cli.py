@@ -12,12 +12,14 @@ import pytest
 from fastapi.testclient import TestClient
 from room_fixtures import DemoRoomService, create_room_store
 from session_fixtures import FakeQueueDriver, FakeSessionDriver
+from sqlalchemy import update
 
 from agent_relay.application.delivery.service import DeliveryService
 from agent_relay.application.members.sessions import SessionInfo
 from agent_relay.bootstrap.http import create_app
-from agent_relay.infrastructure.persistence.queries import SQLiteRoomQueries as RoomQueries
-from agent_relay.infrastructure.persistence.store import SQLiteRoomStore
+from agent_relay.infrastructure.persistence.database import Database
+from agent_relay.infrastructure.persistence.models import DeliveryRecord
+from agent_relay.infrastructure.persistence.room_queries import SQLAlchemyRoomQueries as RoomQueries
 from agent_relay.interfaces.cli import main
 from agent_relay.interfaces.client import HttpResponse, RelayClient
 
@@ -87,7 +89,7 @@ def cli(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> Iterator[CliHarne
     client = TestClient(
         create_app(
             logging.getLogger("tests.cli"),
-            store=service.store,
+            database=service.store.database,
             session_driver=sessions,
             queue_driver=FakeQueueDriver(),
         )
@@ -106,7 +108,7 @@ def test_room_creation_is_shared_by_cli_queries_and_reopened_store(cli: CliHarne
     assert snapshot["room"] == created
     assert snapshot["messages"] == []
     assert cli.run("room", "metadata", room_id)["room"] == created
-    reopened = RoomQueries(SQLiteRoomStore(cli.service.store.path))
+    reopened = RoomQueries(Database(cli.service.store.path))
     assert reopened.metadata(room_id).room.name == "文档协作"
 
 
@@ -395,8 +397,8 @@ def test_cli_query_keyword_and_clear_preserve_queued_history(cli: CliHarness) ->
     assert query["keyword"] == ["跨话题"]
     assert query["member_id"] == ["backend-worker"]
 
-    with cli.service.store.write() as connection:
-        connection.execute("UPDATE deliveries SET status = 'queued'")
+    with cli.service.store.database.write() as session:
+        session.execute(update(DeliveryRecord).values(status="queued"))
     cleared = cli.run("queue", "clear", ROOM, "--member-id", "frontend-worker")
     assert cleared == {"removedMessages": 5}
     assert cli.calls[-1][0].get_method() == "DELETE"

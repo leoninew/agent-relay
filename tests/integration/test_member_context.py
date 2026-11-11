@@ -10,6 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 from room_fixtures import DemoRoomService, create_room_store
 from session_fixtures import FakeQueueDriver, FakeSessionDriver
+from sqlalchemy import select
 
 from agent_relay.application.delivery.service import DeliveryService
 from agent_relay.application.members.context import ContextQuery, ContextResult, MemberCatalog
@@ -17,9 +18,12 @@ from agent_relay.application.rooms.contracts import CreateMessage, UpdateMember
 from agent_relay.bootstrap.http import create_app
 from agent_relay.domain.rooms.models import TopicPosition
 from agent_relay.domain.rooms.rules import build_message
-from agent_relay.infrastructure.persistence.context import SQLiteMemberContext as MemberContext
-from agent_relay.infrastructure.persistence.queries import SQLiteRoomQueries as RoomQueries
-from agent_relay.infrastructure.persistence.store import SQLiteRoomStore
+from agent_relay.infrastructure.persistence.database import Database
+from agent_relay.infrastructure.persistence.member_context import (
+    SQLAlchemyMemberContext as MemberContext,
+)
+from agent_relay.infrastructure.persistence.models import ContextMessageRecord, ContextQueryRecord
+from agent_relay.infrastructure.persistence.room_queries import SQLAlchemyRoomQueries as RoomQueries
 
 
 @dataclass
@@ -45,7 +49,7 @@ def context(tmp_path: Path) -> Iterator[ContextEnvironment]:
     client = TestClient(
         create_app(
             logging.getLogger("tests.member_context"),
-            store=service.store,
+            database=service.store.database,
             session_driver=FakeSessionDriver(),
             queue_driver=FakeQueueDriver(),
         )
@@ -59,8 +63,8 @@ def positions(result: ContextResult) -> dict[str, TopicPosition]:
 
 
 def seed_history(context: ContextEnvironment) -> None:
-    with context.service.store.write() as connection:
-        state = RoomQueries(context.service.store).resources_in(connection, "agent-relay")
+    with context.service.store.write_rooms() as repository:
+        state = repository.resources("agent-relay")
         for seq in range(7, 91):
             message = build_message(
                 state,
@@ -72,13 +76,13 @@ def seed_history(context: ContextEnvironment) -> None:
                 sender_name="主会话",
                 created_at=datetime.now(UTC),
             )
-            context.service.store.insert_message(connection, state.room.id, message)
+            repository.insert_message(state.room.id, message)
 
 
 def test_catalog_and_position_queries_return_lightweight_routing_context(
     context: ContextEnvironment,
 ) -> None:
-    cursor = RoomQueries(context.service.store).metadata("agent-relay").event_id
+    cursor = RoomQueries(context.service.store.database).metadata("agent-relay").event_id
     member_url = context.member_urls["frontend-worker"]
     response = context.client.get(f"{member_url}/catalog")
     assert response.status_code == 200
@@ -95,7 +99,7 @@ def test_catalog_and_position_queries_return_lightweight_routing_context(
     assert {topic: row["seq"] for topic, row in current.items()} == {"frontend": 0, "summary": 0}
     assert current["frontend"]["laterCount"] == 3
     assert current["summary"]["laterCount"] == 1
-    assert RoomQueries(context.service.store).metadata("agent-relay").event_id == cursor
+    assert RoomQueries(context.service.store.database).metadata("agent-relay").event_id == cursor
 
 
 def test_topic_context_pages_in_both_directions_and_allows_history_below_position(
@@ -158,7 +162,7 @@ def test_keyword_search_uses_literal_body_text_and_member_visible_messages(
 def test_single_context_records_exact_results_and_advances_each_subscribed_topic(
     context: ContextEnvironment,
 ) -> None:
-    before = RoomQueries(context.service.store).metadata("agent-relay").summary
+    before = RoomQueries(context.service.store.database).metadata("agent-relay").summary
     result = context.query({"messageId": "agent-relay-msg-0004"}, "test-worker")
     assert [message.seq for message in result.messages] == [4]
     assert {topic: position.seq for topic, position in positions(result).items()} == {
@@ -172,22 +176,19 @@ def test_single_context_records_exact_results_and_advances_each_subscribed_topic
     older = context.query({"messageId": "agent-relay-msg-0004"}, "test-worker")
     assert positions(older)["frontend"].seq == 6
     assert positions(older)["backend"].seq == 4
-    with context.service.store.read() as connection:
-        record = connection.execute(
-            "SELECT message_id, provided_at FROM member_context_queries WHERE id = ?",
-            (result.query_id,),
-        ).fetchone()
-        provided = connection.execute(
-            "SELECT message_id, position FROM member_context_messages WHERE query_id = ? "
-            "ORDER BY position",
-            (result.query_id,),
-        ).fetchall()
-    assert record["message_id"] == result.messages[0].id
-    assert [(row["message_id"], row["position"]) for row in provided] == [
-        (result.messages[0].id, 0)
-    ]
-    assert datetime.fromisoformat(record["provided_at"]).tzinfo is not None
-    assert RoomQueries(context.service.store).metadata("agent-relay").summary == before
+    with context.service.store.database.read() as session:
+        record = session.get(ContextQueryRecord, result.query_id)
+        provided = list(
+            session.scalars(
+                select(ContextMessageRecord)
+                .where(ContextMessageRecord.query_id == result.query_id)
+                .order_by(ContextMessageRecord.position)
+            )
+        )
+    assert record is not None and record.message_id == result.messages[0].id
+    assert [(row.message_id, row.position) for row in provided] == [(result.messages[0].id, 0)]
+    assert record.provided_at.tzinfo is not None
+    assert RoomQueries(context.service.store.database).metadata("agent-relay").summary == before
 
 
 def test_member_without_subscriptions_can_read_an_actual_direct_message(
@@ -237,7 +238,7 @@ def test_subscription_changes_determine_current_context_and_keep_previous_positi
 def test_positions_survive_reopening_and_reach_the_web_through_persistent_events(
     context: ContextEnvironment,
 ) -> None:
-    queries = RoomQueries(context.service.store)
+    queries = RoomQueries(context.service.store.database)
     cursor = queries.metadata("agent-relay").event_id
     result = context.query({"messageId": "agent-relay-msg-0006"})
     page = queries.events("agent-relay", cursor)
@@ -260,7 +261,7 @@ def test_positions_survive_reopening_and_reach_the_web_through_persistent_events
             topic_ids=["frontend"],
         ),
     )
-    reopened = MemberContext(SQLiteRoomStore(context.service.store.path))
+    reopened = MemberContext(Database(context.service.store.path))
     saved = {
         position.topic_id: position
         for position in reopened.positions("agent-relay", "frontend-worker")
@@ -277,7 +278,7 @@ def test_positions_survive_reopening_and_reach_the_web_through_persistent_events
 def test_concurrent_context_queries_keep_the_maximum_provided_sequence(
     context: ContextEnvironment,
 ) -> None:
-    service = MemberContext(context.service.store)
+    service = MemberContext(context.service.store.database)
     member_id = "frontend-worker"
     with ThreadPoolExecutor(max_workers=2) as pool:
         tasks = [

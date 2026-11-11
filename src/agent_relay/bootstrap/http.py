@@ -14,8 +14,8 @@ from agent_relay.infrastructure.dispatch.dependencies import (
     create_delivery_runner,
     create_presence_runner,
 )
+from agent_relay.infrastructure.persistence.database import Database
 from agent_relay.infrastructure.persistence.dependencies import create_database
-from agent_relay.infrastructure.persistence.store import SQLiteRoomStore
 from agent_relay.interfaces.http.exception_handlers import (
     register_exception_handlers,
     unexpected_exception_handler,
@@ -33,18 +33,45 @@ def create_app(
     *,
     settings: Settings | None = None,
     static_directory: Path | None = None,
-    store: SQLiteRoomStore | None = None,
+    database: Database | None = None,
     session_driver: SessionDriver | None = None,
     queue_driver: QueueDriver | None = None,
 ) -> FastAPI:
     configured = settings if settings is not None else load_settings()
-    database = (
-        store
-        if store is not None
+    owned = database is None
+    active_database = (
+        database
+        if database is not None
         else create_database(
             configured.database.path, migrate_on_startup=configured.database.migrate_on_startup
         )
     )
+    try:
+        return _configure_app(
+            logger,
+            configured,
+            active_database,
+            owned=owned,
+            static_directory=static_directory,
+            session_driver=session_driver,
+            queue_driver=queue_driver,
+        )
+    except BaseException:
+        if owned:
+            active_database.close()
+        raise
+
+
+def _configure_app(
+    logger: logging.Logger,
+    configured: Settings,
+    database: Database,
+    *,
+    owned: bool,
+    static_directory: Path | None,
+    session_driver: SessionDriver | None,
+    queue_driver: QueueDriver | None,
+) -> FastAPI:
     codex = configured.codex
     sessions = (
         session_driver
@@ -61,15 +88,19 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        delivery_runner.start()
         try:
-            presence_runner.start()
+            delivery_runner.start()
             try:
-                yield
+                presence_runner.start()
+                try:
+                    yield
+                finally:
+                    await run_in_threadpool(presence_runner.close)
             finally:
-                await run_in_threadpool(presence_runner.close)
+                await run_in_threadpool(delivery_runner.close)
         finally:
-            await run_in_threadpool(delivery_runner.close)
+            if owned:
+                await run_in_threadpool(database.close)
 
     app = FastAPI(title="Agent Relay", lifespan=lifespan)
     app.state.logger = logger
@@ -93,7 +124,7 @@ def build_app(
     *,
     settings: Settings | None = None,
     static_directory: Path | None = None,
-    store: SQLiteRoomStore | None = None,
+    database: Database | None = None,
     session_driver: SessionDriver | None = None,
     queue_driver: QueueDriver | None = None,
 ) -> FastAPI:
@@ -101,7 +132,7 @@ def build_app(
         logging.getLogger("agent_relay.http"),
         settings=settings,
         static_directory=static_directory,
-        store=store,
+        database=database,
         session_driver=session_driver,
         queue_driver=queue_driver,
     )

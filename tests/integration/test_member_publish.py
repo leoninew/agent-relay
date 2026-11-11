@@ -7,14 +7,13 @@ from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-from room_fixtures import DemoRoomService, create_room_store
+from room_fixtures import DemoRoomService, create_room_store, open_room_store
 from session_fixtures import FakeQueueDriver, FakeSessionDriver
 
 from agent_relay.application.delivery.service import DeliveryService
 from agent_relay.application.rooms.contracts import UpdateMember
 from agent_relay.application.rooms.service import RoomService
 from agent_relay.bootstrap.http import create_app
-from agent_relay.infrastructure.persistence.store import SQLiteRoomStore
 
 
 @dataclass
@@ -40,7 +39,7 @@ def members(tmp_path: Path) -> Iterator[MemberEnvironment]:
     with TestClient(
         create_app(
             logger,
-            store=service.store,
+            database=service.store.database,
             queue_driver=driver,
             session_driver=FakeSessionDriver(),
         )
@@ -172,7 +171,7 @@ def test_member_publish_queue_receipts_and_member_identity_survive_restart(
         f"createdAt: {result['createdAt']}\n"
         "sender: 前端 Worker（frontend-worker）\n\n成员消息投递到原会话"
     )
-    store = SQLiteRoomStore(members.service.store.path)
+    store = open_room_store(members.service.store.path)
     restored = RoomService(store).publication(
         "agent-relay", publication_id, member_id="frontend-worker"
     )

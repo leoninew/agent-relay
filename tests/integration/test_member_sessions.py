@@ -1,5 +1,4 @@
 import logging
-import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from datetime import timedelta
@@ -10,7 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 from room_fixtures import StoredMemberSessions as MemberSessions
 from room_fixtures import StoredRoomService as RoomService
-from room_fixtures import create_room_store
+from room_fixtures import create_room_store, open_room_store
 from session_fixtures import FakeQueueDriver, FakeSessionDriver
 
 from agent_relay.application.members.sessions import SessionInfo, SessionUnavailableError
@@ -26,8 +25,8 @@ from agent_relay.domain.rooms.state import RoomState
 from agent_relay.infrastructure.dispatch.presence import (
     MemberPresenceRunner as MemberPresenceService,
 )
-from agent_relay.infrastructure.persistence.queries import SQLiteRoomQueries as RoomQueries
-from agent_relay.infrastructure.persistence.store import SQLiteRoomStore
+from agent_relay.infrastructure.persistence.repositories.rooms import SQLAlchemyRoomRepository
+from agent_relay.infrastructure.persistence.room_queries import SQLAlchemyRoomQueries as RoomQueries
 
 
 def setup(tmp_path: Path) -> tuple[MemberSessions, RoomService, FakeSessionDriver, str, str]:
@@ -116,12 +115,12 @@ def test_running_member_observations_refresh_when_the_original_session_changes_s
     candidate = members.candidates(room_id)[0]
     assert candidate.presence == "unknown" and not candidate.usable
     assert candidate.unavailable_reason and "独立实例" in candidate.unavailable_reason
-    current = RoomQueries(rooms.store).metadata(room_id).members[0]
+    current = RoomQueries(rooms.store.database).metadata(room_id).members[0]
     assert current.presence == "unknown"
     assert current.activity == candidate.unavailable_reason
     driver.sessions["one"] = SessionInfo("one", "D:/project", "provider-a", "Existing", "idle")
     assert members.candidates(room_id)[0].usable
-    assert RoomQueries(rooms.store).metadata(room_id).members[0].presence == "available"
+    assert RoomQueries(rooms.store.database).metadata(room_id).members[0].presence == "available"
 
 
 def test_presence_worker_updates_joined_members_and_emits_events_without_listing_sessions(
@@ -130,7 +129,7 @@ def test_presence_worker_updates_joined_members_and_emits_events_without_listing
     members, rooms, driver, room_id, topic_id = setup(tmp_path)
     member = members.add(room_id, request(topic_id))
     rooms.update_member(room_id, member.id, UpdateMember(name="Renamed", topic_ids=[topic_id]))
-    queries = RoomQueries(rooms.store)
+    queries = RoomQueries(rooms.store.database)
     cursor = queries.events(room_id, 0).next_event_id
     driver.inspected.clear()
     worker = MemberPresenceService(members, logging.getLogger("tests.member-presence"))
@@ -183,7 +182,7 @@ def test_presence_worker_marks_failed_observations_unknown_and_continues_other_m
     assert current["user"].presence == "available" and current["user"].observed_at is None
     monkeypatch.setattr(driver, "inspect", inspect)
     worker.refresh()
-    assert RoomQueries(rooms.store).metadata(room_id).members[0].presence == "busy"
+    assert RoomQueries(rooms.store.database).metadata(room_id).members[0].presence == "busy"
 
 
 def test_unchanged_observations_checkpoint_without_emitting_events_on_every_poll(
@@ -192,7 +191,7 @@ def test_unchanged_observations_checkpoint_without_emitting_events_on_every_poll
     members, rooms, driver, room_id, topic_id = setup(tmp_path)
     member = members.add(room_id, request(topic_id))
     assert member.observed_at is not None
-    queries = RoomQueries(rooms.store)
+    queries = RoomQueries(rooms.store.database)
     cursor = queries.events(room_id, 0).next_event_id
     members.record_observations(
         room_id, list(driver.sessions.values()), member.observed_at + timedelta(seconds=5)
@@ -212,14 +211,14 @@ def test_session_renames_sync_without_overwriting_member_aliases_and_survive_res
     member = members.add(room_id, request(topic_id))
     rooms.update_member(room_id, member.id, UpdateMember(name="Alias", topic_ids=[topic_id]))
     assert member.observed_at is not None
-    queries = RoomQueries(rooms.store)
+    queries = RoomQueries(rooms.store.database)
     cursor = queries.events(room_id, 0).next_event_id
     driver.sessions["one"] = replace(driver.sessions["one"], name="Renamed Codex session")
     members.record_observations(
         room_id, list(driver.sessions.values()), member.observed_at + timedelta(seconds=1)
     )
     assert {event.kind for event in queries.events(room_id, cursor).events} == {"session"}
-    metadata = RoomQueries(create_room_store(tmp_path / "rooms.sqlite3")).metadata(room_id)
+    metadata = RoomQueries(open_room_store(tmp_path / "rooms.sqlite3").database).metadata(room_id)
     assert metadata.sessions[0].name == "Renamed Codex session"
     assert metadata.members[0].name == "Alias"
     assert metadata.members[0].topic_ids == [topic_id]
@@ -236,7 +235,7 @@ def test_application_observes_presence_and_stops_worker_on_shutdown(
     driver.sessions["one"] = replace(driver.sessions["one"], status="idle")
     app = create_app(
         logging.getLogger("tests.member-presence"),
-        store=rooms.store,
+        database=rooms.store.database,
         queue_driver=FakeQueueDriver(),
         session_driver=driver,
     )
@@ -250,7 +249,7 @@ def test_application_observes_presence_and_stops_worker_on_shutdown(
         nonlocal attempts
         attempts += 1
         if fail_first and attempts == 1:
-            raise sqlite3.OperationalError("temporary observation failure")
+            raise RuntimeError("temporary observation failure")
         refresh()
         observed.set()
 
@@ -280,7 +279,7 @@ def test_join_revalidates_directory_id_topics_and_does_not_write_on_failure(tmp_
 
 def test_concurrent_join_has_one_persistent_binding(tmp_path: Path) -> None:
     members, rooms, driver, room_id, topic_id = setup(tmp_path)
-    second = MemberSessions(SQLiteRoomStore(members.store.path), driver)
+    second = MemberSessions(open_room_store(members.store.path), driver)
 
     def join(index: int) -> str:
         try:
@@ -300,17 +299,17 @@ def test_failed_local_commit_rolls_back_session_and_member(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     members, rooms, _, room_id, topic_id = setup(tmp_path)
-    original = members.store.save_resources
+    original = SQLAlchemyRoomRepository.save_resources
 
-    def fail(connection: sqlite3.Connection, current: RoomState, before: RoomState) -> None:
-        original(connection, current, before)
-        raise sqlite3.OperationalError("injected failure")
+    def fail(repository: SQLAlchemyRoomRepository, current: RoomState, before: RoomState) -> None:
+        original(repository, current, before)
+        raise RuntimeError("injected failure")
 
-    monkeypatch.setattr(members.store, "save_resources", fail)
-    with pytest.raises(sqlite3.OperationalError):
+    monkeypatch.setattr(SQLAlchemyRoomRepository, "save_resources", fail)
+    with pytest.raises(RuntimeError, match="injected failure"):
         members.add(room_id, request(topic_id))
     assert [member.id for member in rooms.snapshot(room_id).members] == ["user"]
-    assert RoomQueries(rooms.store).metadata(room_id).sessions == []
+    assert RoomQueries(rooms.store.database).metadata(room_id).sessions == []
 
 
 def test_api_preserves_bindings_on_restart_and_hides_upstream_errors(tmp_path: Path) -> None:
@@ -318,7 +317,12 @@ def test_api_preserves_bindings_on_restart_and_hides_upstream_errors(tmp_path: P
     route = f"/api/room/{room_id}"
     logger = logging.getLogger("tests.member-sessions")
     with TestClient(
-        create_app(logger, store=rooms.store, queue_driver=FakeQueueDriver(), session_driver=driver)
+        create_app(
+            logger,
+            database=rooms.store.database,
+            queue_driver=FakeQueueDriver(),
+            session_driver=driver,
+        )
     ) as client:
         assert driver.listed == 0 and driver.inspected == []
         response = client.post(route + "/member", json=request(topic_id).model_dump(by_alias=True))
@@ -330,10 +334,13 @@ def test_api_preserves_bindings_on_restart_and_hides_upstream_errors(tmp_path: P
         member = client.get(route).json()["members"][0]
         assert client.get(route + "/member-operation/old").status_code == 404
     driver = FakeSessionDriver([driver.sessions["one"]])
-    restored = RoomService(SQLiteRoomStore(members.store.path))
+    restored = RoomService(open_room_store(members.store.path))
     with TestClient(
         create_app(
-            logger, store=restored.store, queue_driver=FakeQueueDriver(), session_driver=driver
+            logger,
+            database=restored.store.database,
+            queue_driver=FakeQueueDriver(),
+            session_driver=driver,
         )
     ) as client:
         assert [

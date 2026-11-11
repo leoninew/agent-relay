@@ -22,9 +22,12 @@ D07 保持显式结构化目标、受控成员身份与来源幂等规则；已�
 
 最新[审视修正](20261107-architecture-review.md)按用户反馈收窄职责。下文协议事实保留，修订 5 的执行权限管理、全部工具冻结、输出观察和后台工具核对要求已撤回；备份/恢复后置。
 
-## 删除 Codex 队列等待项（2026-11-11）
+## 删除等待项与中断轮次（2026-11-11）
 
+- 本机 `codex 0.167.0` 的 `codex queue --help` 仅提供入队和可选 `--resume`；`codex-cli message queue --help` 也没有取消或中断参数。`--resume` 是尝试继续会话，不会取消当前轮次。
 - 本机 `codex app-server generate-json-schema --experimental` 提供 `thread/queue/delete`，以 `threadId` 与 `queuedSubmissionId` 定位等待项，返回 `deleted`。下表已有隔离会话的删除证据。Relay 通过 `queue clear --clear-codex` / `queue_clear(clear_codex=true)` 选择性使用该方法，仍以保存回执限定范围。
+- [OpenAI App Server 文档](https://developers.openai.com/codex/app-server/)和本机 schema 均提供 `turn/interrupt(threadId, turnId)`。它对正在运行的指定轮次发起取消；以同一轮次的 `turn/completed`、`status=interrupted` 确认结果。它不删除等待项，也不回滚已经发生的副作用。
+- 本轮没有实测中断后是否会自动消费下一条。若将来提供类似 Esc 的“中断并继续”，先等中断确认，再检查原会话是否已自动接手下一项；只有仍空闲且目标仍是原队首时，才考虑使用实验接口 `thread/queue/start`。不将中断或启动下一项绑定到清空操作。
 
 ## 证据与可重复入口
 

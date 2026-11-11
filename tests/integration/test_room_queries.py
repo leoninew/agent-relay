@@ -6,8 +6,10 @@ from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-from room_fixtures import DemoRoomService, create_room_store
+from room_fixtures import DemoRoomService, create_room_store, open_room_store
 from session_fixtures import FakeQueueDriver, FakeSessionDriver
+from sqlalchemy import select, update
+from sqlalchemy.pool import QueuePool
 
 from agent_relay.application.delivery.ports import QueueHead, QueueRejected, ReceivedInput
 from agent_relay.application.delivery.service import DeliveryService
@@ -17,9 +19,11 @@ from agent_relay.application.rooms.contracts import CreateMessage, RoomEvent, Up
 from agent_relay.application.rooms.service import RoomService
 from agent_relay.bootstrap.http import create_app
 from agent_relay.domain.rooms.rules import build_message
-from agent_relay.infrastructure.persistence.context import SQLiteMemberContext as MemberContext
-from agent_relay.infrastructure.persistence.queries import SQLiteRoomQueries as RoomQueries
-from agent_relay.infrastructure.persistence.store import SQLiteRoomStore
+from agent_relay.infrastructure.persistence.member_context import (
+    SQLAlchemyMemberContext as MemberContext,
+)
+from agent_relay.infrastructure.persistence.models import DeliveryRecord
+from agent_relay.infrastructure.persistence.room_queries import SQLAlchemyRoomQueries as RoomQueries
 
 ROOM = "/api/room/agent-relay"
 
@@ -40,7 +44,7 @@ def client(service: DemoRoomService, queue_driver: FakeQueueDriver) -> Iterator[
     client = TestClient(
         create_app(
             logging.getLogger("tests.room.queries"),
-            store=service.store,
+            database=service.store.database,
             session_driver=FakeSessionDriver(
                 [
                     SessionInfo(
@@ -60,8 +64,8 @@ def client(service: DemoRoomService, queue_driver: FakeQueueDriver) -> Iterator[
 
 
 def seed_history(service: DemoRoomService) -> None:
-    with service.store.write() as connection:
-        state = RoomQueries(service.store).resources_in(connection, "agent-relay")
+    with service.store.write_rooms() as repository:
+        state = repository.resources("agent-relay")
         for seq in range(7, 126):
             sender = "backend-worker" if seq % 2 else "frontend-worker"
             topics = (
@@ -81,15 +85,15 @@ def seed_history(service: DemoRoomService) -> None:
                 sender_name=sender,
                 created_at=datetime.now(UTC),
             )
-            service.store.insert_message(connection, state.room.id, message)
+            repository.insert_message(state.room.id, message)
 
 
 def test_queue_includes_old_messages_once_and_pages_before_chat_history(
     service: DemoRoomService, client: TestClient
 ) -> None:
     seed_history(service)
-    with service.store.write() as connection:
-        connection.execute("UPDATE deliveries SET status = 'queued'")
+    with service.store.database.write() as session:
+        session.execute(update(DeliveryRecord).values(status="queued"))
 
     assert client.get(ROOM).json()["messages"][0]["seq"] == 76
     first = client.get(f"{ROOM}/queue").json()
@@ -116,17 +120,21 @@ def test_queue_includes_active_dispatches_and_partial_receipts_but_excludes_fail
     service: DemoRoomService, client: TestClient
 ) -> None:
     first = "agent-relay-msg-0001"
-    with service.store.write() as connection:
-        connection.execute("UPDATE deliveries SET status = 'received'")
-        connection.execute(
-            "UPDATE deliveries SET status = 'queued' WHERE message_id = ? "
-            "AND target_member_id = 'frontend-worker'",
-            (first,),
+    with service.store.database.write() as session:
+        session.execute(update(DeliveryRecord).values(status="received"))
+        session.execute(
+            update(DeliveryRecord)
+            .where(
+                DeliveryRecord.message_id == first,
+                DeliveryRecord.target_member_id == "frontend-worker",
+            )
+            .values(status="queued")
         )
         for seq, status in ((2, "pending"), (3, "submitting"), (4, "rejected"), (5, "unknown")):
-            connection.execute(
-                "UPDATE deliveries SET status = ? WHERE message_id = ?",
-                (status, f"agent-relay-msg-{seq:04d}"),
+            session.execute(
+                update(DeliveryRecord)
+                .where(DeliveryRecord.message_id == f"agent-relay-msg-{seq:04d}")
+                .values(status=status)
             )
 
     partial = client.get(f"{ROOM}/queue").json()
@@ -137,13 +145,15 @@ def test_queue_includes_active_dispatches_and_partial_receipts_but_excludes_fail
         "received",
     }
     assert not partial["hasMore"]
-    with service.store.write() as connection:
-        connection.execute(
-            "UPDATE deliveries SET status = 'received' WHERE message_id = ?", (first,)
+    with service.store.database.write() as session:
+        session.execute(
+            update(DeliveryRecord)
+            .where(DeliveryRecord.message_id == first)
+            .values(status="received")
         )
     assert client.get(f"{ROOM}/queue").json()["totalMessages"] == 2
-    with service.store.write() as connection:
-        connection.execute("UPDATE deliveries SET status = 'received'")
+    with service.store.database.write() as session:
+        session.execute(update(DeliveryRecord).values(status="received"))
     assert client.get(f"{ROOM}/queue").json()["messages"] == []
     assert client.get(f"{ROOM}/queue").json()["totalMessages"] == 0
     assert client.get(f"{ROOM}/message/{first}").json()["deliveries"]
@@ -165,9 +175,11 @@ def test_queue_filters_scope_before_pagination_and_counts_the_entire_scope(
     service: DemoRoomService, client: TestClient
 ) -> None:
     seed_history(service)
-    with service.store.write() as connection:
-        connection.execute(
-            "UPDATE deliveries SET status = 'received' WHERE message_id = 'agent-relay-msg-0124'"
+    with service.store.database.write() as session:
+        session.execute(
+            update(DeliveryRecord)
+            .where(DeliveryRecord.message_id == "agent-relay-msg-0124")
+            .values(status="received")
         )
     expected = [
         seq
@@ -238,11 +250,15 @@ def test_clear_queue_marks_every_page_in_scope_and_preserves_history_and_receipt
     service: DemoRoomService, client: TestClient, queue_driver: FakeQueueDriver
 ) -> None:
     seed_history(service)
-    with service.store.write() as connection:
-        connection.execute("UPDATE deliveries SET status = 'queued'")
-        connection.execute(
-            "UPDATE deliveries SET status = 'received', received_at = updated_at "
-            "WHERE message_id = 'agent-relay-msg-0004' AND target_member_id = 'frontend-worker'"
+    with service.store.database.write() as session:
+        session.execute(update(DeliveryRecord).values(status="queued"))
+        session.execute(
+            update(DeliveryRecord)
+            .where(
+                DeliveryRecord.message_id == "agent-relay-msg-0004",
+                DeliveryRecord.target_member_id == "frontend-worker",
+            )
+            .values(status="received", received_at=DeliveryRecord.updated_at)
         )
     original = client.get(f"{ROOM}/message/agent-relay-msg-0004").json()
     cursor = client.get(f"{ROOM}/metadata").json()["eventId"]
@@ -284,29 +300,48 @@ def test_clear_codex_deletes_only_scoped_waiting_items_after_relay_commit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     scope = {"topic_id": "frontend", "member_id": "frontend-worker", "clear_codex": "true"}
-    with service.store.write() as connection:
-        connection.execute(
-            "UPDATE deliveries SET status = 'queued', queued_submission_id = id "
-            "WHERE message_id IN ('agent-relay-msg-0002', 'agent-relay-msg-0003', "
-            "'agent-relay-msg-0004', 'agent-relay-msg-0006')"
+    with service.store.database.write() as session:
+        session.execute(
+            update(DeliveryRecord)
+            .where(
+                DeliveryRecord.message_id.in_(
+                    [
+                        "agent-relay-msg-0002",
+                        "agent-relay-msg-0003",
+                        "agent-relay-msg-0004",
+                        "agent-relay-msg-0006",
+                    ]
+                )
+            )
+            .values(status="queued", queued_submission_id=DeliveryRecord.id)
         )
-        connection.execute(
-            "UPDATE deliveries SET status = 'received' "
-            "WHERE message_id = 'agent-relay-msg-0004' AND target_member_id = 'test-worker'"
+        session.execute(
+            update(DeliveryRecord)
+            .where(
+                DeliveryRecord.message_id == "agent-relay-msg-0004",
+                DeliveryRecord.target_member_id == "test-worker",
+            )
+            .values(status="received")
         )
-        connection.execute(
-            "UPDATE deliveries SET status = 'submitting' "
-            "WHERE message_id = 'agent-relay-msg-0005' AND target_member_id = 'coordinator'"
+        session.execute(
+            update(DeliveryRecord)
+            .where(
+                DeliveryRecord.message_id == "agent-relay-msg-0005",
+                DeliveryRecord.target_member_id == "coordinator",
+            )
+            .values(status="submitting")
         )
 
     original_delete = queue_driver.delete
 
     def delete_after_commit(thread_id: str, queued_submission_id: str) -> bool:
-        with service.store.read() as connection:
-            saved = connection.execute(
-                "SELECT deleted_at FROM deliveries WHERE id = ?", (queued_submission_id,)
-            ).fetchone()
-            assert saved is not None and saved["deleted_at"] is not None
+        pool = service.store.database.engine.pool
+        assert isinstance(pool, QueuePool) and pool.checkedout() == 0
+        with service.store.database.read() as session:
+            saved = session.scalar(
+                select(DeliveryRecord).where(DeliveryRecord.id == queued_submission_id)
+            )
+            assert saved is not None and saved.deleted_at is not None
         return original_delete(thread_id, queued_submission_id)
 
     monkeypatch.setattr(queue_driver, "delete", delete_after_commit)
@@ -345,10 +380,12 @@ def test_clear_queue_excludes_removed_deliveries_from_background_processing(
 ) -> None:
     work = service.store.claim_delivery()
     assert work is not None
-    with service.store.write() as connection:
-        connection.execute("UPDATE deliveries SET status = 'queued' WHERE status = 'pending'")
+    with service.store.database.write() as session:
+        session.execute(
+            update(DeliveryRecord).where(DeliveryRecord.status == "pending").values(status="queued")
+        )
     assert client.delete(f"{ROOM}/queue").status_code == 200
-    removed = RoomQueries(service.store).message(work.room_id, work.message.id)
+    removed = RoomQueries(service.store.database).message(work.room_id, work.message.id)
     assert all(delivery.deleted_at is not None for delivery in removed.deliveries)
     assert service.store.claim_delivery() is None
     assert service.store.unconfirmed_inputs() == {}
@@ -364,7 +401,7 @@ def test_clear_queue_excludes_removed_deliveries_from_background_processing(
         )
         service.store.delivery_note(delivery.target_session_id, delivery.client_message_id, "late")
     service.store.interrupt_submissions()
-    assert RoomQueries(service.store).message(work.room_id, work.message.id) == removed
+    assert RoomQueries(service.store.database).message(work.room_id, work.message.id) == removed
     assert client.get(f"{ROOM}/queue").json()["totalMessages"] == 0
 
 
@@ -406,7 +443,7 @@ def test_message_names_follow_members_across_history_context_and_delivery(
     assert service.post_message("agent-relay", request, member_id=renamed.id).sender_name == (
         renamed.name
     )
-    context = MemberContext(service.store).query(
+    context = MemberContext(service.store.database).query(
         "agent-relay", "backend-worker", ContextQuery(message_id=message.id)
     )
     assert context.messages[0].sender_name == renamed.name
@@ -419,7 +456,9 @@ def test_message_names_follow_members_across_history_context_and_delivery(
     assert claimed_names == [renamed.name]
 
     service.delete_member("agent-relay", renamed.id)
-    restored = RoomQueries(SQLiteRoomStore(service.store.path)).message("agent-relay", message.id)
+    restored = RoomQueries(open_room_store(service.store.path).database).message(
+        "agent-relay", message.id
+    )
     assert restored.sender_id == renamed.id
     assert restored.sender_name == renamed.name
 
@@ -652,10 +691,11 @@ def test_persistent_event_catchup_covers_resources_subscriptions_and_queue_resul
     stored = client.get(f"{ROOM}/message/{message['id']}").json()
     assert stored["deliveries"][0]["status"] == "queued"
 
-    reopened = RoomQueries(SQLiteRoomStore(service.store.path))
+    reopened_store = open_room_store(service.store.path)
+    reopened = RoomQueries(reopened_store.database)
     recovered = reopened.events("agent-relay", events[-8].event_id, limit=200)
     assert recovered.events == events[-7:]
-    assert RoomService(reopened.store).snapshot("agent-relay").event_id == cursor
+    assert RoomService(reopened_store).snapshot("agent-relay").event_id == cursor
 
 
 def test_websocket_uses_persistent_catchup_and_streams_subsequent_commits(

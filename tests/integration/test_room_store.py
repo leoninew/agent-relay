@@ -1,7 +1,6 @@
 import json
 import logging
 import os
-import sqlite3
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
@@ -12,8 +11,9 @@ from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-from room_fixtures import DemoRoomService, create_room_store
+from room_fixtures import DemoRoomService, create_room_store, open_room_store
 from session_fixtures import FakeSessionDriver
+from sqlalchemy.exc import IntegrityError
 
 from agent_relay.application.rooms.contracts import (
     CreateMessage,
@@ -27,8 +27,6 @@ from agent_relay.bootstrap.http import create_app
 from agent_relay.domain.rooms.errors import RoomConflictError
 from agent_relay.domain.rooms.rules import build_message
 from agent_relay.infrastructure.persistence.migrations import run_migrations
-from agent_relay.infrastructure.persistence.queries import SQLiteRoomQueries as RoomQueries
-from agent_relay.infrastructure.persistence.store import SQLiteRoomStore
 
 pytestmark = pytest.mark.usefixtures("migrated_database")
 
@@ -76,10 +74,12 @@ def test_resources_and_historical_routing_survive_a_new_process(tmp_path: Path) 
             sys.executable,
             "-c",
             "import sys; from pathlib import Path; "
-            "from agent_relay.infrastructure.persistence.store import SQLiteRoomStore; "
+            "from agent_relay.infrastructure.persistence.database import Database; "
+            "from agent_relay.infrastructure.persistence.room_store import SQLAlchemyRoomStore; "
             "from agent_relay.application.rooms.service import RoomService; "
-            "print(RoomService(SQLiteRoomStore(Path(sys.argv[1])))"
-            ".snapshot('agent-relay').model_dump_json())",
+            "database = Database(Path(sys.argv[1])); "
+            "print(RoomService(SQLAlchemyRoomStore(database))"
+            ".snapshot('agent-relay').model_dump_json()); database.close()",
             str(path),
         ],
         check=True,
@@ -120,7 +120,7 @@ def test_concurrent_publications_have_unique_sequences_and_no_lost_writes(tmp_pa
     DemoRoomService(create_room_store(path))
 
     def publish(index: int) -> int:
-        service = RoomService(SQLiteRoomStore(path))
+        service = RoomService(open_room_store(path))
         return service.post_message(
             "agent-relay",
             CreateMessage(
@@ -131,7 +131,7 @@ def test_concurrent_publications_have_unique_sequences_and_no_lost_writes(tmp_pa
     with ThreadPoolExecutor(max_workers=4) as pool:
         sequences = list(pool.map(publish, range(12)))
     assert sorted(sequences) == list(range(7, 19))
-    snapshot = RoomService(SQLiteRoomStore(path)).snapshot("agent-relay")
+    snapshot = RoomService(open_room_store(path)).snapshot("agent-relay")
     assert len(snapshot.messages) == 18
     assert len({message.id for message in snapshot.messages}) == 18
     assert all(
@@ -145,7 +145,7 @@ def test_concurrent_normalized_project_creation_reports_conflict(tmp_path: Path)
     run_migrations(path)
 
     def create(project_path: str) -> str:
-        service = RoomService(SQLiteRoomStore(path))
+        service = RoomService(open_room_store(path))
         try:
             service.create_room(CreateRoom(name="Project", project_path=project_path))
         except RoomConflictError:
@@ -155,7 +155,7 @@ def test_concurrent_normalized_project_creation_reports_conflict(tmp_path: Path)
     with ThreadPoolExecutor(max_workers=2) as pool:
         results = list(pool.map(create, ["D:/WORK/project/", "d:\\work\\PROJECT"]))
     assert sorted(results) == ["conflict", "created"]
-    assert len(RoomService(SQLiteRoomStore(path)).list_rooms()) == 1
+    assert len(RoomService(open_room_store(path)).list_rooms()) == 1
 
 
 def test_delivery_write_failure_rolls_back_message_and_resource_changes(tmp_path: Path) -> None:
@@ -164,16 +164,16 @@ def test_delivery_write_failure_rolls_back_message_and_resource_changes(tmp_path
     service = DemoRoomService(store)
     before = service.snapshot("agent-relay")
     with (
-        pytest.raises(sqlite3.IntegrityError, match="FOREIGN KEY"),
-        store.write() as connection,
+        pytest.raises(IntegrityError, match="FOREIGN KEY"),
+        store.write_rooms() as repository,
     ):
-        state = RoomQueries(store).resources_in(connection, "agent-relay")
+        state = repository.resources("agent-relay")
         original = deepcopy(state)
         state.room.name = "must roll back"
         state.members[0].topic_ids = ["backend"]
         message = build_message(
             state,
-            seq=RoomQueries.next_message_seq_in(connection, state.room.id),
+            seq=repository.next_message_seq(state.room.id),
             content="must roll back",
             topic_ids=["backend"],
             mentioned_member_ids=[],
@@ -183,9 +183,9 @@ def test_delivery_write_failure_rolls_back_message_and_resource_changes(tmp_path
         )
         # This fails after the room, subscriptions, and message have been written.
         message.deliveries[-1].target_member_id = "missing"
-        store.save_resources(connection, state, original)
-        store.insert_message(connection, state.room.id, message)
-    reopened = RoomService(SQLiteRoomStore(path))
+        repository.save_resources(state, original)
+        repository.insert_message(state.room.id, message)
+    reopened = RoomService(open_room_store(path))
     assert reopened.snapshot("agent-relay") == before
     message = reopened.post_message(
         "agent-relay",
@@ -200,13 +200,13 @@ def test_cross_room_subscription_is_rejected_by_database(tmp_path: Path) -> None
     foreign_topic = service.add_topic("housekeeper", CreateTopic(name="Other"))
     before = service.snapshot("agent-relay")
     with (
-        pytest.raises(sqlite3.IntegrityError, match="FOREIGN KEY"),
-        store.write() as connection,
+        pytest.raises(IntegrityError, match="FOREIGN KEY"),
+        store.write_rooms() as repository,
     ):
-        state = RoomQueries(store).resources_in(connection, "agent-relay")
+        state = repository.resources("agent-relay")
         original = deepcopy(state)
         state.members[0].topic_ids = [foreign_topic.id]
-        store.save_resources(connection, state, original)
+        repository.save_resources(state, original)
     assert service.snapshot("agent-relay") == before
 
 

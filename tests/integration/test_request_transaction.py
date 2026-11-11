@@ -8,7 +8,7 @@ from starlette.types import Message, Receive, Scope, Send
 
 from agent_relay.application.rooms.contracts import CreateRoom, CreateTopic, RoomMetadata
 from agent_relay.bootstrap.http import create_app
-from agent_relay.infrastructure.persistence.queries import SQLiteRoomQueries as RoomQueries
+from agent_relay.infrastructure.persistence.room_queries import SQLAlchemyRoomQueries as RoomQueries
 from agent_relay.interfaces.http.rooms.dependencies import (
     RoomQueriesDependency,
     RoomServiceDependency,
@@ -19,7 +19,7 @@ def test_request_shares_writes_and_commits_before_the_response_starts(tmp_path: 
     store = create_room_store(tmp_path / "request.sqlite3")
     app = create_app(
         logging.getLogger("tests.request-transaction"),
-        store=store,
+        database=store.database,
         session_driver=FakeSessionDriver(),
         queue_driver=FakeQueueDriver(),
     )
@@ -31,7 +31,7 @@ def test_request_shares_writes_and_commits_before_the_response_starts(tmp_path: 
         room = service.create_room(CreateRoom(name="Project", project_path="D:/project"))
         service.add_topic(room.id, CreateTopic(name="Implementation"))
         # Other connections cannot see either write until the request is committed.
-        assert RoomQueries(store).rooms() == []
+        assert RoomQueries(store.database).rooms() == []
         return queries.metadata(room.id)
 
     committed: list[RoomMetadata] = []
@@ -39,9 +39,9 @@ def test_request_shares_writes_and_commits_before_the_response_starts(tmp_path: 
     async def observe_response(scope: Scope, receive: Receive, send: Send) -> None:
         async def observe_start(message: Message) -> None:
             if message["type"] == "http.response.start":
-                rooms = RoomQueries(store).rooms()
+                rooms = RoomQueries(store.database).rooms()
                 assert len(rooms) == 1
-                committed.append(RoomQueries(store).metadata(rooms[0].id))
+                committed.append(RoomQueries(store.database).metadata(rooms[0].id))
             await send(message)
 
         await app(scope, receive, observe_start)

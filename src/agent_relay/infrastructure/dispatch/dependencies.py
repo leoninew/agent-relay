@@ -7,22 +7,25 @@ from agent_relay.application.members.sessions import SessionDriver
 from agent_relay.infrastructure.dispatch.delivery import DeliveryRunner
 from agent_relay.infrastructure.dispatch.lock import SubmitterLock
 from agent_relay.infrastructure.dispatch.presence import MemberPresenceRunner
-from agent_relay.infrastructure.persistence.store import SQLiteRoomStore
+from agent_relay.infrastructure.persistence.database import Database
+from agent_relay.infrastructure.persistence.delivery_store import SQLAlchemyDeliveryStore
+from agent_relay.infrastructure.persistence.room_store import SQLAlchemyRoomStore
 
 
 def create_delivery_runner(
-    store: SQLiteRoomStore, driver: QueueDriver, logger: logging.Logger, concurrency: int
+    database: Database, driver: QueueDriver, logger: logging.Logger, concurrency: int
 ) -> DeliveryRunner:
+    store = SQLAlchemyDeliveryStore(database)
     return DeliveryRunner(
         store,
         DeliveryService(store, driver, logger),
-        SubmitterLock(store.path),
+        SubmitterLock(database.path),
         logger,
         concurrency,
     )
 
 
 def create_presence_runner(
-    store: SQLiteRoomStore, driver: SessionDriver, logger: logging.Logger
+    database: Database, driver: SessionDriver, logger: logging.Logger
 ) -> MemberPresenceRunner:
-    return MemberPresenceRunner(MemberSessions(store, driver), logger)
+    return MemberPresenceRunner(MemberSessions(SQLAlchemyRoomStore(database), driver), logger)

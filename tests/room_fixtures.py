@@ -8,33 +8,45 @@ from agent_relay.application.rooms.service import RoomService
 from agent_relay.domain.rooms.models import Member, Message, Room, Session, Topic
 from agent_relay.domain.rooms.rules import build_message
 from agent_relay.domain.rooms.state import RoomState
+from agent_relay.infrastructure.persistence.database import Database
+from agent_relay.infrastructure.persistence.delivery_store import SQLAlchemyDeliveryStore
 from agent_relay.infrastructure.persistence.migrations import run_migrations
-from agent_relay.infrastructure.persistence.store import SQLiteRoomStore
+from agent_relay.infrastructure.persistence.room_store import SQLAlchemyRoomStore
 
 
-def create_room_store(path: Path) -> SQLiteRoomStore:
+class RoomTestStore(SQLAlchemyRoomStore, SQLAlchemyDeliveryStore):
+    @property
+    def path(self) -> Path:
+        return self.database.path
+
+
+def open_room_store(path: Path) -> RoomTestStore:
+    return RoomTestStore(Database(path))
+
+
+def create_room_store(path: Path) -> RoomTestStore:
     run_migrations(path)
-    return SQLiteRoomStore(path)
+    return open_room_store(path)
 
 
 class StoredRoomService(RoomService):
-    store: SQLiteRoomStore
+    store: RoomTestStore
 
 
 class StoredMemberSessions(MemberSessions):
-    store: SQLiteRoomStore
+    store: RoomTestStore
 
 
 class DemoRoomService(StoredRoomService):
-    def __init__(self, store: SQLiteRoomStore) -> None:
+    def __init__(self, store: RoomTestStore) -> None:
         super().__init__(store)
-        with store.write() as connection:
+        with store.write_rooms() as repository:
             for state in self._seed_rooms():
-                store.insert_room(connection, state.room)
-                store.save_resources(connection, state, RoomState(room=state.room))
+                repository.insert_room(state.room)
+                repository.save_resources(state, RoomState(room=state.room))
                 if state.room.id == "agent-relay":
                     for message in self._seed_messages(state):
-                        store.insert_message(connection, state.room.id, message)
+                        repository.insert_message(state.room.id, message)
 
     def _seed_rooms(self) -> list[RoomState]:
         room = Room(

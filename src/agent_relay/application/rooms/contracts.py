@@ -137,6 +137,20 @@ class CreateRoom(RoomModel):
         return value
 
 
+class UpdateRoom(RoomModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=80)
+
+    @field_validator("name")
+    @classmethod
+    def strip_required(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Field cannot be blank")
+        return value
+
+
 class UpdateMember(RoomModel):
     model_config = ConfigDict(extra="forbid")
 

@@ -1,10 +1,9 @@
-import json
 from datetime import UTC, datetime
 
 import pytest
 
 from agent_relay.domain.rooms.models import Delivery
-from agent_relay.infrastructure.persistence.records import delivery_from_record, delivery_record
+from agent_relay.infrastructure.persistence.mappers import delivery_from_model, delivery_to_model
 
 
 @pytest.mark.parametrize("metadata", [None, {}, {"accepted": True, "details": {"attempt": 1}}])
@@ -34,11 +33,9 @@ def test_delivery_round_trip_stores_only_extra_receipt_metadata(
         queued_submission_id="queued-id" if receipt is not None else None,
         receipt=receipt,
     )
-    record = delivery_record(delivery)
-    assert "receipt" not in record
-    encoded = record["receipt_metadata"]
-    assert (json.loads(encoded) if encoded is not None else None) == metadata
-    assert delivery_from_record(record) == delivery
+    model = delivery_to_model("room", "message", delivery)
+    assert model.receipt_metadata == metadata
+    assert delivery_from_model(model) == delivery
     assert delivery.receipt == receipt
 
 
@@ -57,4 +54,4 @@ def test_delivery_rejects_receipt_identifiers_that_disagree_with_columns(field: 
         receipt=receipt,
     )
     with pytest.raises(ValueError, match="identifiers"):
-        delivery_record(delivery)
+        delivery_to_model("room", "message", delivery)

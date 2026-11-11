@@ -14,9 +14,11 @@ from mcp.server.mcpserver import Context, MCPServer
 from mcp.types import CallToolResult, TextContent
 from room_fixtures import DemoRoomService, create_room_store
 from session_fixtures import FakeQueueDriver, FakeSessionDriver
+from sqlalchemy import update
 
 from agent_relay.application.members.sessions import SessionInfo
 from agent_relay.bootstrap.http import create_app
+from agent_relay.infrastructure.persistence.models import DeliveryRecord
 from agent_relay.interfaces.client import HttpResponse, RelayClient
 from agent_relay.interfaces.mcp import create_mcp_server
 
@@ -71,7 +73,7 @@ def mcp(tmp_path: Path) -> Iterator[McpHarness]:
     web = TestClient(
         create_app(
             logging.getLogger("tests.mcp"),
-            store=service.store,
+            database=service.store.database,
             session_driver=FakeSessionDriver(
                 [SessionInfo("candidate", "D:/work/mcp", "codex", "MCP candidate", "idle")]
             ),
@@ -213,11 +215,15 @@ def test_mcp_room_message_and_queue_scopes_share_http_semantics(mcp: McpHarness)
 
 
 def test_mcp_queue_clear_preserves_history_and_only_changes_relay_queue(mcp: McpHarness) -> None:
-    with mcp.service.store.write() as connection:
-        connection.execute("UPDATE deliveries SET status = 'queued'")
-        connection.execute(
-            "UPDATE deliveries SET queued_submission_id = 'queue-receipt' "
-            "WHERE message_id = 'agent-relay-msg-0006' AND target_member_id = 'frontend-worker'"
+    with mcp.service.store.database.write() as session:
+        session.execute(update(DeliveryRecord).values(status="queued"))
+        session.execute(
+            update(DeliveryRecord)
+            .where(
+                DeliveryRecord.message_id == "agent-relay-msg-0006",
+                DeliveryRecord.target_member_id == "frontend-worker",
+            )
+            .values(queued_submission_id="queue-receipt")
         )
     target = ("agent-relay-frontend", "queue-receipt")
     mcp.queue_driver.delete_results[target] = True

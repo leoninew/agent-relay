@@ -5,7 +5,8 @@ from starlette.requests import HTTPConnection
 
 from agent_relay.application.members.service import MemberSessions
 from agent_relay.application.members.sessions import SessionDriver
-from agent_relay.interfaces.http.persistence import RoomStoreDependency
+from agent_relay.infrastructure.persistence.room_store import SQLAlchemyRoomStore
+from agent_relay.interfaces.http.persistence import DatabaseDependency
 
 
 def get_session_driver(connection: HTTPConnection) -> SessionDriver:
@@ -16,9 +17,9 @@ SessionDriverDependency = Annotated[SessionDriver, Depends(get_session_driver)]
 
 
 def get_member_sessions(
-    store: RoomStoreDependency, driver: SessionDriverDependency
+    database: DatabaseDependency, driver: SessionDriverDependency
 ) -> MemberSessions:
-    return MemberSessions(store, driver)
+    return MemberSessions(SQLAlchemyRoomStore(database), driver)
 
 
 MemberSessionsDependency = Annotated[MemberSessions, Depends(get_member_sessions)]

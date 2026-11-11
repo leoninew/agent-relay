@@ -14,6 +14,7 @@ from agent_relay.application.rooms.contracts import (
     CreateTopic,
     RoomSnapshot,
     UpdateMember,
+    UpdateRoom,
 )
 from agent_relay.application.rooms.ports import RoomStore
 from agent_relay.domain.rooms.errors import RoomConflictError, RoomInputError, RoomNotFoundError
@@ -62,6 +63,14 @@ class RoomService:
         with self.store.write_rooms() as rooms:
             rooms.room(room_id)
             rooms.delete_room(room_id)
+
+    def update_room(self, room_id: str, request: UpdateRoom) -> Room:
+        with self.store.write_rooms() as rooms:
+            state = rooms.resources(room_id)
+            original = deepcopy(state)
+            state.room.name = request.name
+            rooms.save_resources(state, original)
+            return state.room.model_copy(deep=True)
 
     def clear_queue(
         self, room_id: str, *, topic_id: str | None = None, member_id: str | None = None
