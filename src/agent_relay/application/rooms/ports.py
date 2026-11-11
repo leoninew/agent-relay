@@ -1,23 +1,19 @@
-from contextlib import AbstractContextManager
-from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 
-from agent_relay.application.rooms.contracts import (
+from agent_relay.application.messages.contracts import (
     MessagePage,
     MessageQueuePage,
+)
+from agent_relay.application.messages.ports import MessageRepository
+from agent_relay.application.rooms.contracts import (
     RoomEventPage,
     RoomMetadata,
     RoomSnapshot,
 )
+from agent_relay.application.transactions import RepositoryScope
 from agent_relay.domain.rooms.models import Member, Message, Room
 from agent_relay.domain.rooms.state import RoomState
-
-
-@dataclass(frozen=True)
-class CodexQueueTarget:
-    session_id: str
-    submission_id: str | None
 
 
 class RoomRepository(Protocol):
@@ -28,7 +24,7 @@ class RoomRepository(Protocol):
     def publisher(self, room_id: str, member_id: str | None) -> Member: ...
     def joined_members(self, room_id: str) -> dict[str, str]: ...
     def bindings(self) -> list[tuple[str, str]]: ...
-    def insert_room(self, room: Room) -> None: ...
+    def insert_room(self, room: Room, user: Member) -> None: ...
     def delete_room(self, room_id: str) -> None: ...
     def save_resources(self, state: RoomState, original: RoomState) -> None: ...
     def save_observation(
@@ -40,27 +36,9 @@ class RoomRepository(Protocol):
         activity: str,
         observed_at: datetime,
         session_name: str | None,
-    ) -> None: ...
-
-
-class MessageRepository(Protocol):
-    def publication(
-        self, room_id: str, publisher_id: str, publication_id: str
-    ) -> Message | None: ...
-    def message_exists(self, room_id: str, message_id: str) -> bool: ...
-    def next_message_seq(self, room_id: str) -> int: ...
-    def insert_message(self, room_id: str, message: Message) -> None: ...
-    def clear_queue(
-        self,
-        room_id: str,
         *,
-        topic_id: str | None,
-        member_id: str | None,
-        deleted_at: datetime,
-    ) -> int: ...
-    def codex_queue_targets(
-        self, room_id: str, *, topic_id: str | None, member_id: str | None
-    ) -> list[CodexQueueTarget]: ...
+        refresh_cutoff: datetime,
+    ) -> None: ...
 
 
 class RoomData(RoomRepository, MessageRepository, Protocol):
@@ -104,8 +82,6 @@ class RoomQueries(Protocol):
     def events(self, room_id: str, after_event_id: int, limit: int = 200) -> RoomEventPage: ...
 
 
-class RoomStore(Protocol):
+class RoomStore(RepositoryScope[RoomData], Protocol):
     @property
     def queries(self) -> RoomQueries: ...
-    def read_rooms(self) -> AbstractContextManager[RoomData]: ...
-    def write_rooms(self) -> AbstractContextManager[RoomData]: ...

@@ -4,6 +4,7 @@ from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
+from sqlalchemy.engine import Connection
 
 MIGRATION_HEAD = "queue_deleted_20261110"
 
@@ -15,7 +16,11 @@ def _configuration(path: Path) -> Config:
     return config
 
 
-def run_migrations(path: Path) -> None:
+def run_migrations(path: Path, *, connection: Connection | None = None) -> None:
     database_path = path.expanduser().resolve()
-    database_path.parent.mkdir(parents=True, exist_ok=True)
-    command.upgrade(_configuration(database_path), "head")
+    config = _configuration(database_path)
+    if connection is None:
+        database_path.parent.mkdir(parents=True, exist_ok=True)
+    else:
+        config.attributes["connection"] = connection
+    command.upgrade(config, "head")

@@ -3,13 +3,11 @@ from datetime import datetime
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from agent_relay.application.rooms.ports import CodexQueueTarget
+from agent_relay.application.messages.ports import CodexQueueTarget
+from agent_relay.domain.rooms.delivery import ACTIVE_DELIVERY_STATUSES
 from agent_relay.domain.rooms.models import Message
 from agent_relay.infrastructure.persistence.mappers import delivery_to_model
-from agent_relay.infrastructure.persistence.message_queries import (
-    ACTIVE_DELIVERY_STATUSES,
-    MessageQueries,
-)
+from agent_relay.infrastructure.persistence.message_queries import MessageQueries
 from agent_relay.infrastructure.persistence.models import (
     DeliveryRecord,
     MessageMentionRecord,

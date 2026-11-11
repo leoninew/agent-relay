@@ -2,27 +2,32 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
-from agent_relay.application.rooms.contracts import (
+from agent_relay.application.members.contracts import (
     ChangedMember,
-    ChangedTopic,
-    ClearedMessageQueue,
     CreatedMember,
     CreateMember,
+    SessionCandidate,
+    UpdateMember,
+)
+from agent_relay.application.messages.contracts import (
+    ClearedMessageQueue,
     CreateMessage,
-    CreateRoom,
-    CreateTopic,
     MessagePage,
     MessageQueuePage,
+)
+from agent_relay.application.rooms.contracts import (
+    ChangedTopic,
+    CreateRoom,
+    CreateTopic,
     RoomEventPage,
     RoomMetadata,
     RoomSnapshot,
-    SessionCandidate,
-    UpdateMember,
     UpdateRoom,
 )
 from agent_relay.domain.rooms.models import Member, Message, Room
-from agent_relay.interfaces.http.members.dependencies import MemberSessionsDependency
+from agent_relay.interfaces.http.members.dependencies import MemberServiceDependency
 from agent_relay.interfaces.http.rooms.dependencies import (
+    MessageServiceDependency,
     QueueClearServiceDependency,
     QueueDriverDependency,
     RoomQueriesDependency,
@@ -119,7 +124,7 @@ def get_message(room_id: str, message_id: str, queries: RoomQueriesDependency) -
 @router.delete("/{room_id}/queue", response_model_exclude_none=True)
 def clear_message_queue(
     room_id: str,
-    service: RoomServiceDependency,
+    service: MessageServiceDependency,
     queue_clear_service: QueueClearServiceDependency,
     driver: QueueDriverDependency,
     topic_id: Annotated[str | None, Query()] = None,
@@ -144,17 +149,21 @@ def get_events(
 
 
 @router.post("/{room_id}/message", status_code=201)
-def create_message(room_id: str, request: CreateMessage, service: RoomServiceDependency) -> Message:
+def create_message(
+    room_id: str, request: CreateMessage, service: MessageServiceDependency
+) -> Message:
     return service.post_message(room_id, request)
 
 
 @router.get("/{room_id}/publication/{publication_id}")
-def get_publication(room_id: str, publication_id: str, service: RoomServiceDependency) -> Message:
+def get_publication(
+    room_id: str, publication_id: str, service: MessageServiceDependency
+) -> Message:
     return service.publication(room_id, publication_id)
 
 
 @router.get("/{room_id}/session")
-def list_sessions(room_id: str, service: MemberSessionsDependency) -> list[SessionCandidate]:
+def list_sessions(room_id: str, service: MemberServiceDependency) -> list[SessionCandidate]:
     return service.candidates(room_id)
 
 
@@ -165,14 +174,14 @@ def get_session_member(room_id: str, session_id: str, queries: RoomQueriesDepend
 
 @router.post("/{room_id}/member", status_code=201)
 def add_member(
-    room_id: str, request: CreateMember, service: MemberSessionsDependency
+    room_id: str, request: CreateMember, service: MemberServiceDependency
 ) -> CreatedMember:
     return service.add(room_id, request)
 
 
 @router.patch("/{room_id}/member/{member_id}")
 def update_member(
-    room_id: str, member_id: str, request: UpdateMember, service: RoomServiceDependency
+    room_id: str, member_id: str, request: UpdateMember, service: MemberServiceDependency
 ) -> ChangedMember:
     return service.update_member(room_id, member_id, request)
 
@@ -195,5 +204,5 @@ def delete_topic(room_id: str, topic_id: str, service: RoomServiceDependency) ->
 
 
 @router.delete("/{room_id}/member/{member_id}")
-def delete_member(room_id: str, member_id: str, service: RoomServiceDependency) -> ChangedMember:
+def delete_member(room_id: str, member_id: str, service: MemberServiceDependency) -> ChangedMember:
     return service.delete_member(room_id, member_id)

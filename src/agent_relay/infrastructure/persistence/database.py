@@ -3,6 +3,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from sqlalchemy import Text, column, select, table
+from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -14,11 +15,11 @@ from agent_relay.infrastructure.persistence.transaction import SQLAlchemyTransac
 class Database:
     """Own the process engine and lend serial, explicitly bounded sessions."""
 
-    def __init__(self, path: Path) -> None:
+    def __init__(self, path: Path, *, engine: Engine | None = None) -> None:
         self.path = path.expanduser().resolve()
-        if not self.path.is_file():
+        if engine is None and not self.path.is_file():
             raise RuntimeError("Room database is missing; run `python -m agent_relay.migrate`")
-        self.engine = create_sqlite_engine(self.path)
+        self.engine = engine if engine is not None else create_sqlite_engine(self.path)
         self._sessions = sessionmaker(
             self.engine, autoflush=False, expire_on_commit=False, autobegin=False
         )

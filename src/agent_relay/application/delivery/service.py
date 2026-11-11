@@ -6,16 +6,24 @@ from datetime import UTC, datetime
 from agent_relay.application.delivery.ports import (
     ActivationRejected,
     ClaimedDelivery,
-    DeliveryStore,
+    DeliveryRepository,
     QueueDriver,
     QueueRejected,
+)
+from agent_relay.domain.rooms.delivery import (
+    PROCESSING_FAILURE,
+    QUEUED_NOTE,
+    REJECTED_SUBMISSION,
+    UNCERTAIN_SUBMISSION,
+    queue_accepted,
+    submission_failed,
 )
 
 
 class DeliveryService:
     def __init__(
         self,
-        store: DeliveryStore,
+        store: DeliveryRepository,
         driver: QueueDriver,
         logger: logging.Logger,
     ) -> None:
@@ -24,21 +32,19 @@ class DeliveryService:
         self.logger = logger
         self.history_cursors: dict[str, str | None] = {}
 
+    def recover(self) -> None:
+        self.store.interrupt_submissions()
+
     def submit(self, work: ClaimedDelivery) -> None:
         try:
             self._submit(work)
         except Exception:
             self.logger.exception("Delivery processing failed delivery=%s", work.delivery.id)
-            delivery = work.delivery.model_copy(deep=True)
-            delivery.status = "unknown"
-            delivery.error = "本次投递处理失败，无法确认入队结果；不会自动重发"
-            delivery.updated_at = datetime.now(UTC)
-            # Only an unfinished submission can change. A saved queue receipt or
-            # received input must survive an error in the later activation step.
+            delivery = submission_failed(work.delivery, PROCESSING_FAILURE, datetime.now(UTC))
             self.store.finish_delivery(work.room_id, delivery)
 
     def _submit(self, work: ClaimedDelivery) -> None:
-        delivery = work.delivery.model_copy(deep=True)
+        delivery = work.delivery
         sender = f"{work.message.sender_name}（{work.message.sender_id}）"
         created_at = work.message.model_dump(mode="json", by_alias=True)["createdAt"]
         text = (
@@ -55,20 +61,13 @@ class DeliveryService:
                 delivery.client_message_id,
                 text,
             )
-            delivery.status = "queued"
-            delivery.queued_at = datetime.now(UTC)
-            delivery.note = "已入队，等待原会话消费；如已中断，请在原 Codex 会话继续"
-            delivery.queued_submission_id = receipt.id
-            delivery.receipt = receipt.metadata
+            delivery = queue_accepted(delivery, receipt.id, receipt.metadata, datetime.now(UTC))
         except QueueRejected:
-            delivery.status = "rejected"
-            delivery.error = "Codex 明确拒绝本次入队"
+            delivery = submission_failed(delivery, REJECTED_SUBMISSION, datetime.now(UTC))
             self.logger.exception("Queue rejected delivery=%s", delivery.id)
         except Exception:
-            delivery.status = "unknown"
-            delivery.error = "无法确认入队结果；不会自动重发"
+            delivery = submission_failed(delivery, UNCERTAIN_SUBMISSION, datetime.now(UTC))
             self.logger.exception("Queue result unknown delivery=%s", delivery.id)
-        delivery.updated_at = datetime.now(UTC)
         saved = self.store.finish_delivery(work.room_id, delivery)
         if saved and delivery.status == "queued":
             self.activate_after_submission(delivery.target_session_id, delivery.client_message_id)
@@ -81,7 +80,7 @@ class DeliveryService:
                 self.store.delivery_note(
                     session_id,
                     client_message_id,
-                    "已入队，等待原会话消费；如已中断，请在原 Codex 会话继续",
+                    QUEUED_NOTE,
                 )
                 return
             self.driver.activate(session_id, head.id)

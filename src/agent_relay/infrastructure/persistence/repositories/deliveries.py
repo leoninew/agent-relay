@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session, aliased
 from sqlalchemy.sql.dml import Update
 
 from agent_relay.application.delivery.ports import ClaimedDelivery, QueueHead, ReceivedInput
+from agent_relay.domain.rooms.delivery import INTERRUPTED_SUBMISSION, UNCONFIRMED_DELIVERY_STATUSES
 from agent_relay.domain.rooms.models import Delivery
 from agent_relay.infrastructure.persistence.mappers import delivery_from_model, delivery_values
 from agent_relay.infrastructure.persistence.message_queries import MessageQueries
@@ -45,9 +46,9 @@ class SQLAlchemyDeliveryRepository:
             update(DeliveryRecord)
             .where(DeliveryRecord.status == "submitting", DeliveryRecord.deleted_at.is_(None))
             .values(
-                status="unknown",
+                status=INTERRUPTED_SUBMISSION.status,
                 updated_at=datetime.now(UTC),
-                error="提交中断，入队结果未知；不会自动重发",
+                error=INTERRUPTED_SUBMISSION.error,
             )
         )
 
@@ -151,7 +152,7 @@ class SQLAlchemyDeliveryRepository:
         rows = self.session.execute(
             select(DeliveryRecord.target_session_id, DeliveryRecord.client_message_id)
             .where(
-                DeliveryRecord.status.in_(("queued", "unknown")),
+                DeliveryRecord.status.in_(UNCONFIRMED_DELIVERY_STATUSES),
                 DeliveryRecord.deleted_at.is_(None),
             )
             .order_by(insertion_order("deliveries"))
@@ -166,7 +167,7 @@ class SQLAlchemyDeliveryRepository:
             update(DeliveryRecord)
             .where(
                 DeliveryRecord.target_session_id == session_id,
-                DeliveryRecord.status.in_(("queued", "unknown")),
+                DeliveryRecord.status.in_(UNCONFIRMED_DELIVERY_STATUSES),
                 DeliveryRecord.deleted_at.is_(None),
                 DeliveryRecord.client_message_id == received.client_message_id,
             )

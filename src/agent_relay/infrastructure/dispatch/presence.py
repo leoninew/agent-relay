@@ -1,13 +1,11 @@
 import logging
 from threading import Event, Thread
 
-from agent_relay.application.members.service import MemberSessions
+from agent_relay.application.members.service import MemberService
 
 
 class MemberPresenceRunner:
-    def __init__(
-        self, members: MemberSessions, logger: logging.Logger, interval: float = 5
-    ) -> None:
+    def __init__(self, members: MemberService, logger: logging.Logger, interval: float = 5) -> None:
         self.members = members
         self.logger = logger
         self.interval = interval

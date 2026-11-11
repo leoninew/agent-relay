@@ -1,21 +1,19 @@
-from datetime import UTC, datetime
-from uuid import uuid4
+from datetime import datetime
 
 from sqlalchemy import or_, select, update
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement
 
-from agent_relay.application.members.context import (
+from agent_relay.application.context.contracts import (
     CatalogMember,
     CatalogTopic,
     ContextMessage,
     ContextQuery,
-    ContextResult,
     MemberCatalog,
 )
+from agent_relay.application.rooms.views import TopicPosition
+from agent_relay.domain.rooms.context import VisibilityScope
 from agent_relay.domain.rooms.errors import RoomNotFoundError
-from agent_relay.domain.rooms.models import TopicPosition
-from agent_relay.domain.rooms.positions import position_updates, require_subscribed_topic
 from agent_relay.infrastructure.persistence.message_queries import MessageQueries
 from agent_relay.infrastructure.persistence.models import (
     ContextMessageRecord,
@@ -39,7 +37,7 @@ class SQLAlchemyContextRepository:
         self.resources = ResourceQueries(session)
         self.messages = MessageQueries(session)
 
-    def _subscriptions(self, room_id: str, member_id: str) -> set[str]:
+    def subscriptions(self, room_id: str, member_id: str) -> set[str]:
         member = self.session.scalar(
             select(MemberRecord.id).where(
                 MemberRecord.room_id == room_id,
@@ -66,7 +64,7 @@ class SQLAlchemyContextRepository:
         )
 
     def catalog(self, room_id: str, member_id: str) -> MemberCatalog:
-        subscriptions = self._subscriptions(room_id, member_id)
+        subscriptions = self.subscriptions(room_id, member_id)
         room = self.resources.room(room_id)
         topics = [
             CatalogTopic(
@@ -113,18 +111,17 @@ class SQLAlchemyContextRepository:
             members=members,
         )
 
-    def positions(self, room_id: str, member_id: str) -> list[TopicPosition]:
-        self._subscriptions(room_id, member_id)
+    def load_positions(self, room_id: str, member_id: str) -> list[TopicPosition]:
         return self.resources.positions(room_id, member_id)
 
     @staticmethod
-    def _visibility(member_id: str, subscriptions: set[str]) -> ColumnElement[bool]:
+    def _visibility(scope: VisibilityScope) -> ColumnElement[bool]:
         delivered = (
             select(DeliveryRecord.message_id)
             .where(
                 DeliveryRecord.room_id == MessageRecord.room_id,
                 DeliveryRecord.message_id == MessageRecord.id,
-                DeliveryRecord.target_member_id == member_id,
+                DeliveryRecord.target_member_id == scope.delivery_member_id,
             )
             .correlate(MessageRecord)
             .exists()
@@ -134,19 +131,18 @@ class SQLAlchemyContextRepository:
             .where(
                 MessageTopicRecord.room_id == MessageRecord.room_id,
                 MessageTopicRecord.message_id == MessageRecord.id,
-                MessageTopicRecord.topic_id.in_(subscriptions),
+                MessageTopicRecord.topic_id.in_(scope.topic_ids),
             )
             .correlate(MessageRecord)
             .exists()
         )
-        return or_(MessageRecord.publisher_id == member_id, delivered, subscribed)
+        return or_(MessageRecord.publisher_id == scope.publisher_id, delivered, subscribed)
 
-    def _select(
-        self, room_id: str, member_id: str, request: ContextQuery, subscriptions: set[str]
+    def select_messages(
+        self, room_id: str, request: ContextQuery, scope: VisibilityScope
     ) -> tuple[list[ContextMessage], bool]:
-        require_subscribed_topic(request.topic_id, subscriptions)
         statement = self.messages.statement().where(
-            MessageRecord.room_id == room_id, self._visibility(member_id, subscriptions)
+            MessageRecord.room_id == room_id, self._visibility(scope)
         )
         if request.message_id is not None:
             statement = statement.where(MessageRecord.id == request.message_id)
@@ -214,18 +210,16 @@ class SQLAlchemyContextRepository:
                 return
         self.session.add(RoomEventRecord(room_id=room_id, kind="position", entity_id=member_id))
 
-    def _record(
+    def record_provision(
         self,
         room_id: str,
         member_id: str,
         request: ContextQuery,
-        subscriptions: set[str],
         messages: list[ContextMessage],
-    ) -> str | None:
-        if not messages:
-            return None
-        query_id = str(uuid4())
-        now = datetime.now(UTC)
+        updates: dict[str, int],
+        query_id: str,
+        provided_at: datetime,
+    ) -> None:
         self.session.add(
             ContextQueryRecord(
                 id=query_id,
@@ -237,7 +231,7 @@ class SQLAlchemyContextRepository:
                 before_seq=request.before_seq,
                 after_seq=request.after_seq,
                 page_limit=request.limit,
-                provided_at=now,
+                provided_at=provided_at,
             )
         )
         self.session.flush()
@@ -248,26 +242,6 @@ class SQLAlchemyContextRepository:
             for position, message in enumerate(messages)
         )
         self.session.flush()
-        updates = position_updates(
-            subscriptions,
-            request.topic_id,
-            ((message.seq, message.topic_ids) for message in messages),
-        )
         for topic_id, seq in sorted(updates.items()):
-            self._advance_position(room_id, member_id, topic_id, seq, now)
+            self._advance_position(room_id, member_id, topic_id, seq, provided_at)
         self.session.flush()
-        return query_id
-
-    def query(self, room_id: str, member_id: str, request: ContextQuery) -> ContextResult:
-        subscriptions = self._subscriptions(room_id, member_id)
-        messages, more = self._select(room_id, member_id, request, subscriptions)
-        query_id = self._record(room_id, member_id, request, subscriptions, messages)
-        forward = request.after_seq is not None
-        return ContextResult(
-            query_id=query_id,
-            messages=messages,
-            has_more=more,
-            next_before_seq=messages[0].seq if more and not forward else None,
-            next_after_seq=messages[-1].seq if more and forward else None,
-            positions=self.resources.positions(room_id, member_id),
-        )

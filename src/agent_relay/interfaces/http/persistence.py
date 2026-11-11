@@ -3,10 +3,13 @@ from typing import Annotated, cast
 from fastapi import Depends, Request
 from starlette.requests import HTTPConnection
 
-from agent_relay.application.members.context import MemberContext
+from agent_relay.application.context.ports import ContextQueries
+from agent_relay.application.context.service import ContextService
+from agent_relay.infrastructure.persistence.context_queries import SQLAlchemyContextQueries
 from agent_relay.infrastructure.persistence.database import Database
-from agent_relay.infrastructure.persistence.member_context import SQLAlchemyMemberContext
+from agent_relay.infrastructure.persistence.repositories.context import SQLAlchemyContextRepository
 from agent_relay.infrastructure.persistence.room_store import SQLAlchemyRoomStore
+from agent_relay.infrastructure.persistence.scopes import SQLAlchemyScope
 from agent_relay.infrastructure.persistence.transaction import SQLAlchemyTransaction
 
 
@@ -25,8 +28,15 @@ def get_room_store(request: Request, database: DatabaseDependency) -> SQLAlchemy
 RoomStoreDependency = Annotated[SQLAlchemyRoomStore, Depends(get_room_store)]
 
 
-def get_member_context(database: DatabaseDependency) -> MemberContext:
-    return SQLAlchemyMemberContext(database)
+def get_context_service(database: DatabaseDependency) -> ContextService:
+    return ContextService(SQLAlchemyScope(database, SQLAlchemyContextRepository))
 
 
-MemberContextDependency = Annotated[MemberContext, Depends(get_member_context)]
+ContextServiceDependency = Annotated[ContextService, Depends(get_context_service)]
+
+
+def get_context_queries(database: DatabaseDependency) -> ContextQueries:
+    return SQLAlchemyContextQueries(database)
+
+
+ContextQueriesDependency = Annotated[ContextQueries, Depends(get_context_queries)]

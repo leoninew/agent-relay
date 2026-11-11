@@ -1,0 +1,31 @@
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Protocol
+
+from agent_relay.domain.rooms.models import Message
+
+
+@dataclass(frozen=True)
+class CodexQueueTarget:
+    session_id: str
+    submission_id: str | None
+
+
+class MessageRepository(Protocol):
+    def publication(
+        self, room_id: str, publisher_id: str, publication_id: str
+    ) -> Message | None: ...
+    def message_exists(self, room_id: str, message_id: str) -> bool: ...
+    def next_message_seq(self, room_id: str) -> int: ...
+    def insert_message(self, room_id: str, message: Message) -> None: ...
+    def clear_queue(
+        self,
+        room_id: str,
+        *,
+        topic_id: str | None,
+        member_id: str | None,
+        deleted_at: datetime,
+    ) -> int: ...
+    def codex_queue_targets(
+        self, room_id: str, *, topic_id: str | None, member_id: str | None
+    ) -> list[CodexQueueTarget]: ...

@@ -1,11 +1,11 @@
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from sqlalchemy import delete, false, func, or_, update
 from sqlalchemy.orm import Session
 
 from agent_relay.application.rooms.contracts import RoomMetadata
 from agent_relay.domain.rooms.events import RoomChangeKind
-from agent_relay.domain.rooms.models import USER_MEMBER_ID, Member, Room
+from agent_relay.domain.rooms.models import Member, Room
 from agent_relay.domain.rooms.state import RoomState
 from agent_relay.infrastructure.persistence.models import (
     ContextMessageRecord,
@@ -56,25 +56,18 @@ class SQLAlchemyRoomRepository:
     def _event(self, room_id: str, kind: RoomChangeKind, entity_id: str) -> None:
         self.session.add(RoomEventRecord(room_id=room_id, kind=kind, entity_id=entity_id))
 
-    def insert_room(self, room: Room) -> None:
+    def insert_room(self, room: Room, user: Member) -> None:
         self.session.add(RoomRecord(**room.model_dump()))
         self.session.flush()
         self.session.add(
             MemberRecord(
                 room_id=room.id,
-                id=USER_MEMBER_ID,
-                name="你",
-                session_id=None,
-                kind="human",
-                initials="你",
-                presence="available",
-                activity="",
-                activity_source="user",
+                **user.model_dump(exclude={"topic_ids"}),
             )
         )
         self.session.flush()
         self._event(room.id, "room", room.id)
-        self._event(room.id, "member", USER_MEMBER_ID)
+        self._event(room.id, "member", user.id)
         self.session.flush()
 
     def save_resources(self, state: RoomState, original: RoomState) -> None:
@@ -185,8 +178,9 @@ class SQLAlchemyRoomRepository:
         activity: str,
         observed_at: datetime,
         session_name: str | None,
+        *,
+        refresh_cutoff: datetime,
     ) -> None:
-        cutoff = observed_at - timedelta(seconds=30)
         member_updated = self.session.scalar(
             update(MemberRecord)
             .where(
@@ -199,7 +193,7 @@ class SQLAlchemyRoomRepository:
                     MemberRecord.activity.is_distinct_from(activity),
                     MemberRecord.activity_source.is_distinct_from("codex"),
                     MemberRecord.observed_at.is_(None),
-                    time_at_or_before(MemberRecord.observed_at, cutoff),
+                    time_at_or_before(MemberRecord.observed_at, refresh_cutoff),
                 ),
             )
             .values(
@@ -227,7 +221,7 @@ class SQLAlchemyRoomRepository:
                     SessionRecord.presence.is_distinct_from(presence),
                     name_changed,
                     SessionRecord.observed_at.is_(None),
-                    time_at_or_before(SessionRecord.observed_at, cutoff),
+                    time_at_or_before(SessionRecord.observed_at, refresh_cutoff),
                 ),
             )
             .values(

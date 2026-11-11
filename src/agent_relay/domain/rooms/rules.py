@@ -3,7 +3,7 @@ from pathlib import PurePosixPath, PureWindowsPath
 from uuid import uuid4
 
 from agent_relay.domain.rooms.errors import RoomConflictError, RoomInputError
-from agent_relay.domain.rooms.models import USER_MEMBER_ID, Delivery, Message
+from agent_relay.domain.rooms.models import USER_MEMBER_ID, Delivery, Member, Message
 from agent_relay.domain.rooms.state import RoomState
 
 
@@ -56,6 +56,28 @@ def resolve_recipient_ids(
             raise RoomInputError("排除发布成员后没有实际接收人，请选择其他话题或 @ 其他成员")
         raise RoomInputError("所选话题暂无成员，请选择其他话题或 @ 成员")
     return recipients
+
+
+def validate_sender_targets(sender: Member, mentioned_member_ids: list[str]) -> None:
+    if sender.kind == "human" and USER_MEMBER_ID in mentioned_member_ids:
+        raise RoomInputError("不能将消息发送给自己")
+
+
+def validate_publication_replay(
+    existing: Message,
+    *,
+    content: str,
+    topic_ids: list[str],
+    mentions: list[str],
+    reply_to_message_id: str | None,
+) -> None:
+    if (
+        existing.content != content
+        or set(existing.topic_ids) != set(topic_ids)
+        or set(existing.mentioned_member_ids) != set(mentions)
+        or existing.reply_to_message_id != reply_to_message_id
+    ):
+        raise RoomConflictError("发布编号已用于另一条消息")
 
 
 def build_message(

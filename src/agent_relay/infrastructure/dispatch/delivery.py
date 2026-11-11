@@ -3,7 +3,7 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from threading import Event, Thread
 from time import monotonic
 
-from agent_relay.application.delivery.ports import DeliveryStore
+from agent_relay.application.delivery.ports import DeliveryRepository
 from agent_relay.application.delivery.service import DeliveryService
 from agent_relay.infrastructure.dispatch.lock import SubmitterLock
 
@@ -11,7 +11,7 @@ from agent_relay.infrastructure.dispatch.lock import SubmitterLock
 class DeliveryRunner:
     def __init__(
         self,
-        store: DeliveryStore,
+        store: DeliveryRepository,
         service: DeliveryService,
         lock: SubmitterLock,
         logger: logging.Logger,
@@ -44,7 +44,7 @@ class DeliveryRunner:
                 self.stop.wait(0.5)
             if self.stop.is_set():
                 return
-            self.store.interrupt_submissions()
+            self.service.recover()
             with ThreadPoolExecutor(max_workers=self.concurrency) as pool:
                 active: set[Future[None]] = set()
                 observations: dict[Future[None], str] = {}

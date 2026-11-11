@@ -36,9 +36,9 @@ def _begin(connection: Connection) -> None:
     connection.exec_driver_sql("BEGIN IMMEDIATE" if mode == "IMMEDIATE" else "BEGIN")
 
 
-def create_sqlite_engine(path: Path) -> Engine:
+def create_sqlite_engine(path: Path | URL) -> Engine:
     engine = create_engine(
-        URL.create("sqlite", database=str(path)),
+        path if isinstance(path, URL) else URL.create("sqlite", database=str(path)),
         connect_args={"timeout": 5.0, "check_same_thread": False},
     )
     event.listen(engine, "connect", _configure_connection)

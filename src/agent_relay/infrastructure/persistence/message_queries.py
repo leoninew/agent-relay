@@ -4,7 +4,8 @@ from sqlalchemy import Select, and_, func, or_, select
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement
 
-from agent_relay.application.rooms.contracts import MessagePage, MessageQueuePage
+from agent_relay.application.messages.contracts import MessagePage, MessageQueuePage
+from agent_relay.domain.rooms.delivery import ACTIVE_DELIVERY_STATUSES
 from agent_relay.domain.rooms.errors import RoomNotFoundError
 from agent_relay.domain.rooms.models import Delivery, Message
 from agent_relay.infrastructure.persistence.mappers import delivery_from_model, message_from_model
@@ -18,8 +19,6 @@ from agent_relay.infrastructure.persistence.models import (
     TopicRecord,
 )
 from agent_relay.infrastructure.persistence.sqlite import insertion_order, literal_contains
-
-ACTIVE_DELIVERY_STATUSES = ("pending", "submitting", "queued")
 
 
 class MessageQueries:

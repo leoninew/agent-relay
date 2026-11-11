@@ -5,22 +5,34 @@ from datetime import UTC, datetime
 from typing import TypeVar
 from uuid import uuid4
 
+from agent_relay.application.members.contracts import (
+    ChangedMember,
+    CreatedMember,
+    CreateMember,
+    SessionCandidate,
+    UpdateMember,
+)
 from agent_relay.application.members.sessions import (
     SessionDriver,
     SessionInfo,
     SessionUnavailableError,
 )
-from agent_relay.application.rooms.contracts import CreatedMember, CreateMember, SessionCandidate
 from agent_relay.application.rooms.ports import RoomStore
 from agent_relay.domain.rooms.errors import RoomConflictError, RoomInputError
+from agent_relay.domain.rooms.members import (
+    observation_cutoff,
+    rename_member,
+    retire_member,
+    validate_join,
+)
 from agent_relay.domain.rooms.models import Member, Session
-from agent_relay.domain.rooms.rules import normalize_project_path, validate_member
+from agent_relay.domain.rooms.rules import normalize_project_path
 from agent_relay.domain.rooms.state import RoomState
 
 T = TypeVar("T")
 
 
-class MemberSessions:
+class MemberService:
     def __init__(self, store: RoomStore, driver: SessionDriver) -> None:
         self.store = store
         self.driver = driver
@@ -33,12 +45,12 @@ class MemberSessions:
             raise SessionUnavailableError("无法读取 Codex 会话，请刷新后重试") from exc
 
     def candidates(self, room_id: str) -> list[SessionCandidate]:
-        with self.store.read_rooms() as rooms:
+        with self.store.read() as rooms:
             cwd = rooms.room(room_id).project_path
         sessions = self._metadata(self.driver.list_sessions)
         observed_at = datetime.now(UTC)
         self.record_observations(room_id, sessions, observed_at)
-        with self.store.read_rooms() as rooms:
+        with self.store.read() as rooms:
             joined = rooms.joined_members(room_id)
         result: list[SessionCandidate] = []
         for info in sessions:
@@ -65,7 +77,7 @@ class MemberSessions:
     ) -> None:
         """Refresh session metadata without changing member names or subscriptions."""
         by_id = {info.id: info for info in sessions}
-        with self.store.write_rooms() as rooms:
+        with self.store.write() as rooms:
             cwd = rooms.room(room_id).project_path
             for session_id, member_id in rooms.joined_members(room_id).items():
                 info = by_id.get(session_id)
@@ -84,6 +96,7 @@ class MemberSessions:
                     activity,
                     observed_at,
                     info.name if valid and info is not None else None,
+                    refresh_cutoff=observation_cutoff(observed_at),
                 )
 
     @staticmethod
@@ -98,15 +111,26 @@ class MemberSessions:
 
     @staticmethod
     def _validate_add(state: RoomState, request: CreateMember) -> None:
-        validate_member(state, request.name, request.topic_ids)
-        if any(
-            member.session_id == request.session_id and not member.deleted_at
-            for member in state.members
-        ):
-            raise RoomConflictError("该会话已加入聊天室")
+        validate_join(state, request.name, request.topic_ids, request.session_id)
+
+    def update_member(self, room_id: str, member_id: str, request: UpdateMember) -> ChangedMember:
+        with self.store.write() as rooms:
+            state = rooms.resources(room_id)
+            original = deepcopy(state)
+            member = rename_member(state, member_id, request.name, request.topic_ids)
+            rooms.save_resources(state, original)
+            return ChangedMember(**member.model_dump(), metadata=rooms.metadata(room_id))
+
+    def delete_member(self, room_id: str, member_id: str) -> ChangedMember:
+        with self.store.write() as rooms:
+            state = rooms.resources(room_id)
+            original = deepcopy(state)
+            member = retire_member(state, member_id, datetime.now(UTC))
+            rooms.save_resources(state, original)
+            return ChangedMember(**member.model_dump(), metadata=rooms.metadata(room_id))
 
     def add(self, room_id: str, request: CreateMember) -> CreatedMember:
-        with self.store.read_rooms() as rooms:
+        with self.store.read() as rooms:
             state = rooms.resources(room_id)
             self._validate_add(state, request)
             cwd = state.room.project_path
@@ -118,7 +142,7 @@ class MemberSessions:
             raise RoomInputError("所选 Codex 会话不属于当前聊天室项目目录")
         if not info.usable:
             raise RoomConflictError(info.unavailable_reason or "所选 Codex 会话当前不可用")
-        with self.store.write_rooms() as rooms:
+        with self.store.write() as rooms:
             state = rooms.resources(room_id)
             self._validate_add(state, request)
             original = deepcopy(state)
@@ -154,7 +178,7 @@ class MemberSessions:
             )
 
     def refresh_presence(self, logger: logging.Logger, cancelled: Callable[[], bool]) -> None:
-        with self.store.read_rooms() as rooms:
+        with self.store.read() as rooms:
             bindings = rooms.bindings()
         sessions: list[SessionInfo] = []
         for session_id in dict.fromkeys(session_id for _, session_id in bindings):

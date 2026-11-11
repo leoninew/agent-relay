@@ -4,9 +4,11 @@ from contextlib import contextmanager
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from agent_relay.application.rooms.contracts import (
+from agent_relay.application.messages.contracts import (
     MessagePage,
     MessageQueuePage,
+)
+from agent_relay.application.rooms.contracts import (
     RoomEvent,
     RoomEventPage,
     RoomMetadata,

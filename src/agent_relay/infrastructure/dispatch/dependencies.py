@@ -2,7 +2,7 @@ import logging
 
 from agent_relay.application.delivery.ports import QueueDriver
 from agent_relay.application.delivery.service import DeliveryService
-from agent_relay.application.members.service import MemberSessions
+from agent_relay.application.members.service import MemberService
 from agent_relay.application.members.sessions import SessionDriver
 from agent_relay.infrastructure.dispatch.delivery import DeliveryRunner
 from agent_relay.infrastructure.dispatch.lock import SubmitterLock
@@ -28,4 +28,4 @@ def create_delivery_runner(
 def create_presence_runner(
     database: Database, driver: SessionDriver, logger: logging.Logger
 ) -> MemberPresenceRunner:
-    return MemberPresenceRunner(MemberSessions(SQLAlchemyRoomStore(database), driver), logger)
+    return MemberPresenceRunner(MemberService(SQLAlchemyRoomStore(database), driver), logger)

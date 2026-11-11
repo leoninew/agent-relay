@@ -89,11 +89,3 @@ class Message(RoomModel):
     reply_to_message_id: str | None = None
     created_at: datetime
     deliveries: list[Delivery]
-
-
-class TopicPosition(RoomModel):
-    member_id: str
-    topic_id: str
-    seq: int
-    updated_at: datetime | None
-    later_count: int
