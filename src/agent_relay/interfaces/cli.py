@@ -11,6 +11,14 @@ import click
 from agent_relay.interfaces.client import ApiResult, RelayClient, RelayClientError, RequestOpener
 
 
+def _validate_keyword(
+    _context: click.Context, _parameter: click.Parameter, value: str | None
+) -> str | None:
+    if value is not None and len(value) > 200:
+        raise click.BadParameter("最多 200 字符")
+    return value
+
+
 @click.group(context_settings={"help_option_names": ["-h", "--help"]}, no_args_is_help=False)
 @click.option(
     "--session-id",
@@ -78,11 +86,12 @@ def room_create(client: RelayClient, name: str, project_path: str) -> ApiResult:
     return client.room_create(name, project_path)
 
 
-@room_commands.command("get", help="读取聊天室及最新消息页")
+@room_commands.command("get", help="读取聊天室和消息页")
 @click.argument("room_id")
 @click.option("--topic-id")
-@click.option("--member-id", help="按发言成员筛选")
-@click.option("--before-seq", type=int)
+@click.option("--member-id", help="筛选发送者或实际接收成员")
+@click.option("--keyword", callback=_validate_keyword, help="正文中的字面子串，最多 200 字符")
+@click.option("--before-seq", type=click.IntRange(min=1))
 @click.option("--limit", type=click.IntRange(1, 200), default=50, show_default=True)
 @click.pass_obj
 def room_get(
@@ -90,10 +99,11 @@ def room_get(
     room_id: str,
     topic_id: str | None,
     member_id: str | None,
+    keyword: str | None,
     before_seq: int | None,
     limit: int,
 ) -> ApiResult:
-    return client.room_get(room_id, topic_id, member_id, before_seq, limit)
+    return client.room_get(room_id, topic_id, member_id, before_seq, limit, keyword=keyword)
 
 
 @room_commands.command("metadata", help="读取聊天室资源和统计")
@@ -254,8 +264,9 @@ def message_commands() -> None:
 @message_commands.command("list", help="查询消息页")
 @click.argument("room_id")
 @click.option("--topic-id")
-@click.option("--member-id", help="按发言成员筛选")
-@click.option("--before-seq", type=int)
+@click.option("--member-id", help="筛选发送者或实际接收成员")
+@click.option("--keyword", callback=_validate_keyword, help="正文中的字面子串，最多 200 字符")
+@click.option("--before-seq", type=click.IntRange(min=1))
 @click.option("--limit", type=click.IntRange(1, 200), default=50, show_default=True)
 @click.pass_obj
 def message_list(
@@ -263,10 +274,50 @@ def message_list(
     room_id: str,
     topic_id: str | None,
     member_id: str | None,
+    keyword: str | None,
     before_seq: int | None,
     limit: int,
 ) -> ApiResult:
-    return client.message_list(room_id, topic_id, member_id, before_seq, limit)
+    return client.message_list(room_id, topic_id, member_id, before_seq, limit, keyword=keyword)
+
+
+@cli.group("queue", no_args_is_help=False)
+def queue_commands() -> None:
+    """查询和清空当前有效消息队列。"""
+
+
+@queue_commands.command("list", help="查询尚未完成投递的消息")
+@click.argument("room_id")
+@click.option("--topic-id")
+@click.option("--member-id", help="筛选发送者或实际接收成员")
+@click.option("--before-seq", type=click.IntRange(min=1))
+@click.option("--limit", type=click.IntRange(1, 200), default=50, show_default=True)
+@click.pass_obj
+def queue_list(
+    client: RelayClient,
+    room_id: str,
+    topic_id: str | None,
+    member_id: str | None,
+    before_seq: int | None,
+    limit: int,
+) -> ApiResult:
+    return client.queue_list(room_id, topic_id, member_id, before_seq, limit)
+
+
+@queue_commands.command("clear", help="清空范围内的 Relay 队列，可选删除 Codex 等待项")
+@click.argument("room_id")
+@click.option("--topic-id")
+@click.option("--member-id", help="筛选发送者或实际接收成员")
+@click.option("--clear-codex", is_flag=True, help="按 Relay 回执删除 Codex 等待项，不中断当前轮次")
+@click.pass_obj
+def queue_clear(
+    client: RelayClient,
+    room_id: str,
+    topic_id: str | None,
+    member_id: str | None,
+    clear_codex: bool,
+) -> ApiResult:
+    return client.queue_clear(room_id, topic_id, member_id, clear_codex=clear_codex)
 
 
 @message_commands.command("get", help="查询单条消息")
@@ -323,7 +374,7 @@ def delivery_commands() -> None:
     """查询持久投递。"""
 
 
-@delivery_commands.command("list", help="列出消息的投递")
+@delivery_commands.command("list", help="列出消息的历史投递（status 不代表当前队列）")
 @click.argument("room_id")
 @click.argument("message_id")
 @click.option(
@@ -342,7 +393,7 @@ def delivery_list(
     return client.delivery_list(room_id, message_id, status, member_id)
 
 
-@delivery_commands.command("get", help="查询单条投递")
+@delivery_commands.command("get", help="查询单条历史投递")
 @click.argument("room_id")
 @click.argument("message_id")
 @click.argument("delivery_id")

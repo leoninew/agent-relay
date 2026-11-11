@@ -1,4 +1,5 @@
 from contextlib import AbstractContextManager
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 
@@ -11,6 +12,12 @@ from agent_relay.application.rooms.contracts import (
 )
 from agent_relay.domain.rooms.models import Member, Message, Room
 from agent_relay.domain.rooms.state import RoomState
+
+
+@dataclass(frozen=True)
+class CodexQueueTarget:
+    session_id: str
+    submission_id: str | None
 
 
 class RoomData(Protocol):
@@ -38,6 +45,9 @@ class RoomData(Protocol):
         member_id: str | None,
         deleted_at: datetime,
     ) -> int: ...
+    def codex_queue_targets(
+        self, room_id: str, *, topic_id: str | None, member_id: str | None
+    ) -> list[CodexQueueTarget]: ...
     def save_observation(
         self,
         room_id: str,

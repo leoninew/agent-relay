@@ -2,6 +2,7 @@ import sqlite3
 from datetime import datetime
 
 from agent_relay.application.rooms.contracts import RoomMetadata
+from agent_relay.application.rooms.ports import CodexQueueTarget
 from agent_relay.domain.rooms.events import RoomChange
 from agent_relay.domain.rooms.models import Member, Message, Room
 from agent_relay.domain.rooms.state import RoomState
@@ -108,6 +109,23 @@ class SQLiteRoomData:
                 self.connection, RoomChange(room_id, "delivery", event["id"], event["message_id"])
             )
         return len({event["message_id"] for event in events})
+
+    def codex_queue_targets(
+        self, room_id: str, *, topic_id: str | None, member_id: str | None
+    ) -> list[CodexQueueTarget]:
+        clauses, args = self.queries.message_scope_in(
+            self.connection, room_id, topic_id=topic_id, member_id=member_id
+        )
+        return [
+            CodexQueueTarget(row["target_session_id"], row["queued_submission_id"])
+            for row in self.connection.execute(
+                "SELECT target_session_id, queued_submission_id FROM deliveries "
+                "WHERE room_id = ? AND deleted_at IS NOT NULL "
+                "AND status IN ('submitting', 'queued') "
+                f"AND message_id IN (SELECT m.id FROM messages m WHERE {' AND '.join(clauses)})",
+                (room_id, *args),
+            )
+        ]
 
     def save_observation(
         self,

@@ -40,6 +40,8 @@ class BufferedResponse:
 class McpHarness:
     server: MCPServer[None]
     http: RelayClient
+    service: DemoRoomService
+    queue_driver: FakeQueueDriver
 
     def call(
         self, tool_name: str, *, _session: str = "agent-relay-coordinator", **arguments: object
@@ -65,6 +67,7 @@ class McpHarness:
 @pytest.fixture
 def mcp(tmp_path: Path) -> Iterator[McpHarness]:
     service = DemoRoomService(create_room_store(tmp_path / "mcp.sqlite3"))
+    queue_driver = FakeQueueDriver()
     web = TestClient(
         create_app(
             logging.getLogger("tests.mcp"),
@@ -72,7 +75,7 @@ def mcp(tmp_path: Path) -> Iterator[McpHarness]:
             session_driver=FakeSessionDriver(
                 [SessionInfo("candidate", "D:/work/mcp", "codex", "MCP candidate", "idle")]
             ),
-            queue_driver=FakeQueueDriver(),
+            queue_driver=queue_driver,
         )
     )
 
@@ -89,7 +92,7 @@ def mcp(tmp_path: Path) -> Iterator[McpHarness]:
         return BufferedResponse(response.status_code, response.headers, response.content)
 
     http = RelayClient("http://testserver", 10, opener=open_request)
-    yield McpHarness(create_mcp_server(http), http)
+    yield McpHarness(create_mcp_server(http), http, service, queue_driver)
     web.close()
 
 
@@ -99,6 +102,8 @@ def test_tool_catalog_exposes_typed_collaboration_and_management(mcp: McpHarness
         "room_list",
         "room_create",
         "room_get",
+        "queue_list",
+        "queue_clear",
         "room_metadata",
         "room_events",
         "topic_list",
@@ -132,6 +137,122 @@ def test_tool_catalog_exposes_typed_collaboration_and_management(mcp: McpHarness
         assert annotations and not annotations.read_only_hint
     position_annotations = tools["member_positions"].annotations
     assert position_annotations and position_annotations.read_only_hint
+    queue_list = tools["queue_list"]
+    assert queue_list.annotations
+    assert queue_list.annotations.read_only_hint
+    assert queue_list.annotations.idempotent_hint
+    assert not queue_list.annotations.destructive_hint
+    queue_clear = tools["queue_clear"]
+    assert queue_clear.annotations
+    assert not queue_clear.annotations.read_only_hint
+    assert not queue_clear.annotations.idempotent_hint
+    assert queue_clear.annotations.destructive_hint
+    assert queue_clear.annotations.open_world_hint
+    clear_schema = queue_clear.input_schema["properties"]["clear_codex"]
+    assert clear_schema["type"] == "boolean" and clear_schema["default"] is False
+
+    def schema_objects(value: object) -> list[dict[str, object]]:
+        if isinstance(value, dict):
+            nested = [schema for item in value.values() for schema in schema_objects(item)]
+            return [value, *nested]
+        if isinstance(value, list):
+            return [schema for item in value for schema in schema_objects(item)]
+        return []
+
+    for tool_name in ("room_get", "message_list", "queue_list"):
+        schema = tools[tool_name].input_schema["properties"]
+        before_schemas = schema_objects(schema["before_seq"])
+        limit_schemas = schema_objects(schema["limit"])
+        assert any(schema.get("minimum") == 1 for schema in before_schemas)
+        assert any(schema.get("minimum") == 1 for schema in limit_schemas)
+        assert any(schema.get("maximum") == 200 for schema in limit_schemas)
+    for tool_name in ("room_get", "message_list"):
+        schema = tools[tool_name].input_schema["properties"]
+        assert any(schema.get("maxLength") == 200 for schema in schema_objects(schema["keyword"]))
+
+
+def test_mcp_room_message_and_queue_scopes_share_http_semantics(mcp: McpHarness) -> None:
+    room = mcp.call(
+        "room_get",
+        room_id=ROOM,
+        topic_id="frontend",
+        member_id="backend-worker",
+        keyword="跨话题",
+    )
+    assert [message["seq"] for message in room["messages"]] == [4, 5]
+
+    messages = mcp.call(
+        "message_list",
+        room_id=ROOM,
+        topic_id="frontend",
+        member_id="backend-worker",
+        keyword="跨话题",
+    )
+    assert [message["seq"] for message in messages["messages"]] == [4, 5]
+
+    first = mcp.call(
+        "queue_list",
+        room_id=ROOM,
+        topic_id="backend",
+        member_id="backend-worker",
+        limit=2,
+    )
+    assert [message["seq"] for message in first["messages"]] == [6, 5]
+    assert first["totalMessages"] == 4
+    assert first["hasMore"] and first["nextBeforeSeq"] == 5
+    second = mcp.call(
+        "queue_list",
+        room_id=ROOM,
+        topic_id="backend",
+        member_id="backend-worker",
+        before_seq=first["nextBeforeSeq"],
+        limit=2,
+    )
+    assert [message["seq"] for message in second["messages"]] == [4, 3]
+    assert not second["hasMore"] and second["nextBeforeSeq"] is None
+
+
+def test_mcp_queue_clear_preserves_history_and_only_changes_relay_queue(mcp: McpHarness) -> None:
+    with mcp.service.store.write() as connection:
+        connection.execute("UPDATE deliveries SET status = 'queued'")
+        connection.execute(
+            "UPDATE deliveries SET queued_submission_id = 'queue-receipt' "
+            "WHERE message_id = 'agent-relay-msg-0006' AND target_member_id = 'frontend-worker'"
+        )
+    target = ("agent-relay-frontend", "queue-receipt")
+    mcp.queue_driver.delete_results[target] = True
+
+    queued = mcp.call("queue_list", room_id=ROOM, member_id="frontend-worker")
+    assert [message["seq"] for message in queued["messages"]] == [6, 5, 4, 2, 1]
+
+    cleared = mcp.call("queue_clear", room_id=ROOM, member_id="frontend-worker")
+    assert cleared == {"removedMessages": 5}
+    assert mcp.call("queue_list", room_id=ROOM, member_id="frontend-worker")["messages"] == []
+    assert [
+        message["seq"]
+        for message in mcp.call("queue_list", room_id=ROOM, member_id="backend-worker")["messages"]
+    ] == [3]
+
+    message = mcp.call("message_get", room_id=ROOM, message_id="agent-relay-msg-0006")
+    assert all(
+        delivery["status"] == "queued" and delivery["deletedAt"]
+        for delivery in message["deliveries"]
+    )
+    history = mcp.call(
+        "delivery_list",
+        room_id=ROOM,
+        message_id=message["id"],
+        status="queued",
+    )
+    assert len(history["deliveries"]) == len(message["deliveries"])
+    assert all(delivery["deletedAt"] for delivery in history["deliveries"])
+    assert mcp.queue_driver.deletions == []
+
+    external = mcp.call("queue_clear", room_id=ROOM, member_id="frontend-worker", clear_codex=True)
+    assert external["removedMessages"] == 0
+    assert external["codexQueue"]["deleted"] == 1
+    assert mcp.queue_driver.deletions == [target]
+    assert mcp.queue_driver.calls == [] and mcp.queue_driver.activations == []
 
 
 def test_mcp_manages_resources_and_zero_subscriptions(mcp: McpHarness) -> None:

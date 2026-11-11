@@ -40,7 +40,15 @@ class DeliveryService:
     def _submit(self, work: ClaimedDelivery) -> None:
         delivery = work.delivery.model_copy(deep=True)
         sender = f"{work.message.sender_name}（{work.message.sender_id}）"
-        text = f"roomId: {work.room_id}\n发送者: {sender}\n\n{work.message.content}"
+        created_at = work.message.model_dump(mode="json", by_alias=True)["createdAt"]
+        text = (
+            f"roomId: {work.room_id}\n"
+            f"messageId: {work.message.id}\n"
+            f"seq: {work.message.seq}\n"
+            f"createdAt: {created_at}\n"
+            f"sender: {sender}\n\n"
+            f"{work.message.content}"
+        )
         try:
             receipt = self.driver.enqueue(
                 delivery.target_session_id,

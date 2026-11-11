@@ -76,6 +76,7 @@ def create_app(
     app.state.settings = configured
     app.state.database = database
     app.state.session_driver = sessions
+    app.state.queue_driver = queue
     app.state.delivery_runner = delivery_runner
     app.state.presence_runner = presence_runner
     app.add_middleware(

@@ -1,11 +1,14 @@
+import logging
 from copy import deepcopy
 from datetime import UTC, datetime
 from uuid import uuid4
 
+from agent_relay.application.delivery.ports import QueueDriver, QueueRejected
 from agent_relay.application.rooms.contracts import (
     ChangedMember,
     ChangedTopic,
     ClearedMessageQueue,
+    CodexQueueClearResult,
     CreateMessage,
     CreateRoom,
     CreateTopic,
@@ -69,6 +72,40 @@ class RoomService:
                 room_id, topic_id=topic_id, member_id=member_id, deleted_at=datetime.now(UTC)
             )
             return ClearedMessageQueue(removed_messages=removed)
+
+    def clear_queue_with_codex(
+        self,
+        room_id: str,
+        driver: QueueDriver,
+        *,
+        topic_id: str | None = None,
+        member_id: str | None = None,
+    ) -> ClearedMessageQueue:
+        with self.store.write_rooms() as rooms:
+            rooms.room(room_id)
+            removed = rooms.clear_queue(
+                room_id, topic_id=topic_id, member_id=member_id, deleted_at=datetime.now(UTC)
+            )
+            targets = rooms.codex_queue_targets(room_id, topic_id=topic_id, member_id=member_id)
+
+        summary = CodexQueueClearResult()
+        logger = logging.getLogger(__name__)
+        for target in targets:
+            if not target.submission_id:
+                summary.without_receipt += 1
+                continue
+            try:
+                if driver.delete(target.session_id, target.submission_id):
+                    summary.deleted += 1
+                else:
+                    summary.not_found += 1
+            except QueueRejected:
+                summary.rejected += 1
+                logger.warning("Codex rejected queue deletion for room=%s", room_id, exc_info=True)
+            except Exception:
+                summary.unknown += 1
+                logger.exception("Codex queue deletion outcome unknown for room=%s", room_id)
+        return ClearedMessageQueue(removed_messages=removed, codex_queue=summary)
 
     def update_member(self, room_id: str, member_id: str, request: UpdateMember) -> ChangedMember:
         with self.store.write_rooms() as rooms:

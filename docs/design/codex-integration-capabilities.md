@@ -1,5 +1,5 @@
 # Codex 接入能力核验与方案建议
-最后修改时间: 2026-11-08 13:21:08
+最后修改时间: 2026-11-11 09:17:23
 
 ## 状态与结论
 
@@ -21,6 +21,10 @@ D07 保持显式结构化目标、受控成员身份与来源幂等规则；已�
 后续用户已确认 D03“成员发布时排除自己”并接受[统一术语](terminology.md)。发布目标先全部校验，按话题订阅与 @ 取并集去重，再排除可信绑定的发布成员，之后检查非空；显式 @ 自己不例外。D09 自动链限制仍待取舍。
 
 最新[审视修正](20261107-architecture-review.md)按用户反馈收窄职责。下文协议事实保留，修订 5 的执行权限管理、全部工具冻结、输出观察和后台工具核对要求已撤回；备份/恢复后置。
+
+## 删除 Codex 队列等待项（2026-11-11）
+
+- 本机 `codex app-server generate-json-schema --experimental` 提供 `thread/queue/delete`，以 `threadId` 与 `queuedSubmissionId` 定位等待项，返回 `deleted`。下表已有隔离会话的删除证据。Relay 通过 `queue clear --clear-codex` / `queue_clear(clear_codex=true)` 选择性使用该方法，仍以保存回执限定范围。
 
 ## 证据与可重复入口
 

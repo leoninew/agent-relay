@@ -4,10 +4,10 @@
 
 ## 执行迁移
 
-在仓库根目录运行，目标数据库取自对应环境的 `database.path`：
+在仓库根目录运行，默认使用 `dev`，可追加 `profile=<名称>` 覆盖。目标数据库取自对应环境的 `database.path`：
 
 ```bash
-make migrate profile=dev
+make migrate
 ```
 
 PowerShell 等价命令：
@@ -27,10 +27,18 @@ uv run --locked python -m agent_relay.migrate
 
 主外键、查询和索引字段使用列或关联表，JSON 仅保存额外元数据。不从业务模型自动生成 DDL。
 
+## 手动验证 SQL
+
+SQL 执行检查使用通用的 `integration` 标记，默认 pytest 运行会排除带此标记的测试。手动运行：
+
+```bash
+uv run --locked pytest tests/integration/test_migration_sql.py -m integration
+```
+
+测试按路径顺序在临时 SQLite 数据库中执行 `sqlite/sql/` 下的全部 `.up.sql`，并检查数据库完整性和外键，不操作开发库。
+
 ## 基线与旧库
 
-当前基线为 `baseline_20261110`，不兼容旧版整模型 JSON 存储，不提供旧数据转换或降级。
+当前基线和 head 均为 `queue_deleted_20261110`。新库一次创建完整结构，包括投递记录的可空 `deleted_at`；已在此 revision 的数据库无需重建或重新标记。
 
-当前 head 为 `queue_deleted_20261110`，在上述基线之后为投递记录增加可空 `deleted_at`，用于队列业务记录的逻辑删除；已有消息、投递状态和回执保持不变。基线数据库可直接执行迁移命令升级，无需重建。
-
-不兼容的更早基线数据库需先停止相关服务、核对路径并按需保留数据，再使用空库重新执行迁移。迁移命令不会自动删除或重建旧库。
+旧 revision（包括 `baseline_20261110`）不在合并后的迁移链上，不提供自动升级、旧数据转换或降级。需重建时，先停止相关服务、核对路径并按需保留数据，再对空库执行迁移。迁移命令不会自动删除或重建旧库。

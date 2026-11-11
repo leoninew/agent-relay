@@ -5,10 +5,12 @@ import math
 from collections.abc import Mapping
 from dataclasses import dataclass
 from http.client import HTTPException
-from typing import Any, NoReturn, Protocol, cast
+from typing import Annotated, Any, NoReturn, Protocol, cast
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
+
+from pydantic import Field
 
 
 class HttpResponse(Protocol):
@@ -226,16 +228,22 @@ class RelayClient:
         room_id: str,
         topic_id: str | None = None,
         member_id: str | None = None,
-        before_seq: int | None = None,
-        limit: int = 50,
+        before_seq: Annotated[int | None, Field(ge=1)] = None,
+        limit: Annotated[int, Field(ge=1, le=200)] = 50,
+        keyword: Annotated[str | None, Field(max_length=200)] = None,
     ) -> ApiResult:
-        """Read room resources and a bounded message page; member_id filters the author."""
+        """Read room resources and messages; member_id matches sender or actual recipients.
+
+        topic_id and member_id are intersected. keyword is a literal content substring;
+        before_seq is exclusive and limit is 1..200.
+        """
         return self.request(
             "GET",
             _room_path(room_id),
             params={
                 "topic_id": topic_id,
                 "member_id": member_id,
+                "keyword": keyword,
                 "before_seq": before_seq,
                 "limit": limit,
             },
@@ -358,13 +366,43 @@ class RelayClient:
         room_id: str,
         topic_id: str | None = None,
         member_id: str | None = None,
-        before_seq: int | None = None,
-        limit: int = 50,
+        before_seq: Annotated[int | None, Field(ge=1)] = None,
+        limit: Annotated[int, Field(ge=1, le=200)] = 50,
+        keyword: Annotated[str | None, Field(max_length=200)] = None,
     ) -> ApiResult:
-        """Read a bounded message page, optionally filtering topic and author."""
+        """Read messages; member_id matches sender or actual recipients.
+
+        topic_id and member_id are intersected. keyword is a literal content substring;
+        before_seq is exclusive and limit is 1..200.
+        """
         return self.request(
             "GET",
             f"{_room_path(room_id)}/message",
+            params={
+                "topic_id": topic_id,
+                "member_id": member_id,
+                "keyword": keyword,
+                "before_seq": before_seq,
+                "limit": limit,
+            },
+        )
+
+    def queue_list(
+        self,
+        room_id: str,
+        topic_id: str | None = None,
+        member_id: str | None = None,
+        before_seq: Annotated[int | None, Field(ge=1)] = None,
+        limit: Annotated[int, Field(ge=1, le=200)] = 50,
+    ) -> ApiResult:
+        """Read current active queue messages, newest first, paging toward older seq values.
+
+        A message is active when it has an undeleted pending, submitting or queued delivery.
+        member_id matches sender or saved recipient; topic_id and member_id are intersected.
+        """
+        return self.request(
+            "GET",
+            f"{_room_path(room_id)}/queue",
             params={
                 "topic_id": topic_id,
                 "member_id": member_id,
@@ -373,8 +411,43 @@ class RelayClient:
             },
         )
 
+    def queue_clear(
+        self,
+        room_id: str,
+        topic_id: str | None = None,
+        member_id: str | None = None,
+        clear_codex: bool = False,
+    ) -> ApiResult:
+        """Remove unfinished deliveries from every matching message, preserving history.
+
+        member_id matches sender or saved recipient and affects all unfinished Agent deliveries
+        on matching messages. Defaults to Relay only. Set clear_codex=true to also delete waiting
+        Codex items identified by Relay receipts in scope, including previously cleared records.
+        Does not interrupt running turns. An unknown outcome must not be retried blindly.
+        """
+        result = self.request(
+            "DELETE",
+            f"{_room_path(room_id)}/queue",
+            params={
+                "topic_id": topic_id,
+                "member_id": member_id,
+                "clear_codex": "true" if clear_codex else None,
+            },
+        )
+        if clear_codex and (
+            not isinstance(result.data, dict) or not isinstance(result.data.get("codexQueue"), dict)
+        ):
+            raise RelayClientError(
+                4,
+                "invalid_response",
+                "服务未返回 Codex 队列清理结果；Relay 记录可能已清空，请核对服务版本",
+                request_id=result.request_id,
+                outcome="unknown",
+            )
+        return result
+
     def message_get(self, room_id: str, message_id: str) -> ApiResult:
-        """Read one saved message and its current per-member delivery status."""
+        """Read one saved message and its persisted per-member delivery history."""
         return self.request("GET", f"{_room_path(room_id)}/message/{_segment(message_id)}")
 
     def message_publish(
@@ -421,7 +494,10 @@ class RelayClient:
         status: str | None = None,
         member_id: str | None = None,
     ) -> ApiResult:
-        """Read message deliveries, optionally filtering current status and recipient."""
+        """Read persisted delivery history, optionally filtering status and recipient.
+
+        Original status and deleted_at are preserved; use queue_list for the active queue.
+        """
         result = self.message_get(room_id, message_id)
         deliveries = [
             row

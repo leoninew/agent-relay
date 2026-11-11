@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from room_fixtures import DemoRoomService, create_room_store
 from session_fixtures import FakeQueueDriver, FakeSessionDriver
 
-from agent_relay.application.delivery.ports import QueueHead, ReceivedInput
+from agent_relay.application.delivery.ports import QueueHead, QueueRejected, ReceivedInput
 from agent_relay.application.delivery.service import DeliveryService
 from agent_relay.application.members.context import ContextQuery
 from agent_relay.application.members.sessions import SessionInfo
@@ -274,6 +274,70 @@ def test_clear_queue_marks_every_page_in_scope_and_preserves_history_and_receipt
     assert client.get(f"{ROOM}/metadata").json()["eventId"] == metadata["eventId"]
     assert queue_driver.calls == []
     assert queue_driver.activations == []
+    assert queue_driver.deletions == []
+
+
+def test_clear_codex_deletes_only_scoped_waiting_items_after_relay_commit(
+    service: DemoRoomService,
+    client: TestClient,
+    queue_driver: FakeQueueDriver,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    scope = {"topic_id": "frontend", "member_id": "frontend-worker", "clear_codex": "true"}
+    with service.store.write() as connection:
+        connection.execute(
+            "UPDATE deliveries SET status = 'queued', queued_submission_id = id "
+            "WHERE message_id IN ('agent-relay-msg-0002', 'agent-relay-msg-0003', "
+            "'agent-relay-msg-0004', 'agent-relay-msg-0006')"
+        )
+        connection.execute(
+            "UPDATE deliveries SET status = 'received' "
+            "WHERE message_id = 'agent-relay-msg-0004' AND target_member_id = 'test-worker'"
+        )
+        connection.execute(
+            "UPDATE deliveries SET status = 'submitting' "
+            "WHERE message_id = 'agent-relay-msg-0005' AND target_member_id = 'coordinator'"
+        )
+
+    original_delete = queue_driver.delete
+
+    def delete_after_commit(thread_id: str, queued_submission_id: str) -> bool:
+        with service.store.read() as connection:
+            saved = connection.execute(
+                "SELECT deleted_at FROM deliveries WHERE id = ?", (queued_submission_id,)
+            ).fetchone()
+            assert saved is not None and saved["deleted_at"] is not None
+        return original_delete(thread_id, queued_submission_id)
+
+    monkeypatch.setattr(queue_driver, "delete", delete_after_commit)
+    confirmed = ("agent-relay-frontend", "agent-relay-msg-0006:frontend-worker")
+    rejected = ("agent-relay-backend", "agent-relay-msg-0004:backend-worker")
+    uncertain = ("agent-relay-test", "agent-relay-msg-0006:test-worker")
+    queue_driver.delete_results.update(
+        {confirmed: True, rejected: QueueRejected("rejected"), uncertain: TimeoutError()}
+    )
+
+    response = client.delete(f"{ROOM}/queue", params=scope)
+    assert response.status_code == 200
+    assert response.json() == {
+        "removedMessages": 3,
+        "codexQueue": {
+            "deleted": 1,
+            "notFound": 2,
+            "rejected": 1,
+            "unknown": 1,
+            "withoutReceipt": 1,
+        },
+    }
+    assert set(queue_driver.deletions) == {
+        confirmed,
+        rejected,
+        uncertain,
+        ("agent-relay-frontend", "agent-relay-msg-0004:frontend-worker"),
+        ("agent-relay-backend", "agent-relay-msg-0006:backend-worker"),
+    }
+    assert len(queue_driver.deletions) == 5
+    assert queue_driver.calls == [] and queue_driver.activations == []
 
 
 def test_clear_queue_excludes_removed_deliveries_from_background_processing(

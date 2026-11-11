@@ -4,6 +4,7 @@ from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+from urllib.error import URLError
 from urllib.parse import parse_qs, urlsplit
 from urllib.request import Request
 
@@ -325,6 +326,144 @@ def test_delivery_queries_read_current_queued_receipts(cli: CliHarness) -> None:
     delivery = filtered["deliveries"][0]
     assert delivery["receipt"]["clientUserMessageId"] == delivery["clientMessageId"]
     assert cli.run("delivery", "get", ROOM, message["id"], delivery["id"]) == delivery
+
+
+def test_queue_list_paginates_and_applies_topic_and_related_member_scope(cli: CliHarness) -> None:
+    first = cli.run(
+        "queue",
+        "list",
+        ROOM,
+        "--topic-id",
+        "backend",
+        "--member-id",
+        "backend-worker",
+        "--limit",
+        "2",
+    )
+    assert [message["seq"] for message in first["messages"]] == [6, 5]
+    assert first["totalMessages"] == 4
+    assert first["hasMore"] and first["nextBeforeSeq"] == 5
+    query = parse_qs(urlsplit(cli.calls[-1][0].full_url).query)
+    assert query == {
+        "topic_id": ["backend"],
+        "member_id": ["backend-worker"],
+        "limit": ["2"],
+    }
+
+    older = cli.run(
+        "queue",
+        "list",
+        ROOM,
+        "--topic-id",
+        "backend",
+        "--member-id",
+        "backend-worker",
+        "--before-seq",
+        "5",
+        "--limit",
+        "2",
+    )
+    assert [message["seq"] for message in older["messages"]] == [4, 3]
+    assert not older["hasMore"]
+
+
+def test_cli_query_keyword_and_clear_preserve_queued_history(cli: CliHarness) -> None:
+    room = cli.run(
+        "room",
+        "get",
+        ROOM,
+        "--member-id",
+        "backend-worker",
+        "--keyword",
+        "跨话题",
+    )
+    assert [message["seq"] for message in room["messages"]] == [4, 5]
+
+    message_page = cli.run(
+        "message",
+        "list",
+        ROOM,
+        "--topic-id",
+        "frontend",
+        "--member-id",
+        "backend-worker",
+        "--keyword",
+        "跨话题",
+    )
+    assert [message["seq"] for message in message_page["messages"]] == [4, 5]
+    query = parse_qs(urlsplit(cli.calls[-1][0].full_url).query)
+    assert query["keyword"] == ["跨话题"]
+    assert query["member_id"] == ["backend-worker"]
+
+    with cli.service.store.write() as connection:
+        connection.execute("UPDATE deliveries SET status = 'queued'")
+    cleared = cli.run("queue", "clear", ROOM, "--member-id", "frontend-worker")
+    assert cleared == {"removedMessages": 5}
+    assert cli.calls[-1][0].get_method() == "DELETE"
+    assert cli.run("queue", "list", ROOM, "--member-id", "frontend-worker")["messages"] == []
+    remaining = cli.run("queue", "list", ROOM, "--member-id", "backend-worker")
+    assert [message["seq"] for message in remaining["messages"]] == [3]
+
+    history = cli.run("delivery", "list", ROOM, "agent-relay-msg-0006", "--status", "queued")
+    assert len(history["deliveries"]) == 3
+    assert all(
+        delivery["status"] == "queued" and delivery["deletedAt"]
+        for delivery in history["deliveries"]
+    )
+
+
+def test_queue_clear_unknown_transport_result_is_not_retried(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    calls = 0
+
+    def fail_request(request: Request, *, timeout: float) -> HttpResponse:
+        nonlocal calls
+        calls += 1
+        assert timeout == 10
+        assert request.get_method() == "DELETE"
+        raise URLError("connection lost")
+
+    assert (
+        main(["queue", "clear", ROOM, "--member-id", "frontend-worker"], opener=fail_request) == 5
+    )
+    output = capsys.readouterr()
+    payload = json.loads(output.err)
+    assert payload["error"]["code"] == "transport_error"
+    assert payload["error"]["outcome"] == "unknown"
+    assert calls == 1
+
+
+def test_queue_clear_codex_flag_is_opt_in(cli: CliHarness) -> None:
+    assert cli.run("queue", "clear", ROOM, "--topic-id", "frontend") == {"removedMessages": 3}
+    assert parse_qs(urlsplit(cli.calls[-1][0].full_url).query) == {"topic_id": ["frontend"]}
+    result = cli.run("queue", "clear", ROOM, "--topic-id", "frontend", "--clear-codex")
+    assert result["removedMessages"] == 0
+    assert result["codexQueue"]["deleted"] == 0
+    assert parse_qs(urlsplit(cli.calls[-1][0].full_url).query) == {
+        "topic_id": ["frontend"],
+        "clear_codex": ["true"],
+    }
+
+
+def test_clear_codex_rejects_old_relay_response(capsys: pytest.CaptureFixture[str]) -> None:
+    def old_service(request: Request, *, timeout: float) -> HttpResponse:
+        assert request.get_method() == "DELETE"
+        return BufferedResponse(200, {"X-Request-Id": "old-relay"}, b'{"removedMessages": 1}')
+
+    assert main(["queue", "clear", ROOM, "--clear-codex"], opener=old_service) == 4
+    payload = json.loads(capsys.readouterr().err)
+    assert payload["requestId"] == "old-relay"
+    assert payload["error"]["outcome"] == "unknown"
+
+
+def test_message_query_validates_http_bounds_before_sending(cli: CliHarness) -> None:
+    before = len(cli.calls)
+    assert main(["message", "list", ROOM, "--before-seq", "0"], opener=cli.open) == 2
+    cli.capsys.readouterr()
+    assert main(["message", "list", ROOM, "--keyword", "x" * 201], opener=cli.open) == 2
+    cli.capsys.readouterr()
+    assert len(cli.calls) == before
 
 
 def test_cli_address_and_timeout_configuration_precedence(

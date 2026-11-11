@@ -129,6 +129,7 @@ CREATE TABLE deliveries (
         AND json_type(receipt_metadata, '$.clientUserMessageId') IS NULL
     )),
     error TEXT,
+    deleted_at TEXT,
     PRIMARY KEY(room_id, id),
     UNIQUE(room_id, message_id, target_member_id),
     FOREIGN KEY(room_id, message_id) REFERENCES messages(room_id, id),

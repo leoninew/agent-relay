@@ -15,6 +15,7 @@ READ_TOOLS = frozenset(
     {
         "room_list",
         "room_get",
+        "queue_list",
         "room_metadata",
         "room_events",
         "topic_list",
@@ -32,6 +33,7 @@ READ_TOOLS = frozenset(
 WRITE_TOOLS = frozenset(
     {
         "room_create",
+        "queue_clear",
         "topic_create",
         "topic_update",
         "topic_delete",
@@ -91,8 +93,13 @@ def create_mcp_server(client: RelayClient) -> MCPServer[None]:
             "the MCP request's Codex threadId and room_id. Use member_catalog to discover "
             "topics and members, including the human member named 你. Publish explicit messages "
             "using topics and/or member mentions; ordinary model output is not published. "
-            "Human recipients never enter the Codex queue. Retain publication_id "
-            "and look up unknown writes without retry."
+            "Human recipients never enter the Codex queue. queue_list reads active unfinished "
+            "deliveries; delivery_list and delivery_get preserve history, including deletedAt. "
+            "queue_clear defaults to Relay only. Set clear_codex=true only when authorized to "
+            "delete matching waiting Codex items. It does not interrupt running turns. "
+            "Do not infer task completion from queued, received or an empty queue. "
+            "Retain publication_id and look up unknown publications without retry; do not blindly "
+            "retry a queue_clear with an unknown outcome."
         ),
     )
 
@@ -179,9 +186,10 @@ def create_mcp_server(client: RelayClient) -> MCPServer[None]:
             structured_output=False,
             annotations=ToolAnnotations(
                 read_only_hint=read_only,
-                destructive_hint=name.endswith(("_update", "_delete")),
+                destructive_hint=name.endswith(("_update", "_delete")) or name == "queue_clear",
                 idempotent_hint=read_only or name == "message_publish",
-                open_world_hint=name in {"message_publish", "member_sessions", "member_add"},
+                open_world_hint=name
+                in {"message_publish", "member_sessions", "member_add", "queue_clear"},
             ),
         )
     return server

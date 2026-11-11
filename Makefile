@@ -40,7 +40,7 @@ test:
 	$(MAKE) -C web test
 
 web:
-	cd web && corepack pnpm dev --mode $(profile)
+	cd web && corepack pnpm exec vite --mode "$(profile)"
 
 migrate webapi: export AGENT_RELAY_PROFILE = $(profile)
 migrate:

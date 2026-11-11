@@ -47,8 +47,17 @@ class MessageQueuePage(RoomModel):
     next_before_seq: int | None
 
 
+class CodexQueueClearResult(RoomModel):
+    deleted: int = 0
+    not_found: int = 0
+    rejected: int = 0
+    unknown: int = 0
+    without_receipt: int = 0
+
+
 class ClearedMessageQueue(RoomModel):
     removed_messages: int
+    codex_queue: CodexQueueClearResult | None = None
 
 
 class RoomMetadata(RoomModel):

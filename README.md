@@ -20,16 +20,16 @@ make deps
 在两个终端分别启动后端和前端：
 
 ```bash
-make webapi profile=dev
+make webapi
 ```
 
 ```bash
-make web profile=dev
+make web
 ```
 
 前端为 `http://localhost:9081`，`/api` 代理到后端 `http://127.0.0.1:9080`。`dev` 配置已启用代码重载和启动迁移；新数据库为空，需在页面创建聊天室并添加已有 Codex 会话。
 
-默认配置位于 `config/config.yaml`，开发配置位于 `.env.dev`。环境变量使用 `AGENT_RELAY_` 前缀和 `__` 分隔层级，优先级为默认配置 → `.env.<profile>` → 系统环境变量。Make 默认使用 `dev`，直接运行 Python 入口时通过 `AGENT_RELAY_PROFILE` 选择环境，未设置则为 `prod`。
+`make web`、`make webapi` 和 `make migrate` 默认使用 `dev`，可追加 `profile=<名称>` 覆盖。配置见 `config/config.yaml` 和 `.env.<profile>`，系统环境变量优先。
 
 数据库默认位于 `data/agent-relay.sqlite3`。手动迁移、修改结构及旧库处理见[迁移指南](migrations/README.md)。
 
@@ -68,3 +68,4 @@ agent-relay --help
 - [协作设计](docs/design/codex-session-chat-collaboration.md)
 - [统一术语](docs/design/terminology.md)
 - [Agent Relay 协作 skill](plugins/agent-relay/skills/agent-relay/SKILL.md)
+- [变更记录](RELEASE.md)

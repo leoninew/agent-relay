@@ -116,6 +116,9 @@ try:
         elif method == "thread/queue/start":
             assert params["queuedSubmissionId"] == "queued-original"
             result = {"turn": {"id": "turn-original", "status": "inProgress"}}
+        elif method == "thread/queue/delete":
+            assert params == {"threadId": "original-id", "queuedSubmissionId": "queued-original"}
+            result = {} if mode == "malformed" else {"deleted": mode != "missing"}
         elif method == "thread/items/list":
             assert params["sortDirection"] == "desc"
             result = {

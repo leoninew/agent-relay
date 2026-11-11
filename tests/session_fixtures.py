@@ -29,6 +29,8 @@ class FakeQueueDriver:
         self.calls: list[tuple[str, str, str]] = []
         self.heads: dict[str, QueueHead] = {}
         self.activations: list[tuple[str, str]] = []
+        self.deletions: list[tuple[str, str]] = []
+        self.delete_results: dict[tuple[str, str], bool | Exception] = {}
         self.inputs: dict[str, list[ReceivedInput]] = {}
 
     def enqueue(self, thread_id: str, client_message_id: str, text: str) -> QueueReceipt:
@@ -40,6 +42,14 @@ class FakeQueueDriver:
 
     def activation_candidate(self, thread_id: str) -> QueueHead | None:
         return self.heads.get(thread_id)
+
+    def delete(self, thread_id: str, queued_submission_id: str) -> bool:
+        target = (thread_id, queued_submission_id)
+        self.deletions.append(target)
+        result = self.delete_results.get(target, False)
+        if isinstance(result, Exception):
+            raise result
+        return result
 
     def activate(self, thread_id: str, queued_submission_id: str) -> str:
         self.activations.append((thread_id, queued_submission_id))

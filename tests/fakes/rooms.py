@@ -4,7 +4,7 @@ from copy import deepcopy
 from datetime import datetime
 
 from agent_relay.application.rooms.contracts import RoomMetadata, RoomSummary
-from agent_relay.application.rooms.ports import RoomData, RoomQueries
+from agent_relay.application.rooms.ports import CodexQueueTarget, RoomData, RoomQueries
 from agent_relay.domain.rooms.errors import RoomNotFoundError
 from agent_relay.domain.rooms.models import USER_MEMBER_ID, Member, Message, Room, Topic
 from agent_relay.domain.rooms.state import RoomState
@@ -132,6 +132,11 @@ class MemoryRoomData:
         member_id: str | None,
         deleted_at: datetime,
     ) -> int:
+        raise NotImplementedError
+
+    def codex_queue_targets(
+        self, room_id: str, *, topic_id: str | None, member_id: str | None
+    ) -> list[CodexQueueTarget]:
         raise NotImplementedError
 
     def save_observation(

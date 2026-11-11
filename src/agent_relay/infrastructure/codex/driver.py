@@ -355,6 +355,20 @@ class CodexDriver:
                 receipt["id"], {key: value for key, value in receipt.items() if key != "input"}
             )
 
+    def delete(self, thread_id: str, queued_submission_id: str) -> bool:
+        with ProxyRpc(self.command, self.timeout) as rpc:
+            try:
+                result = rpc.call(
+                    "thread/queue/delete",
+                    {"threadId": thread_id, "queuedSubmissionId": queued_submission_id},
+                )
+            except RpcRejected as exc:
+                raise QueueRejected(str(exc)) from exc
+            deleted = result.get("deleted")
+            if not isinstance(deleted, bool):
+                raise RpcDisconnected("Missing Codex queue deletion result")
+            return deleted
+
     def activation_candidate(self, thread_id: str) -> QueueHead | None:
         with ProxyRpc(self.command, self.timeout) as rpc:
             metadata = rpc.call("thread/read", {"threadId": thread_id, "includeTurns": False})

@@ -166,7 +166,11 @@ def test_member_publish_queue_receipts_and_member_identity_survive_restart(
         if client_id == delivery["clientMessageId"]
     )
     assert delivered == (
-        "roomId: agent-relay\n发送者: 前端 Worker（frontend-worker）\n\n成员消息投递到原会话"
+        f"roomId: agent-relay\n"
+        f"messageId: {result['id']}\n"
+        f"seq: {result['seq']}\n"
+        f"createdAt: {result['createdAt']}\n"
+        "sender: 前端 Worker（frontend-worker）\n\n成员消息投递到原会话"
     )
     store = SQLiteRoomStore(members.service.store.path)
     restored = RoomService(store).publication(

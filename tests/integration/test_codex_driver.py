@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 from pytest import MonkeyPatch
 
+from agent_relay.application.delivery.ports import QueueRejected
 from agent_relay.infrastructure.codex.driver import (
     CodexDriver,
     ProxyRpc,
@@ -145,6 +146,15 @@ def test_queue_activation_and_input_receipt_use_original_identities() -> None:
     assert [(item.client_message_id, item.item_id, item.turn_id) for item in page.inputs] == [
         ("stable-client-id", "input-original", "turn-original")
     ]
+
+
+def test_queue_delete_targets_exact_submission_in_original_thread() -> None:
+    assert driver().delete("original-id", "queued-original") is True
+    assert driver("missing").delete("original-id", "queued-original") is False
+    with pytest.raises(QueueRejected):
+        driver("reject").delete("original-id", "queued-original")
+    with pytest.raises(RpcDisconnected):
+        driver("malformed").delete("original-id", "queued-original")
 
 
 @pytest.mark.parametrize(

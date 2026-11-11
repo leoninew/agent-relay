@@ -81,6 +81,26 @@ def test_activation_rejection_preserves_the_saved_queue_receipt() -> None:
     assert len(driver.calls) == 1
 
 
+def test_submission_includes_stable_message_lookup_facts() -> None:
+    work = work_item()
+    driver = FakeQueueDriver()
+    DeliveryService(
+        MemoryDeliveryStore(work), driver, logging.getLogger("tests.delivery.location")
+    ).submit(work)
+
+    assert len(driver.calls) == 1
+    _, _, text = driver.calls[0]
+    created_at = work.message.model_dump(mode="json", by_alias=True)["createdAt"]
+    assert text == (
+        f"roomId: {work.room_id}\n"
+        f"messageId: {work.message.id}\n"
+        f"seq: {work.message.seq}\n"
+        f"createdAt: {created_at}\n"
+        f"sender: {work.message.sender_name}（{work.message.sender_id}）\n\n"
+        f"{work.message.content}"
+    )
+
+
 def test_removed_submission_does_not_trigger_activation_or_overwrite_the_marker() -> None:
     work = work_item()
     store = MemoryDeliveryStore(work)

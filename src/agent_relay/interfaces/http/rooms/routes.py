@@ -22,6 +22,8 @@ from agent_relay.application.rooms.contracts import (
 from agent_relay.domain.rooms.models import Member, Message, Room
 from agent_relay.interfaces.http.members.dependencies import MemberSessionsDependency
 from agent_relay.interfaces.http.rooms.dependencies import (
+    QueueClearServiceDependency,
+    QueueDriverDependency,
     RoomQueriesDependency,
     RoomServiceDependency,
 )
@@ -108,13 +110,20 @@ def get_message(room_id: str, message_id: str, queries: RoomQueriesDependency) -
     return queries.message(room_id, message_id)
 
 
-@router.delete("/{room_id}/queue")
+@router.delete("/{room_id}/queue", response_model_exclude_none=True)
 def clear_message_queue(
     room_id: str,
     service: RoomServiceDependency,
+    queue_clear_service: QueueClearServiceDependency,
+    driver: QueueDriverDependency,
     topic_id: Annotated[str | None, Query()] = None,
     member_id: Annotated[str | None, Query()] = None,
+    clear_codex: Annotated[bool, Query()] = False,
 ) -> ClearedMessageQueue:
+    if clear_codex:
+        return queue_clear_service.clear_queue_with_codex(
+            room_id, driver, topic_id=topic_id, member_id=member_id
+        )
     return service.clear_queue(room_id, topic_id=topic_id, member_id=member_id)
 
 

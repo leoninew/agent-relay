@@ -111,11 +111,18 @@ def test_web_publications_reach_original_sessions_and_results_survive_restart(
             }
     assert len(driver.calls) == sum(len(m["deliveries"]) for m in results)
     for session_id, client_id, text in driver.calls:
-        delivery = next(
-            d for m in results for d in m["deliveries"] if d["clientMessageId"] == client_id
+        message = next(
+            m for m in results if any(d["clientMessageId"] == client_id for d in m["deliveries"])
         )
+        delivery = next(d for d in message["deliveries"] if d["clientMessageId"] == client_id)
         assert session_id == delivery["targetSessionId"]
-        assert text == ("roomId: agent-relay\n发送者: 你（user）\n\n仅验证投递")
+        assert text == (
+            f"roomId: agent-relay\n"
+            f"messageId: {message['id']}\n"
+            f"seq: {message['seq']}\n"
+            f"createdAt: {message['createdAt']}\n"
+            "sender: 你（user）\n\n仅验证投递"
+        )
 
 
 def test_human_message_to_the_only_topic_member_reaches_its_original_session(

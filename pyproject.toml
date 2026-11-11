@@ -58,7 +58,10 @@ line-ending = "lf"
 testpaths = ["tests/unit"]
 python_files = ["test_*.py"]
 pythonpath = ["src", "tests"]
-addopts = "-ra"
+addopts = "-ra -m 'not integration'"
+markers = [
+  "integration: opt-in integration tests excluded from default runs",
+]
 
 [tool.mypy]
 python_version = "3.12"
