@@ -1,17 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useMessageQueue } from "@/domains/room/useMessageQueue";
-import { clearMessageQueue, fetchMessageQueue } from "@/services/roomApi";
+import { deleteQueueMessage, fetchMessageQueue } from "@/services/roomApi";
 import type { MessageQueuePage, MessageQueueScope } from "@/services/roomApi";
 
 import { roomFixture } from "../../fixtures/room";
 
 vi.mock("@/services/roomApi", () => ({
-  clearMessageQueue: vi.fn(),
+  deleteQueueMessage: vi.fn(),
   fetchMessageQueue: vi.fn(),
 }));
 const fetchQueue = vi.mocked(fetchMessageQueue);
-const clearQueue = vi.mocked(clearMessageQueue);
+const deleteMessage = vi.mocked(deleteQueueMessage);
 
 function page(overrides: Partial<MessageQueuePage> = {}): MessageQueuePage {
   return {
@@ -40,7 +40,6 @@ describe("message queue", () => {
     const queue = useMessageQueue(() => "room/one");
     await queue.refresh();
     expect(queue.messages.value).toEqual(first);
-    expect(queue.totalMessages.value).toBe(51);
     fetchQueue.mockResolvedValueOnce(page({ messages: [second], totalMessages: 51 }));
     await queue.loadMore();
     expect(fetchQueue).toHaveBeenLastCalledWith(
@@ -63,7 +62,6 @@ describe("message queue", () => {
     fetchQueue.mockResolvedValueOnce(page({ messages: [], totalMessages: 0 }));
     await queue.refresh();
     expect(queue.messages.value).toEqual([]);
-    expect(queue.totalMessages.value).toBe(0);
     expect(queue.error.value).toBeNull();
   });
 
@@ -140,7 +138,7 @@ describe("message queue", () => {
     );
   });
 
-  it("clears every page of the current scope and reloads the queue", async () => {
+  it("removes one message and reloads the current scope without clearing other pages", async () => {
     const sample = roomFixture().messages[0];
     const first = Array.from({ length: 50 }, (_, index) => ({
       ...sample,
@@ -155,29 +153,39 @@ describe("message queue", () => {
       () => ({ topicId: "frontend" }),
     );
     await queue.refresh();
-    clearQueue.mockResolvedValueOnce({ removedMessages: 125 });
-    fetchQueue.mockResolvedValueOnce(page({ messages: [], totalMessages: 0 }));
-    await queue.clear();
-    expect(clearQueue).toHaveBeenCalledOnce();
-    expect(clearQueue).toHaveBeenLastCalledWith("room", { topicId: "frontend" });
-    expect(queue.messages.value).toEqual([]);
-    expect(queue.totalMessages.value).toBe(0);
-    expect(queue.hasMore.value).toBe(false);
-    expect(queue.clearing.value).toBe(false);
-    expect(queue.clearError.value).toBeNull();
+    deleteMessage.mockResolvedValueOnce({ removedMessages: 1 });
+    const remaining = [...first.slice(1), { ...sample, id: "msg-75", seq: 75 }];
+    fetchQueue.mockResolvedValueOnce(
+      page({ messages: remaining, totalMessages: 124, hasMore: true, nextBeforeSeq: 75 }),
+    );
+    const removing = queue.remove(first[0].id);
+    expect(queue.removingId.value).toBe(first[0].id);
+    await removing;
+    expect(deleteMessage).toHaveBeenCalledOnce();
+    expect(deleteMessage).toHaveBeenLastCalledWith("room", first[0].id);
+    expect(fetchQueue).toHaveBeenLastCalledWith(
+      "room",
+      { topicId: "frontend", beforeSeq: undefined, limit: 50 },
+      expect.any(AbortSignal),
+    );
+    expect(queue.messages.value).toEqual(remaining);
+    expect(queue.hasMore.value).toBe(true);
+    expect(queue.removingId.value).toBeNull();
+    expect(queue.removeError.value).toBeNull();
   });
 
-  it("keeps the list and reports a clear failure without retrying the mutation", async () => {
+  it("keeps the list and reports a deletion failure without retrying the mutation", async () => {
     fetchQueue.mockResolvedValueOnce(page());
     const queue = useMessageQueue(() => "room");
     await queue.refresh();
-    clearQueue.mockRejectedValueOnce(new Error("offline"));
-    await queue.clear();
+    deleteMessage.mockRejectedValueOnce(new Error("offline"));
+    const messageId = queue.messages.value[0].id;
+    await queue.remove(messageId);
     expect(queue.messages.value).toEqual(page().messages);
-    expect(queue.clearError.value).toBe("队列清空失败，请重试。");
-    expect(queue.clearing.value).toBe(false);
-    expect(clearQueue).toHaveBeenCalledOnce();
-    expect(clearQueue).toHaveBeenLastCalledWith("room", {});
+    expect(queue.removeError.value).toBe("队列记录删除失败，请重试。");
+    expect(queue.removingId.value).toBeNull();
+    expect(deleteMessage).toHaveBeenCalledOnce();
+    expect(deleteMessage).toHaveBeenLastCalledWith("room", messageId);
     expect(fetchQueue).toHaveBeenCalledOnce();
   });
 });

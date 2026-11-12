@@ -152,16 +152,15 @@
         <template #queue>
           <MessageQueue
             :messages="queueMessages"
-            :total-messages="queueTotal"
             :has-more="queueHasMore"
             :loading="queueLoading"
             :loading-more="queueLoadingMore"
-            :clearing="queueClearing"
+            :removing-id="queueRemovingId"
             :error="queueError"
-            :clear-error="queueClearError"
+            :remove-error="queueRemoveError"
             @select="selectQueueMessage"
             @refresh="messageQueue.refresh"
-            @clear="messageQueue.clear"
+            @remove="messageQueue.remove"
             @load-more="messageQueue.loadMore"
           />
         </template>
@@ -295,13 +294,12 @@
   );
   const {
     messages: queueMessages,
-    totalMessages: queueTotal,
     hasMore: queueHasMore,
     loading: queueLoading,
     loadingMore: queueLoadingMore,
-    clearing: queueClearing,
+    removingId: queueRemovingId,
     error: queueError,
-    clearError: queueClearError,
+    removeError: queueRemoveError,
   } = messageQueue;
   const detailTopic = computed(() => {
     const target = detailTarget.value;

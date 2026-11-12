@@ -1098,6 +1098,14 @@ button.topic-chip:hover:not(:disabled) {
 .queue-table tbody tr:hover {
   background: hsl(var(--muted) / 0.55);
 }
+.queue-table th,
+.queue-table td {
+  vertical-align: middle;
+}
+.queue-table .queue-actions {
+  width: 36px;
+  padding: 4px;
+}
 .queue-error {
   color: hsl(var(--destructive));
 }

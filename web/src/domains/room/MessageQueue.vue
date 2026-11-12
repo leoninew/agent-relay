@@ -7,33 +7,25 @@
           type="button"
           class="icon-button"
           aria-label="刷新队列"
-          :disabled="loading || loadingMore || clearing"
+          :disabled="loading || loadingMore || removingId !== null"
           @click="$emit('refresh')"
         >
           <AppIcon name="refresh" />
         </button>
-        <button
-          type="button"
-          class="icon-button"
-          aria-label="清空队列"
-          title="移除待办记录，不会撤回已送入会话的内容"
-          :aria-busy="clearing"
-          :disabled="loading || loadingMore || clearing || totalMessages === 0"
-          @click="$emit('clear')"
-        >
-          <AppIcon name="trash" />
-        </button>
       </div>
     </header>
-    <p class="detail-empty">清空仅移除待办记录，不会撤回已送入会话的内容。</p>
-    <div class="queue-content" :aria-busy="loading || loadingMore || clearing">
+    <div class="queue-content" :aria-busy="loading || loadingMore || removingId !== null">
       <div v-if="error" class="queue-error" role="alert">
         <span>{{ error }}</span>
-        <AppButton variant="plain" :disabled="loading || clearing" @click="$emit('refresh')">
+        <AppButton
+          variant="plain"
+          :disabled="loading || removingId !== null"
+          @click="$emit('refresh')"
+        >
           重试
         </AppButton>
       </div>
-      <p v-if="clearError" class="queue-error" role="alert">{{ clearError }}</p>
+      <p v-if="removeError" class="queue-error" role="alert">{{ removeError }}</p>
       <AppLoading v-if="loading && !messages.length">正在加载队列…</AppLoading>
       <p v-else-if="!messages.length && !error" class="detail-empty">暂无发送中或接收中的消息</p>
       <table v-if="rows.length" class="queue-table" aria-label="队列记录">
@@ -41,6 +33,7 @@
           <tr>
             <th scope="col">消息</th>
             <th scope="col">状态</th>
+            <th scope="col" class="queue-actions">操作</th>
           </tr>
         </thead>
         <tbody>
@@ -59,6 +52,20 @@
             <td>
               <span class="delivery-stage">{{ row.stage ?? "—" }}</span>
             </td>
+            <td class="queue-actions">
+              <button
+                type="button"
+                class="icon-button"
+                :aria-label="`删除消息 #${row.message.seq} 的队列记录`"
+                title="移除这条待办记录，不会撤回已送入会话的内容"
+                :aria-busy="removingId === row.message.id"
+                :disabled="loading || loadingMore || removingId !== null"
+                @click="$emit('remove', row.message.id)"
+              >
+                <AppSpinner v-if="removingId === row.message.id" />
+                <AppIcon v-else name="trash" />
+              </button>
+            </td>
           </tr>
         </tbody>
       </table>
@@ -68,7 +75,7 @@
         variant="plain"
         :loading="loadingMore"
         loading-label="加载中…"
-        :disabled="loading || clearing"
+        :disabled="loading || removingId !== null"
         @click="$emit('loadMore')"
       >
         加载更多消息
@@ -83,23 +90,23 @@
   import AppButton from "@/components/AppButton.vue";
   import AppIcon from "@/components/AppIcon.vue";
   import AppLoading from "@/components/AppLoading.vue";
+  import AppSpinner from "@/components/AppSpinner.vue";
   import { deliveryStage } from "@/domains/room/deliveryStage";
   import type { RoomMessage } from "@/services/roomApi";
 
   const props = defineProps<{
     messages: RoomMessage[];
-    totalMessages: number;
     hasMore: boolean;
     loading: boolean;
     loadingMore: boolean;
-    clearing: boolean;
+    removingId: string | null;
     error: string | null;
-    clearError: string | null;
+    removeError: string | null;
   }>();
   defineEmits<{
     select: [messageId: string];
     refresh: [];
-    clear: [];
+    remove: [messageId: string];
     loadMore: [];
   }>();
 

@@ -87,8 +87,11 @@ class SQLAlchemyMessageRepository:
         topic_id: str | None,
         member_id: str | None,
         deleted_at: datetime,
+        message_id: str | None = None,
     ) -> int:
         scope = self.messages.scope(room_id, topic_id=topic_id, member_id=member_id)
+        if message_id is not None:
+            scope &= MessageRecord.id == message_id
         criteria = (
             (DeliveryRecord.room_id == room_id)
             & DeliveryRecord.deleted_at.is_(None)

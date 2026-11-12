@@ -5,7 +5,7 @@ import { apiClient } from "@/services/api";
 import type { CreateMessage } from "@/services/roomApi";
 import {
   addRoomMember,
-  clearMessageQueue,
+  deleteQueueMessage,
   deleteRoom,
   fetchRoom,
   fetchRoomEvents,
@@ -169,22 +169,21 @@ describe("room API", () => {
     );
   });
 
-  it("clears the entire resource queue without a page cursor", async () => {
+  it("removes one queue message using escaped room and message identities", async () => {
     adapterMock.mockImplementationOnce(async (config: InternalAxiosRequestConfig) => ({
       config,
-      data: { removedMessages: 80 },
+      data: { removedMessages: 1 },
       headers: { "content-type": "application/json" },
       status: 200,
       statusText: "",
     }));
-    await expect(
-      clearMessageQueue("room/one", { topicId: "frontend", memberId: "test-worker" }),
-    ).resolves.toEqual({ removedMessages: 80 });
+    await expect(deleteQueueMessage("room/one", "message/one")).resolves.toEqual({
+      removedMessages: 1,
+    });
     expect(adapterMock).toHaveBeenLastCalledWith(
       expect.objectContaining({
         method: "delete",
-        url: "/api/room/room%2Fone/queue",
-        params: { topic_id: "frontend", member_id: "test-worker" },
+        url: "/api/room/room%2Fone/queue/message%2Fone",
       }),
     );
   });

@@ -9,20 +9,19 @@ function props() {
   const room = roomFixture();
   return {
     messages: [...room.messages].reverse(),
-    totalMessages: 2,
     hasMore: false,
     loading: false,
     loadingMore: false,
-    clearing: false,
+    removingId: null as string | null,
     error: null as string | null,
-    clearError: null as string | null,
+    removeError: null as string | null,
   };
 }
 
 describe("MessageQueue", () => {
   afterEach(cleanup);
 
-  it("shows fifteen-character previews and one delivery stage column", async () => {
+  it("shows fifteen-character previews, delivery stages and row actions", async () => {
     const input = props();
     const message = input.messages[0];
     message.content = "一二三四五六七八九十甲乙丙丁😀额外内容";
@@ -31,12 +30,13 @@ describe("MessageQueue", () => {
     expect(screen.getAllByRole("columnheader").map((header) => header.textContent)).toEqual([
       "消息",
       "状态",
+      "操作",
     ]);
     expect(
       within(screen.getAllByRole("row")[1])
         .getAllByRole("cell")
         .map((cell) => cell.textContent?.trim()),
-    ).toEqual(["一二三四五六七八九十甲乙丙丁😀…", "接收中"]);
+    ).toEqual(["一二三四五六七八九十甲乙丙丁😀…", "接收中", ""]);
     expect(screen.getByText(input.messages[1].content)).toBeTruthy();
     const preview = screen.getByRole("button", { name: "查看消息 #2 详情" });
     expect(preview.getAttribute("title")).toBe(message.content);
@@ -100,7 +100,7 @@ describe("MessageQueue", () => {
 
   it("shows an empty state only after a successful load and allows retrying failures", async () => {
     const { emitted, rerender } = render(MessageQueue, {
-      props: { ...props(), messages: [], totalMessages: 0, loading: true },
+      props: { ...props(), messages: [], loading: true },
     });
     expect(screen.getByText("正在加载队列…")).toBeTruthy();
     expect(screen.queryByText("暂无发送中或接收中的消息")).toBeNull();
@@ -119,17 +119,27 @@ describe("MessageQueue", () => {
     expect(emitted().loadMore).toHaveLength(1);
   });
 
-  it("clears the current queue and disables actions while clearing or when empty", async () => {
-    const { emitted, rerender } = render(MessageQueue, { props: props() });
+  it("removes only the selected row and disables mutations while removing", async () => {
+    const input = props();
+    const message = input.messages[0];
+    const { emitted, rerender } = render(MessageQueue, { props: input });
     expect(screen.getByRole("heading", { level: 3, name: "队列" })).toBeTruthy();
-    await fireEvent.click(screen.getByRole("button", { name: "清空队列" }));
-    expect(emitted().clear).toEqual([[]]);
-    await rerender({ clearing: true });
-    expect(screen.getByRole("button", { name: "清空队列" }).hasAttribute("disabled")).toBe(true);
+    expect(screen.queryByRole("button", { name: "清空队列" })).toBeNull();
+    const remove = screen.getByRole("button", { name: `删除消息 #${message.seq} 的队列记录` });
+    expect(screen.getAllByRole("button", { name: /删除消息 #\d+ 的队列记录/ })).toHaveLength(2);
+    expect(remove.getAttribute("title")).toBe("移除这条待办记录，不会撤回已送入会话的内容");
+    await fireEvent.click(remove);
+    expect(emitted().remove).toEqual([[message.id]]);
+    expect(emitted().select).toBeUndefined();
+    await rerender({ removingId: message.id });
+    expect(remove.getAttribute("aria-busy")).toBe("true");
+    for (const button of screen.getAllByRole("button", { name: /删除消息 #\d+ 的队列记录/ }))
+      expect(button.hasAttribute("disabled")).toBe(true);
     expect(screen.getByRole("button", { name: "刷新队列" }).hasAttribute("disabled")).toBe(true);
-    await rerender({ clearing: false, clearError: "队列清空失败，请重试。" });
-    expect(screen.getByRole("alert").textContent).toBe("队列清空失败，请重试。");
-    await rerender({ messages: [], totalMessages: 0, clearError: null });
-    expect(screen.getByRole("button", { name: "清空队列" }).hasAttribute("disabled")).toBe(true);
+    await rerender({ removingId: null, removeError: "队列记录删除失败，请重试。" });
+    expect(screen.getByRole("alert").textContent).toBe("队列记录删除失败，请重试。");
+    expect(remove.hasAttribute("disabled")).toBe(false);
+    await rerender({ messages: [], removeError: null });
+    expect(screen.queryByRole("button", { name: /删除消息 #\d+ 的队列记录/ })).toBeNull();
   });
 });

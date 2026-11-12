@@ -140,7 +140,7 @@ export type MessageQueueScope = {
   topicId?: string;
   memberId?: string;
 };
-export type ClearMessageQueueResult = {
+export type QueueRemovalResult = {
   removedMessages: number;
 };
 export type MessageQueueQuery = MessageQueueScope & {
@@ -294,13 +294,12 @@ export async function fetchMessageQueue(
   return data;
 }
 
-export async function clearMessageQueue(
+export async function deleteQueueMessage(
   roomId: string,
-  scope: MessageQueueScope = {},
-): Promise<ClearMessageQueueResult> {
-  const { data } = await apiClient.delete<ClearMessageQueueResult>(
-    `/api/room/${encodeURIComponent(roomId)}/queue`,
-    { params: { topic_id: scope.topicId, member_id: scope.memberId } },
+  messageId: string,
+): Promise<QueueRemovalResult> {
+  const { data } = await apiClient.delete<QueueRemovalResult>(
+    `/api/room/${encodeURIComponent(roomId)}/queue/${encodeURIComponent(messageId)}`,
   );
   return data;
 }

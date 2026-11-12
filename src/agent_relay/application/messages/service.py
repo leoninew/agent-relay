@@ -82,6 +82,20 @@ class MessageService:
             )
             return ClearedMessageQueue(removed_messages=removed)
 
+    def delete_queue_message(self, room_id: str, message_id: str) -> ClearedMessageQueue:
+        with self.store.write() as rooms:
+            rooms.room(room_id)
+            if not rooms.message_exists(room_id, message_id):
+                raise RoomNotFoundError("消息不存在")
+            removed = rooms.clear_queue(
+                room_id,
+                topic_id=None,
+                member_id=None,
+                message_id=message_id,
+                deleted_at=datetime.now(UTC),
+            )
+            return ClearedMessageQueue(removed_messages=removed)
+
     def clear_queue_with_codex(
         self,
         room_id: str,

@@ -1,7 +1,7 @@
 import { ref } from "vue";
 
 import { describeApiError } from "@/services/api";
-import { clearMessageQueue, fetchMessageQueue } from "@/services/roomApi";
+import { deleteQueueMessage, fetchMessageQueue } from "@/services/roomApi";
 import type { MessageQueuePage, MessageQueueScope, RoomMessage } from "@/services/roomApi";
 
 export function useMessageQueue(
@@ -9,13 +9,12 @@ export function useMessageQueue(
   scope: () => MessageQueueScope = () => ({}),
 ) {
   const messages = ref<RoomMessage[]>([]);
-  const totalMessages = ref(0);
   const hasMore = ref(false);
   const loading = ref(false);
   const loadingMore = ref(false);
-  const clearing = ref(false);
+  const removingId = ref<string | null>(null);
   const error = ref<string | null>(null);
-  const clearError = ref<string | null>(null);
+  const removeError = ref<string | null>(null);
   let nextBeforeSeq: number | null = null;
   let version = 0;
   let controller: AbortController | undefined;
@@ -30,16 +29,14 @@ export function useMessageQueue(
   function reset(): void {
     cancel();
     messages.value = [];
-    totalMessages.value = 0;
     hasMore.value = false;
     nextBeforeSeq = null;
     error.value = null;
-    clearError.value = null;
+    removeError.value = null;
   }
 
   function apply(page: MessageQueuePage, loaded: RoomMessage[]): void {
     messages.value = [...loaded].sort((left, right) => right.seq - left.seq);
-    totalMessages.value = page.totalMessages;
     hasMore.value = page.hasMore;
     nextBeforeSeq = page.nextBeforeSeq;
   }
@@ -114,14 +111,14 @@ export function useMessageQueue(
     }
   }
 
-  async function clear(): Promise<void> {
+  async function remove(messageId: string): Promise<void> {
     const currentRoom = roomId();
-    if (!currentRoom || clearing.value) return;
+    if (!currentRoom || removingId.value !== null) return;
     const currentScope = { ...scope() };
-    clearing.value = true;
-    clearError.value = null;
+    removingId.value = messageId;
+    removeError.value = null;
     try {
-      await clearMessageQueue(currentRoom, currentScope);
+      await deleteQueueMessage(currentRoom, messageId);
       if (currentRoom === roomId()) await refresh();
     } catch (caught) {
       const selectedScope = scope();
@@ -130,24 +127,23 @@ export function useMessageQueue(
         currentScope.topicId === selectedScope.topicId &&
         currentScope.memberId === selectedScope.memberId
       )
-        clearError.value = describeApiError(caught, "队列清空失败，请重试。");
+        removeError.value = describeApiError(caught, "队列记录删除失败，请重试。");
     } finally {
-      clearing.value = false;
+      removingId.value = null;
     }
   }
 
   return {
     messages,
-    totalMessages,
     hasMore,
     loading,
     loadingMore,
-    clearing,
+    removingId,
     error,
-    clearError,
+    removeError,
     refresh,
     loadMore,
-    clear,
+    remove,
     reset,
     cancel,
   };

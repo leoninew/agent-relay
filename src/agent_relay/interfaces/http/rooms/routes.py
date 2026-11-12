@@ -138,6 +138,13 @@ def clear_message_queue(
     return service.clear_queue(room_id, topic_id=topic_id, member_id=member_id)
 
 
+@router.delete("/{room_id}/queue/{message_id}", response_model_exclude_none=True)
+def delete_queue_message(
+    room_id: str, message_id: str, service: MessageServiceDependency
+) -> ClearedMessageQueue:
+    return service.delete_queue_message(room_id, message_id)
+
+
 @router.get("/{room_id}/event")
 def get_events(
     room_id: str,

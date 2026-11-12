@@ -6,7 +6,7 @@ from agent_relay.application.delivery.ports import QueueDriver
 from agent_relay.application.messages.contracts import CreateMessage
 from agent_relay.application.messages.ports import CodexQueueTarget
 from agent_relay.application.messages.service import MessageService
-from agent_relay.domain.rooms.errors import RoomConflictError, RoomInputError
+from agent_relay.domain.rooms.errors import RoomConflictError, RoomInputError, RoomNotFoundError
 from agent_relay.domain.rooms.models import McpServerReference, SkillReference, Topic
 from agent_relay.domain.rooms.state import RoomState
 
@@ -226,6 +226,34 @@ def test_publication_replay_preserves_recipients_after_subscription_changes(
     room_repository.publication.return_value = before
     assert service.post_message(state.room.id, request) == before
     room_repository.insert_message.assert_called_once()
+
+
+@pytest.mark.parametrize("removed", [0, 1])
+def test_queue_message_deletion_targets_only_the_requested_message(
+    room_store: MagicMock, room_repository: Mock, removed: int
+) -> None:
+    room_repository.message_exists.return_value = True
+    room_repository.clear_queue.return_value = removed
+
+    result = MessageService(room_store).delete_queue_message("agent-relay", "message-one")
+
+    room_repository.message_exists.assert_called_once_with("agent-relay", "message-one")
+    room_repository.clear_queue.assert_called_once_with(
+        "agent-relay", topic_id=None, member_id=None, message_id="message-one", deleted_at=ANY
+    )
+    assert result.removed_messages == removed
+    assert result.codex_queue is None
+
+
+def test_queue_message_deletion_rejects_a_missing_message_without_clearing_the_queue(
+    room_store: MagicMock, room_repository: Mock
+) -> None:
+    room_repository.message_exists.return_value = False
+
+    with pytest.raises(RoomNotFoundError, match="消息不存在"):
+        MessageService(room_store).delete_queue_message("agent-relay", "missing")
+
+    room_repository.clear_queue.assert_not_called()
 
 
 def test_queue_clear_releases_the_store_before_deleting_remote_items(

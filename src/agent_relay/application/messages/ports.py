@@ -25,6 +25,7 @@ class MessageRepository(Protocol):
         topic_id: str | None,
         member_id: str | None,
         deleted_at: datetime,
+        message_id: str | None = None,
     ) -> int: ...
     def codex_queue_targets(
         self, room_id: str, *, topic_id: str | None, member_id: str | None
