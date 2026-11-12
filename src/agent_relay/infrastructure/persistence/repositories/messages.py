@@ -1,13 +1,11 @@
 from datetime import datetime
 
 from sqlalchemy import select, update
-from sqlalchemy.orm import Session
 
 from agent_relay.application.dto.messages import CodexQueueTarget
 from agent_relay.domain.rooms.delivery import ACTIVE_DELIVERY_STATUSES
 from agent_relay.domain.rooms.models import Message
 from agent_relay.infrastructure.persistence.mappers import delivery_to_model
-from agent_relay.infrastructure.persistence.message_queries import MessageQueries
 from agent_relay.infrastructure.persistence.models import (
     DeliveryRecord,
     MessageMentionRecord,
@@ -16,22 +14,12 @@ from agent_relay.infrastructure.persistence.models import (
     MessageTopicRecord,
     RoomEventRecord,
 )
+from agent_relay.infrastructure.persistence.repositories._message_reads import (
+    SQLAlchemyMessageReads,
+)
 
 
-class SQLAlchemyMessageRepository:
-    def __init__(self, session: Session) -> None:
-        self.session = session
-        self.messages = MessageQueries(session)
-
-    def publication(self, room_id: str, publisher_id: str, publication_id: str) -> Message | None:
-        return self.messages.publication(room_id, publisher_id, publication_id)
-
-    def message_exists(self, room_id: str, message_id: str) -> bool:
-        return self.messages.message_exists(room_id, message_id)
-
-    def next_message_seq(self, room_id: str) -> int:
-        return self.messages.next_message_seq(room_id)
-
+class SQLAlchemyMessageRepository(SQLAlchemyMessageReads):
     def insert_message(self, room_id: str, message: Message) -> None:
         self.session.add(
             MessageRecord(
@@ -89,7 +77,7 @@ class SQLAlchemyMessageRepository:
         deleted_at: datetime,
         message_id: str | None = None,
     ) -> int:
-        scope = self.messages.scope(room_id, topic_id=topic_id, member_id=member_id)
+        scope = self.scope(room_id, topic_id=topic_id, member_id=member_id)
         if message_id is not None:
             scope &= MessageRecord.id == message_id
         criteria = (
@@ -123,7 +111,7 @@ class SQLAlchemyMessageRepository:
     def codex_queue_targets(
         self, room_id: str, *, topic_id: str | None, member_id: str | None
     ) -> list[CodexQueueTarget]:
-        scope = self.messages.scope(room_id, topic_id=topic_id, member_id=member_id)
+        scope = self.scope(room_id, topic_id=topic_id, member_id=member_id)
         return [
             CodexQueueTarget(session_id, submission_id)
             for session_id, submission_id in self.session.execute(

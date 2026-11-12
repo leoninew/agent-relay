@@ -1,15 +1,12 @@
-from sqlalchemy.orm import Session
-
+from agent_relay.application.context.ports import ContextReadRepository
 from agent_relay.application.dto.context import MemberCatalog
 from agent_relay.application.dto.positions import TopicPosition
-from agent_relay.infrastructure.persistence.database import Database
-from agent_relay.infrastructure.persistence.repositories.context import SQLAlchemyContextRepository
-from agent_relay.infrastructure.persistence.scopes import SQLAlchemyScope
+from agent_relay.application.transactions import RepositoryScope
 
 
-class SQLAlchemyContextQueries:
-    def __init__(self, source: Database | Session) -> None:
-        self.repositories = SQLAlchemyScope(source, SQLAlchemyContextRepository)
+class ContextReader:
+    def __init__(self, repositories: RepositoryScope[ContextReadRepository]) -> None:
+        self.repositories = repositories
 
     def catalog(self, room_id: str, member_id: str) -> MemberCatalog:
         with self.repositories.read() as repository:

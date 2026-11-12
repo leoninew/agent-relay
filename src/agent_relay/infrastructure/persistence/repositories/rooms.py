@@ -1,9 +1,7 @@
 from datetime import datetime
 
 from sqlalchemy import delete, false, func, or_, update
-from sqlalchemy.orm import Session
 
-from agent_relay.application.dto.rooms import RoomMetadata
 from agent_relay.domain.rooms.models import Member, Room, RoomChangeKind, RoomState
 from agent_relay.infrastructure.persistence.models import (
     ContextMessageRecord,
@@ -21,36 +19,11 @@ from agent_relay.infrastructure.persistence.models import (
     TopicPositionRecord,
     TopicRecord,
 )
-from agent_relay.infrastructure.persistence.resource_queries import ResourceQueries
+from agent_relay.infrastructure.persistence.repositories._room_reads import SQLAlchemyRoomReads
 from agent_relay.infrastructure.persistence.sqlite import time_at_or_before
 
 
-class SQLAlchemyRoomRepository:
-    def __init__(self, session: Session) -> None:
-        self.session = session
-        self.queries = ResourceQueries(session)
-
-    def room(self, room_id: str) -> Room:
-        return self.queries.room(room_id)
-
-    def resources(self, room_id: str) -> RoomState:
-        return self.queries.resources(room_id)
-
-    def metadata(self, room_id: str) -> RoomMetadata:
-        return self.queries.metadata(room_id)
-
-    def project_exists(self, project_path: str) -> bool:
-        return self.queries.project_exists(project_path)
-
-    def publisher(self, room_id: str, member_id: str | None) -> Member:
-        return self.queries.publisher(room_id, member_id)
-
-    def joined_members(self, room_id: str) -> dict[str, str]:
-        return self.queries.joined_members(room_id)
-
-    def bindings(self) -> list[tuple[str, str]]:
-        return self.queries.bindings()
-
+class SQLAlchemyRoomRepository(SQLAlchemyRoomReads):
     def _event(self, room_id: str, kind: RoomChangeKind, entity_id: str) -> None:
         self.session.add(RoomEventRecord(room_id=room_id, kind=kind, entity_id=entity_id))
 
@@ -166,6 +139,26 @@ class SQLAlchemyRoomRepository:
             )
             .execution_options(synchronize_session="fetch")
         )
+
+    def clear_messages(self, room_id: str, deleted_at: datetime) -> int:
+        removed = list(
+            self.session.scalars(
+                update(MessageRecord)
+                .where(MessageRecord.room_id == room_id, MessageRecord.deleted_at.is_(None))
+                .values(deleted_at=deleted_at)
+                .returning(MessageRecord.id)
+                .execution_options(synchronize_session="fetch")
+            )
+        )
+        self.session.execute(
+            update(DeliveryRecord)
+            .where(DeliveryRecord.room_id == room_id, DeliveryRecord.deleted_at.is_(None))
+            .values(deleted_at=deleted_at, updated_at=deleted_at)
+            .execution_options(synchronize_session="fetch")
+        )
+        self._event(room_id, "clear", room_id)
+        self.session.flush()
+        return len(removed)
 
     def save_observation(
         self,

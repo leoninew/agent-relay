@@ -10,7 +10,7 @@ from agent_relay.domain.rooms.errors import (
     RoomInputError,
     RoomNotFoundError,
 )
-from agent_relay.interfaces.http.dependencies import application_settings, get_logger
+from agent_relay.interfaces.http.dependencies import get_http_dependencies, get_logger
 from agent_relay.interfaces.http.errors import error_json_response
 from agent_relay.interfaces.http.middleware import log_request_failure
 
@@ -59,7 +59,7 @@ async def request_validation_exception_handler(
 async def unexpected_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     response = error_json_response(request, 500)
     log_request_failure(
-        get_logger(request), exc, application_settings(request.app).logging.request.failed, request
+        get_logger(request), exc, get_http_dependencies(request).logging.request_failed, request
     )
     return response
 

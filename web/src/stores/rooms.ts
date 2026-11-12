@@ -1,8 +1,16 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
 
-import { addRoomTopic, createRoom, deleteRoom, fetchRooms, updateRoom } from "@/services/roomApi";
+import {
+  addRoomTopic,
+  clearRoom,
+  createRoom,
+  deleteRoom,
+  fetchRooms,
+  updateRoom,
+} from "@/services/roomApi";
 import type {
+  ClearedRoom,
   CreateRoom,
   CreateTopic,
   MessagePage,
@@ -58,6 +66,18 @@ export const useRoomsStore = defineStore("rooms", () => {
     const snapshot = snapshots.value[room.id];
     if (snapshot) snapshot.room = room;
     return room;
+  }
+
+  async function clear(roomId: string): Promise<ClearedRoom> {
+    const result = await clearRoom(roomId);
+    sync({
+      ...result.metadata,
+      messages: [],
+      hasMore: false,
+      hasNewer: false,
+      nextBeforeSeq: null,
+    });
+    return result;
   }
 
   function sync(snapshot: RoomSnapshot): void {
@@ -124,6 +144,7 @@ export const useRoomsStore = defineStore("rooms", () => {
     create,
     rename,
     remove,
+    clear,
     sync,
     syncMetadata,
     prependPage,

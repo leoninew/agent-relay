@@ -8,13 +8,13 @@ from agent_relay.application.dto.delivery import ClaimedDelivery, QueueHead, Rec
 from agent_relay.domain.rooms.delivery import INTERRUPTED_SUBMISSION, UNCONFIRMED_DELIVERY_STATUSES
 from agent_relay.domain.rooms.models import Delivery
 from agent_relay.infrastructure.persistence.mappers import delivery_from_model, delivery_values
-from agent_relay.infrastructure.persistence.message_queries import MessageQueries
 from agent_relay.infrastructure.persistence.models import (
     DeliveryRecord,
     MemberRecord,
     RoomEventRecord,
 )
-from agent_relay.infrastructure.persistence.resource_queries import ResourceQueries
+from agent_relay.infrastructure.persistence.repositories.messages import SQLAlchemyMessageRepository
+from agent_relay.infrastructure.persistence.repositories.rooms import SQLAlchemyRoomRepository
 from agent_relay.infrastructure.persistence.sqlite import insertion_order
 
 
@@ -92,8 +92,10 @@ class SQLAlchemyDeliveryRepository:
             return None
         return ClaimedDelivery(
             candidate.room_id,
-            ResourceQueries(self.session).room(candidate.room_id),
-            MessageQueries(self.session).message(candidate.room_id, candidate.message_id),
+            SQLAlchemyRoomRepository(self.session).room(candidate.room_id),
+            SQLAlchemyMessageRepository(self.session).message(
+                candidate.room_id, candidate.message_id
+            ),
             delivery_from_model(candidate),
         )
 

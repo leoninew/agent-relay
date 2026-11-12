@@ -8,14 +8,16 @@ from agent_relay.infrastructure.dispatch.delivery import DeliveryRunner
 from agent_relay.infrastructure.dispatch.lock import SubmitterLock
 from agent_relay.infrastructure.dispatch.presence import MemberPresenceRunner
 from agent_relay.infrastructure.persistence.database import Database
-from agent_relay.infrastructure.persistence.delivery_store import SQLAlchemyDeliveryStore
-from agent_relay.infrastructure.persistence.room_store import SQLAlchemyRoomStore
+from agent_relay.infrastructure.persistence.dependencies import (
+    create_delivery_store,
+    create_room_store,
+)
 
 
 def create_delivery_runner(
     database: Database, driver: DeliveryDriver, logger: logging.Logger, concurrency: int
 ) -> DeliveryRunner:
-    store = SQLAlchemyDeliveryStore(database)
+    store = create_delivery_store(database)
     return DeliveryRunner(
         store,
         DeliveryService(store, driver, logger),
@@ -28,4 +30,4 @@ def create_delivery_runner(
 def create_presence_runner(
     database: Database, driver: SessionDriver, logger: logging.Logger
 ) -> MemberPresenceRunner:
-    return MemberPresenceRunner(MemberService(SQLAlchemyRoomStore(database), driver), logger)
+    return MemberPresenceRunner(MemberService(create_room_store(database), driver), logger)

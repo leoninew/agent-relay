@@ -8,7 +8,7 @@ from sqlalchemy.engine import Connection
 
 from agent_relay.resources import resource_root
 
-MIGRATION_HEAD = "delivery_steer_20261112"
+MIGRATION_HEAD = "message_deleted_20261112"
 
 
 def _configuration(path: Path, *, resources: Path | None = None) -> Config:

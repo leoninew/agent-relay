@@ -130,6 +130,11 @@ export type MessagePage = {
 };
 
 export type RoomSnapshot = RoomMetadata & MessagePage;
+export type ClearedRoom = {
+  removedMessages: number;
+  removedMembers: number;
+  metadata: RoomMetadata;
+};
 export type MessageQueuePage = {
   messages: RoomMessage[];
   totalMessages: number;
@@ -157,7 +162,7 @@ export type MessageQuery = {
 };
 export type RoomEvent = {
   eventId: number;
-  kind: "room" | "topic" | "member" | "session" | "message" | "delivery" | "position";
+  kind: "room" | "topic" | "member" | "session" | "message" | "delivery" | "position" | "clear";
   entityId: string;
   messageId: string | null;
 };
@@ -226,6 +231,13 @@ export async function updateRoom(roomId: string, request: UpdateRoom): Promise<R
 
 export async function deleteRoom(roomId: string): Promise<void> {
   await apiClient.delete(`/api/room/${encodeURIComponent(roomId)}`);
+}
+
+export async function clearRoom(roomId: string): Promise<ClearedRoom> {
+  const { data } = await apiClient.post<ClearedRoom>(
+    `/api/room/${encodeURIComponent(roomId)}/clear`,
+  );
+  return data;
 }
 
 function queryParams(query: MessageQuery) {

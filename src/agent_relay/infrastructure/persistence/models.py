@@ -128,6 +128,7 @@ class MessageRecord(Base):
     )
     reply_to_message_id: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(ISODateTime)
+    deleted_at: Mapped[datetime | None] = mapped_column(ISODateTime)
 
     __table_args__ = (
         CheckConstraint("seq > 0"),

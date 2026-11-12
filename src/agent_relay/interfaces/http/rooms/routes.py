@@ -17,6 +17,7 @@ from agent_relay.application.dto.messages import (
 )
 from agent_relay.application.dto.rooms import (
     ChangedTopic,
+    ClearedRoom,
     CreateRoom,
     CreateTopic,
     RoomEventPage,
@@ -25,11 +26,15 @@ from agent_relay.application.dto.rooms import (
     UpdateRoom,
 )
 from agent_relay.domain.rooms.models import Member, Message, Room
-from agent_relay.interfaces.http.members.dependencies import MemberServiceDependency
+from agent_relay.interfaces.http.members.dependencies import (
+    MemberServiceDependency,
+    SessionDriverDependency,
+)
 from agent_relay.interfaces.http.rooms.dependencies import (
     MessageServiceDependency,
     QueueClearServiceDependency,
     QueueDriverDependency,
+    RoomClearServiceDependency,
     RoomQueriesDependency,
     RoomServiceDependency,
 )
@@ -50,6 +55,13 @@ def create_room(request: CreateRoom, service: RoomServiceDependency) -> Room:
 @router.delete("/{room_id}", status_code=204)
 def delete_room(room_id: str, service: RoomServiceDependency) -> None:
     service.delete_room(room_id)
+
+
+@router.post("/{room_id}/clear")
+def clear_room(
+    room_id: str, service: RoomClearServiceDependency, driver: SessionDriverDependency
+) -> ClearedRoom:
+    return service.clear_room(room_id, driver)
 
 
 @router.patch("/{room_id}")

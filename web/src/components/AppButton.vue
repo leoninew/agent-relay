@@ -20,7 +20,7 @@
   const props = withDefaults(
     defineProps<{
       type?: "button" | "submit" | "reset";
-      variant?: "primary" | "secondary" | "plain";
+      variant?: "primary" | "secondary" | "warning" | "plain";
       loading?: boolean;
       loadingLabel?: string;
       disabled?: boolean;

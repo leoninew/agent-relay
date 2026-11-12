@@ -33,6 +33,8 @@ make web
 
 数据库默认位于 `data/agent-relay.sqlite3`。手动迁移、修改结构及旧库处理见[迁移指南](migrations/README.md)。
 
+聊天室搜索框右侧的“清空”按钮会先要求确认，再软删除当前聊天室全部消息及投递记录，并移除当前无法连接的成员。话题、可连接成员与固定用户保留；界面不提供恢复入口。成员连接状态核验失败时操作报错，保留原数据。
+
 ## Windows 桌面应用
 
 需要 Windows 和 Microsoft Edge WebView2 Runtime。源码启动：
@@ -56,7 +58,7 @@ make check
 make test
 ```
 
-依次检查前后端类型、lint 和格式，运行后端与前端单元测试。使用 `make check fix=1` 自动修复 lint 和格式问题。
+依次检查前后端类型、lint 和格式，运行后端与前端单元测试。单测按层隔离依赖，前端只验证规则、状态和请求契约，不包含 UI 或性能测试。使用 `make check fix=1` 自动修复 lint 和格式问题。
 
 修改依赖后更新并提交对应的 `uv.lock` 或 `web/pnpm-lock.yaml`。
 

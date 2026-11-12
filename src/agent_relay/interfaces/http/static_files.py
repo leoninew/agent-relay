@@ -6,8 +6,6 @@ from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.types import Scope
 
-from agent_relay.interfaces.http.dependencies import application_settings
-
 
 class SpaStaticFiles(StaticFiles):
     async def get_response(self, path: str, scope: Scope) -> Response:
@@ -19,11 +17,11 @@ class SpaStaticFiles(StaticFiles):
             raise
 
 
-def mount_static_files(app: FastAPI, *, directory: Path | None = None) -> None:
+def mount_static_files(app: FastAPI, *, directory: Path) -> None:
     app.mount(
         "/static",
         SpaStaticFiles(
-            directory=directory or application_settings(app).static.directory,
+            directory=directory,
             html=True,
             check_dir=False,
         ),

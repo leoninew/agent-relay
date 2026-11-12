@@ -56,12 +56,14 @@ messageId: <work.message.id>
 seq: <work.message.seq>
 createdAt: <work.message.created_at.isoformat()>
 sender: <sender_name>（<sender_id>）
+referTo: <被引用消息 ID，仅 replyToMessageId 非空时出现>
 
 <原消息正文>
 ```
 
 - createdAt 保留保存时间的时区，不使用提交或接收时刻；对应上下文结果中的同一时间事实。
 - 发送者字段名按用户补充统一为 `sender:`，姓名与成员 ID 格式保留；测试和说明使用相同字段名。
+- 消息引用其他消息时，在 `sender` 后增加 `referTo:` 行，值为持久化的 `replyToMessageId`；无引用时不输出该行，正文前仍保留一个空行。
 - 原 clientMessageId、队列回执、输入匹配、单次首项启动和未知结果不重发规则不变。
 - 仅影响后续正常提交生成的文本，不扫描、重写或重新投递既有 Codex 队列。
 

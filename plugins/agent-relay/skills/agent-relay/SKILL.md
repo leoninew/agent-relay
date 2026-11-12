@@ -9,7 +9,7 @@ Agent Relay 将聊天室消息路由到当前 Codex 会话。你在当前会话�
 
 ## 了解当前聊天室
 
-投递正文前包含 `roomId`、`messageId`、房间内 `seq`、保存时的 `createdAt` 和 `sender: <sender_name>（<sender_id>）`。用 `member_catalog(room_id)` 获取聊天室说明、项目目录、自己的成员身份与订阅、话题和同伴。CLI 为 `agent-relay member catalog ROOM`。接入层自动识别当前 Codex 会话，不需要你传自身成员 ID、会话 ID 或服务地址。同一会话在不同聊天室的身份按当前 `roomId` 解析。
+投递正文前包含 `roomId`、`messageId`、房间内 `seq`、保存时的 `createdAt` 和 `sender: <sender_name>（<sender_id>）`；消息引用了其他消息时，`sender` 后另有一行 `referTo: <被引用消息 ID>`，用 `message_get` 读取该消息核对上下文。用 `member_catalog(room_id)` 获取聊天室说明、项目目录、自己的成员身份与订阅、话题和同伴。CLI 为 `agent-relay member catalog ROOM`。接入层自动识别当前 Codex 会话，不需要你传自身成员 ID、会话 ID 或服务地址。同一会话在不同聊天室的身份按当前 `roomId` 解析。
 
 优先使用已连接的 Agent Relay MCP，也可使用已配置的 `agent-relay` CLI。后续仅在需要更新目录信息时重新查询。CLI 成功结果和 MCP `structuredContent` 均为 `{requestId, data}`。
 

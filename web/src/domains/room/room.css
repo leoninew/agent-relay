@@ -274,6 +274,19 @@
   min-width: 0;
   flex-shrink: 0;
 }
+.conversation-actions {
+  display: flex;
+  align-items: stretch;
+  flex: 1;
+  min-width: 0;
+  max-width: 440px;
+  gap: 8px;
+}
+.conversation-clear-button {
+  flex-shrink: 0;
+  min-height: 36px;
+  padding: 5px 14px;
+}
 .conversation-search {
   display: flex;
   align-items: stretch;

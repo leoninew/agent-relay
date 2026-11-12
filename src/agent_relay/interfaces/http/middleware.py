@@ -8,7 +8,7 @@ from starlette.concurrency import run_in_threadpool
 from starlette.datastructures import MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from agent_relay.interfaces.http.dependencies import application_settings, get_logger
+from agent_relay.interfaces.http.dependencies import get_http_dependencies, get_logger
 from agent_relay.interfaces.http.errors import (
     INTERNAL_ERROR_CODE,
     REQUEST_ID_HEADER,
@@ -64,9 +64,9 @@ class RequestLoggingMiddleware:
         request_id = ensure_request_id(request)
         path = request.url.path
         logger = get_logger(request)
-        settings = application_settings(request.app)
-        logger.info(settings.logging.request.begin, request_id, request.method, path)
-        limit = settings.logging.body.limit
+        logging_options = get_http_dependencies(request).logging
+        logger.info(logging_options.request_begin, request_id, request.method, path)
+        limit = logging_options.body_limit
         log_request_body = limit > 0 and is_json_content_type(
             request.headers.get("content-type", "")
         )
@@ -82,7 +82,7 @@ class RequestLoggingMiddleware:
                 request_body.extend(message.get("body", b"")[: max(0, limit - len(request_body))])
                 if not message.get("more_body", False) and request_body:
                     logger.info(
-                        settings.logging.request.body,
+                        logging_options.request_body,
                         request_id,
                         request_body.decode("utf-8", errors="replace"),
                     )
@@ -110,7 +110,7 @@ class RequestLoggingMiddleware:
                 log_request_failure(
                     logger,
                     exc,
-                    settings.logging.request.failed,
+                    logging_options.request_failed,
                     request,
                     status_code=status_code,
                 )
@@ -119,12 +119,12 @@ class RequestLoggingMiddleware:
             await response(scope, receive_request, send_response)
 
         log_level = log_request_completion(
-            logger, settings.logging.request.end, request, status_code
+            logger, logging_options.request_end, request, status_code
         )
         if response_body:
             logger.log(
                 log_level,
-                settings.logging.response.body,
+                logging_options.response_body,
                 request_id,
                 response_body.decode("utf-8", errors="replace"),
             )

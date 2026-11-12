@@ -8,7 +8,7 @@ from agent_relay.application.dto.messages import (
     CreateMessage,
 )
 from agent_relay.application.rooms.ports import RoomStore
-from agent_relay.domain.rooms.errors import RoomInputError, RoomNotFoundError
+from agent_relay.domain.rooms.errors import RoomConflictError, RoomInputError, RoomNotFoundError
 from agent_relay.domain.rooms.models import Message
 from agent_relay.domain.rooms.rules import (
     build_message,
@@ -32,6 +32,8 @@ class MessageService:
             mentions = list(dict.fromkeys(request.mentioned_member_ids))
             existing = rooms.publication(room_id, sender.id, request.publication_id)
             if existing is not None:
+                if not rooms.message_exists(room_id, existing.id):
+                    raise RoomConflictError("该发布记录已清空，请使用新的发布标识")
                 validate_publication_replay(
                     existing,
                     content=request.content,
@@ -68,7 +70,7 @@ class MessageService:
             rooms.room(room_id)
             sender = rooms.publisher(room_id, member_id)
             message = rooms.publication(room_id, sender.id, publication_id)
-            if message is None:
+            if message is None or not rooms.message_exists(room_id, message.id):
                 raise RoomNotFoundError("发布记录不存在")
             return message.model_copy(deep=True)
 

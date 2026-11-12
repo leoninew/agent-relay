@@ -19,6 +19,7 @@
     --accent-foreground: 222.2 47.4% 11.2%;
     --destructive: 0 72.2% 50.6%;
     --destructive-foreground: 210 40% 98%;
+    --warning: 32 90% 36%;
     --border: 214 25% 89%;
     --input: 214 25% 85%;
     --radius: 0.5rem;
@@ -48,6 +49,7 @@
     --accent-foreground: 210 40% 96%;
     --destructive: 0 62.8% 50%;
     --destructive-foreground: 210 40% 98%;
+    --warning: 43 96% 56%;
     --border: 220 13% 22%;
     --input: 220 13% 22%;
   }
@@ -350,7 +352,8 @@
 .app-button:disabled {
   opacity: 0.6;
 }
-.primary-button {
+.primary-button,
+.warning-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -366,7 +369,17 @@
   font-weight: 500;
   transition: filter 150ms;
 }
-.primary-button svg {
+.warning-button {
+  border-color: hsl(var(--warning) / 0.25);
+  background: hsl(var(--warning) / 0.08);
+  color: hsl(var(--warning));
+}
+.warning-button:hover:not(:disabled) {
+  border-color: hsl(var(--warning) / 0.4);
+  background: hsl(var(--warning) / 0.14);
+}
+.primary-button svg,
+.warning-button svg {
   width: 14px;
   height: 14px;
 }

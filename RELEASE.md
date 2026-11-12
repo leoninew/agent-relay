@@ -4,8 +4,11 @@
 
 ## 未发布
 
+- 统一仓储读取入口，Reader 通过应用端口访问仓储；HTTP dependencies 声明端口，具体持久化装配经各能力工厂集中到 bootstrap。
+- 单元测试按层和能力整理，领域规则集中验证，应用编排隔离仓储与协作服务；移除 UI 测试和闲置依赖，前端使用 Node 验证状态及请求契约，不包含性能测试。
+- 聊天室搜索框右侧新增警告色“清空”按钮，确认后软删除全部消息、投递记录及无法连接的成员，其他客户端同步刷新；需升级至 `message_deleted_20261112`。
 - 合并 SQLite 建表 SQL 和 Alembic revision，保留 `queue_deleted_20261110`，已处于该版本的数据库可继续使用。旧 `baseline_20261110` 不再提供直接升级，处理方式见[迁移指南](migrations/README.md)。
-- 迁移验证只保留一个 SQL 执行集成测试，使用通用 `integration` 标记，默认排除，按需显式运行。
+- 迁移单测仅验证资源定位与 Alembic 调用参数，SQL 和迁移链通过离线命令核对。
 - 明确 `make web`、`make webapi`、`make migrate` 默认使用 `dev`，支持 `profile=<名称>` 覆盖；前端通过 Make 启动时只传入一次 Vite 模式。
 
 ## 2026-11-11

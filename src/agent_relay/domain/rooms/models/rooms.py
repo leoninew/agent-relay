@@ -7,7 +7,9 @@ from pydantic import model_validator
 from agent_relay.domain.rooms.models.base import RoomModel
 
 USER_MEMBER_ID = "user"
-RoomChangeKind = Literal["room", "topic", "member", "session", "message", "delivery", "position"]
+RoomChangeKind = Literal[
+    "room", "topic", "member", "session", "message", "delivery", "position", "clear"
+]
 
 
 class Room(RoomModel):

@@ -15,6 +15,7 @@ from uuid import uuid4
 import uvicorn
 from fastapi import FastAPI
 
+from agent_relay.application.desktop.queries import DesktopExitNotificationReader
 from agent_relay.application.desktop.service import DesktopExitNotificationService
 from agent_relay.application.messages.service import MessageService
 from agent_relay.bootstrap.http import build_app
@@ -22,11 +23,7 @@ from agent_relay.bootstrap.logging import configure_logging
 from agent_relay.bootstrap.paths import load_app_settings, resource_root, user_data_root
 from agent_relay.bootstrap.settings import Settings
 from agent_relay.infrastructure.persistence.database import Database
-from agent_relay.infrastructure.persistence.desktop_queries import (
-    SQLAlchemyDesktopExitNotificationQueries,
-)
-from agent_relay.infrastructure.persistence.room_queries import SQLAlchemyRoomQueries
-from agent_relay.infrastructure.persistence.room_store import SQLAlchemyRoomStore
+from agent_relay.infrastructure.persistence.dependencies import create_room_store
 
 logger = logging.getLogger("agent_relay.desktop")
 AppFactory = Callable[..., FastAPI]
@@ -229,13 +226,14 @@ def run_desktop(
 
 
 def _publish_exit_notifications(database: Database, started_at: datetime, run_id: str) -> None:
+    store = create_room_store(database)
     notifications = DesktopExitNotificationService(
-        SQLAlchemyDesktopExitNotificationQueries(database),
-        MessageService(SQLAlchemyRoomStore(database)),
+        DesktopExitNotificationReader(store),
+        MessageService(store),
         logger,
     ).publish(started_at=started_at, run_id=run_id)
     remaining = list(notifications)
-    queries = SQLAlchemyRoomQueries(database)
+    queries = store.queries
     deadline = time.monotonic() + EXIT_NOTIFICATION_SUBMISSION_TIMEOUT_SECONDS
     while remaining:
         for room_id, notification in remaining[:]:

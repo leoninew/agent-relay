@@ -1,8 +1,12 @@
+from collections import defaultdict
+from datetime import datetime
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from agent_relay.application.dto.desktop import ShutdownNotificationTarget
 from agent_relay.application.dto.positions import TopicPosition
-from agent_relay.application.dto.rooms import RoomMetadata, RoomSummary
+from agent_relay.application.dto.rooms import RoomEvent, RoomEventPage, RoomMetadata, RoomSummary
 from agent_relay.domain.rooms.errors import RoomNotFoundError
 from agent_relay.domain.rooms.models import USER_MEMBER_ID, Member, Room, RoomState
 from agent_relay.infrastructure.persistence.mappers import (
@@ -26,7 +30,7 @@ from agent_relay.infrastructure.persistence.models import (
 from agent_relay.infrastructure.persistence.sqlite import insertion_order
 
 
-class ResourceQueries:
+class SQLAlchemyRoomReads:
     def __init__(self, session: Session) -> None:
         self.session = session
 
@@ -177,6 +181,7 @@ class ResourceQueries:
             .select_from(MessageRecord)
             .where(
                 MessageRecord.room_id == MemberTopicRecord.room_id,
+                MessageRecord.deleted_at.is_(None),
                 MessageRecord.seq > position_seq,
                 topic_matches,
             )
@@ -244,6 +249,7 @@ class ResourceQueries:
                 .select_from(MessageRecord)
                 .where(
                     MessageRecord.room_id == room_id,
+                    MessageRecord.deleted_at.is_(None),
                 )
             )
             or 0
@@ -273,3 +279,92 @@ class ResourceQueries:
             ),
             event_id=event_id,
         )
+
+    def events(self, room_id: str, after_event_id: int, limit: int = 200) -> RoomEventPage:
+        self.room(room_id)
+        if (
+            self.session.scalar(
+                select(RoomEventRecord.event_id)
+                .where(
+                    RoomEventRecord.room_id == room_id,
+                    RoomEventRecord.kind == "clear",
+                    RoomEventRecord.event_id > after_event_id,
+                )
+                .limit(1)
+            )
+            is not None
+        ):
+            return self._resync(room_id)
+        if (
+            after_event_id
+            and self.session.scalar(
+                select(RoomEventRecord.event_id).where(
+                    RoomEventRecord.room_id == room_id,
+                    RoomEventRecord.event_id == after_event_id,
+                )
+            )
+            is None
+        ):
+            return self._resync(room_id)
+        rows = list(
+            self.session.scalars(
+                select(RoomEventRecord)
+                .where(
+                    RoomEventRecord.room_id == room_id,
+                    RoomEventRecord.event_id > after_event_id,
+                )
+                .order_by(RoomEventRecord.event_id)
+                .limit(limit + 1)
+            )
+        )
+        events = [
+            RoomEvent.model_validate(
+                {
+                    "event_id": record.event_id,
+                    "kind": record.kind,
+                    "entity_id": record.entity_id,
+                    "message_id": record.message_id,
+                }
+            )
+            for record in rows[:limit]
+        ]
+        return RoomEventPage(
+            events=events,
+            next_event_id=events[-1].event_id if events else after_event_id,
+            has_more=len(rows) > limit,
+            resync_required=False,
+        )
+
+    def _resync(self, room_id: str) -> RoomEventPage:
+        latest = self.session.scalar(
+            select(func.max(RoomEventRecord.event_id)).where(RoomEventRecord.room_id == room_id)
+        )
+        return RoomEventPage(
+            events=[], next_event_id=latest or 0, has_more=False, resync_required=True
+        )
+
+    def notification_targets(self, started_at: datetime) -> list[ShutdownNotificationTarget]:
+        rows = self.session.execute(
+            select(MessageRecord.room_id, MemberRecord.id)
+            .join(
+                MemberRecord,
+                (MemberRecord.room_id == MessageRecord.room_id)
+                & (MemberRecord.kind == "agent")
+                & MemberRecord.deleted_at.is_(None)
+                & MemberRecord.session_id.is_not(None),
+            )
+            .where(
+                MessageRecord.publisher_id == USER_MEMBER_ID,
+                MessageRecord.deleted_at.is_(None),
+                MessageRecord.created_at >= started_at,
+            )
+            .distinct()
+            .order_by(MessageRecord.room_id, MemberRecord.id)
+        ).tuples()
+        grouped: dict[str, list[str]] = defaultdict(list)
+        for room_id, member_id in rows:
+            grouped[room_id].append(member_id)
+        return [
+            ShutdownNotificationTarget(room_id, tuple(member_ids))
+            for room_id, member_ids in grouped.items()
+        ]

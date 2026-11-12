@@ -14,7 +14,6 @@ from agent_relay.application.dto.context import (
 from agent_relay.application.dto.positions import TopicPosition
 from agent_relay.domain.rooms.errors import RoomNotFoundError
 from agent_relay.domain.rooms.models import VisibilityScope
-from agent_relay.infrastructure.persistence.message_queries import MessageQueries
 from agent_relay.infrastructure.persistence.models import (
     ContextMessageRecord,
     ContextQueryRecord,
@@ -27,15 +26,16 @@ from agent_relay.infrastructure.persistence.models import (
     TopicPositionRecord,
     TopicRecord,
 )
-from agent_relay.infrastructure.persistence.resource_queries import ResourceQueries
+from agent_relay.infrastructure.persistence.repositories.messages import SQLAlchemyMessageRepository
+from agent_relay.infrastructure.persistence.repositories.rooms import SQLAlchemyRoomRepository
 from agent_relay.infrastructure.persistence.sqlite import insertion_order, literal_contains
 
 
 class SQLAlchemyContextRepository:
     def __init__(self, session: Session) -> None:
         self.session = session
-        self.resources = ResourceQueries(session)
-        self.messages = MessageQueries(session)
+        self.resources = SQLAlchemyRoomRepository(session)
+        self.messages = SQLAlchemyMessageRepository(session)
 
     def subscriptions(self, room_id: str, member_id: str) -> set[str]:
         member = self.session.scalar(

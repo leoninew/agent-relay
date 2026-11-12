@@ -10,6 +10,7 @@ from agent_relay.application.capabilities.ports import CapabilityDriver
 from agent_relay.application.delivery.ports import DeliveryDriver
 from agent_relay.application.members.sessions import SessionDriver
 from agent_relay.bootstrap.config import load_settings
+from agent_relay.bootstrap.dependencies import create_http_dependencies
 from agent_relay.bootstrap.settings import Settings
 from agent_relay.infrastructure.codex.dependencies import (
     create_capability_driver,
@@ -113,14 +114,14 @@ def _configure_app(
 
     app = FastAPI(title="Agent Relay", lifespan=lifespan)
     app.state.logger = logger
-    app.state.settings = configured
     app.state.database = database
-    app.state.session_driver = sessions
-    app.state.queue_driver = queue
-    app.state.capability_driver = (
+    capabilities = (
         capability_driver
         if capability_driver is not None
         else create_capability_driver(codex.command, codex.rpc_timeout)
+    )
+    app.state.http_dependencies = create_http_dependencies(
+        database, sessions, queue, capabilities, configured.logging
     )
     app.state.delivery_runner = delivery_runner
     app.state.presence_runner = presence_runner
@@ -130,7 +131,7 @@ def _configure_app(
     app.add_middleware(RequestLoggingMiddleware, exception_handler=unexpected_exception_handler)
     register_exception_handlers(app)
     app.include_router(api_router)
-    mount_static_files(app, directory=static_directory)
+    mount_static_files(app, directory=static_directory or configured.static.directory)
     return app
 
 

@@ -10,7 +10,7 @@ def test_migrations_use_explicit_resources_not_current_directory(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
     database_path = tmp_path / "user data" / "relay.sqlite3"
-    resources = Path(__file__).parents[3]
+    resources = Path(__file__).parents[4]
     monkeypatch.chdir(tmp_path)
     upgrade = Mock()
     monkeypatch.setattr(

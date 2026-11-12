@@ -33,6 +33,12 @@ class RoomSnapshot(RoomMetadata, MessagePage):
     pass
 
 
+class ClearedRoom(RoomModel):
+    removed_messages: int
+    removed_members: int
+    metadata: RoomMetadata
+
+
 class RoomEvent(RoomModel):
     event_id: int
     kind: RoomChangeKind

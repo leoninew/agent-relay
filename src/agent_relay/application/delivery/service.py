@@ -56,12 +56,18 @@ class DeliveryService:
         delivery = work.delivery
         sender = f"{work.message.sender_name}（{work.message.sender_id}）"
         created_at = work.message.model_dump(mode="json", by_alias=True)["createdAt"]
+        refer_to = (
+            f"referTo: {work.message.reply_to_message_id}\n"
+            if work.message.reply_to_message_id
+            else ""
+        )
         text = (
             f"roomId: {work.room_id}\n"
             f"messageId: {work.message.id}\n"
             f"seq: {work.message.seq}\n"
             f"createdAt: {created_at}\n"
-            f"sender: {sender}\n\n"
+            f"sender: {sender}\n"
+            f"{refer_to}\n"
             f"{work.message.content}"
         )
         try:

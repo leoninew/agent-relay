@@ -4,12 +4,15 @@ from uuid import uuid4
 
 from agent_relay.application.dto.rooms import (
     ChangedTopic,
+    ClearedRoom,
     CreateRoom,
     CreateTopic,
     UpdateRoom,
 )
+from agent_relay.application.members.sessions import SessionDriver, SessionUnavailableError
 from agent_relay.application.rooms.ports import RoomStore
 from agent_relay.domain.rooms.errors import RoomConflictError
+from agent_relay.domain.rooms.members import retire_member
 from agent_relay.domain.rooms.models import Room, RoomState, Topic
 from agent_relay.domain.rooms.resources import (
     new_room_state,
@@ -44,6 +47,48 @@ class RoomService:
         with self.store.write() as rooms:
             rooms.room(room_id)
             rooms.delete_room(room_id)
+
+    def clear_room(self, room_id: str, driver: SessionDriver) -> ClearedRoom:
+        with self.store.read() as rooms:
+            state = rooms.resources(room_id)
+            bindings = {
+                member.id: member.session_id
+                for member in state.members
+                if member.kind == "agent" and member.deleted_at is None
+            }
+            project_path = state.room.project_path
+        unavailable: set[str] = set()
+        if bindings:
+            try:
+                sessions = driver.list_sessions()
+            except Exception as exc:
+                raise SessionUnavailableError("无法核验成员连接状态，请刷新后重试") from exc
+            reachable = {
+                info.id
+                for info in sessions
+                if info.usable and normalize_project_path(info.cwd) == project_path
+            }
+            unavailable = {
+                member_id
+                for member_id, session_id in bindings.items()
+                if session_id not in reachable
+            }
+        with self.store.write() as rooms:
+            state = rooms.resources(room_id)
+            original = deepcopy(state)
+            now = datetime.now(UTC)
+            removed_members = 0
+            for member in state.members:
+                if member.id in unavailable and member.deleted_at is None:
+                    retire_member(state, member.id, now)
+                    removed_members += 1
+            rooms.save_resources(state, original)
+            removed_messages = rooms.clear_messages(room_id, now)
+            return ClearedRoom(
+                removed_messages=removed_messages,
+                removed_members=removed_members,
+                metadata=rooms.metadata(room_id),
+            )
 
     def update_room(self, room_id: str, request: UpdateRoom) -> Room:
         with self.store.write() as rooms:

@@ -51,37 +51,51 @@
               详情
             </AppButton>
           </div>
-          <form
-            class="conversation-search"
-            role="search"
-            aria-label="搜索聊天室消息"
-            @submit.prevent="submitSearch"
-          >
-            <div class="conversation-search-field">
-              <AppIcon name="search" />
-              <AppInput
-                v-model="searchText"
-                type="search"
-                name="keyword"
-                maxlength="200"
-                placeholder="搜索消息…"
-                aria-label="搜索消息"
-                clear-label="清空搜索"
-                autocomplete="off"
-              />
-            </div>
-            <AppButton
-              type="submit"
-              variant="primary"
-              class="conversation-search-button"
-              :title="searchText.trim() ? '搜索消息' : '刷新聊天室'"
-              :loading="loading || refreshingSessions"
-              loading-label="加载中…"
-              :disabled="sending"
+          <div class="conversation-actions">
+            <form
+              class="conversation-search"
+              role="search"
+              aria-label="搜索聊天室消息"
+              @submit.prevent="submitSearch"
             >
-              搜索
+              <div class="conversation-search-field">
+                <AppIcon name="search" />
+                <AppInput
+                  v-model="searchText"
+                  type="search"
+                  name="keyword"
+                  maxlength="200"
+                  placeholder="搜索消息…"
+                  aria-label="搜索消息"
+                  clear-label="清空搜索"
+                  autocomplete="off"
+                />
+              </div>
+              <AppButton
+                type="submit"
+                variant="primary"
+                class="conversation-search-button"
+                :title="searchText.trim() ? '搜索消息' : '刷新聊天室'"
+                :loading="loading || refreshingSessions"
+                loading-label="加载中…"
+                :disabled="sending || clearing"
+              >
+                搜索
+              </AppButton>
+            </form>
+            <AppButton
+              variant="warning"
+              class="conversation-clear-button"
+              :loading="clearing"
+              loading-label="清空中…"
+              :disabled="
+                loading || refreshingSessions || sending || saving || Boolean(pendingPublication)
+              "
+              @click="openClear"
+            >
+              清空
             </AppButton>
-          </form>
+          </div>
         </header>
         <div v-if="loadError" class="room-alert" role="alert">
           <span>{{ loadError }}</span>
@@ -119,7 +133,7 @@
         :members="snapshot.members"
         :sessions="snapshot.sessions"
         :reply-to="replyTo"
-        :sending="sending"
+        :sending="sending || clearing"
         :locked="Boolean(pendingPublication)"
         :error="sendError"
         :catalog="capabilities.catalog.value"
@@ -200,6 +214,13 @@
     @close="deleteTarget = undefined"
     @confirm="deleteNode"
   />
+  <RoomClearDialog
+    :room="clearOpen ? snapshot?.room : undefined"
+    :saving="clearing"
+    :error="clearError"
+    @close="clearOpen = false"
+    @confirm="clearCurrentRoom"
+  />
 </template>
 
 <script setup lang="ts">
@@ -216,6 +237,7 @@
   import MessageQueue from "@/domains/room/MessageQueue.vue";
   import MessageTimeline from "@/domains/room/MessageTimeline.vue";
   import RoomComposer from "@/domains/room/RoomComposer.vue";
+  import RoomClearDialog from "@/domains/room/RoomClearDialog.vue";
   import RoomDeleteDialog from "@/domains/room/RoomDeleteDialog.vue";
   import type { DeleteTarget } from "@/domains/room/RoomDeleteDialog.vue";
   import RoomSetupDialog from "@/domains/room/RoomSetupDialog.vue";
@@ -332,6 +354,9 @@
   const editingTopic = ref<Topic>();
   const deleteTarget = ref<ResourceDeleteTarget>();
   const saving = ref(false);
+  const clearOpen = ref(false);
+  const clearing = ref(false);
+  const clearError = ref<string | null>(null);
   const setupError = ref<string | null>(null);
   const sessions = ref<SessionCandidate[]>([]);
   const sessionsLoading = ref(false);
@@ -367,7 +392,7 @@
 
   async function submitSearch(): Promise<void> {
     clearTimeout(searchTimer);
-    if (loading.value || refreshingSessions.value || sending.value) return;
+    if (loading.value || refreshingSessions.value || sending.value || clearing.value) return;
     keyword.value = searchText.value.trim();
     if (keyword.value) await loadLatest();
     else await refreshRoom();
@@ -388,6 +413,9 @@
     stopEvents = subscribeRoomEvents(roomId, current.eventId, async (page: RoomEventPage) => {
       if (version !== loadVersion) return;
       if (page.resyncRequired) {
+        roomPanel.closeDetails();
+        replyTo.value = undefined;
+        messageQueue.reset();
         await loadRoom();
         return;
       }
@@ -549,6 +577,8 @@
     editingMember.value = undefined;
     editingTopic.value = undefined;
     deleteTarget.value = undefined;
+    clearOpen.value = false;
+    clearError.value = null;
     sessionsVersion++;
     sessions.value = [];
     sessionsLoading.value = false;
@@ -599,7 +629,7 @@
   }
 
   async function sendMessage(draft: MessageDraft): Promise<void> {
-    if (sending.value || !currentRoomId.value) return;
+    if (sending.value || clearing.value || !currentRoomId.value) return;
     if (pendingPublication.value) return;
     const request = { ...draft, publicationId: crypto.randomUUID() };
     sessionStorage.setItem(`relay-publication:${currentRoomId.value}`, JSON.stringify(request));
@@ -691,7 +721,7 @@
   }
 
   async function refreshRoom(): Promise<void> {
-    if (!currentRoomId.value || refreshingSessions.value || sending.value) return;
+    if (!currentRoomId.value || refreshingSessions.value || sending.value || clearing.value) return;
     const roomId = currentRoomId.value;
     refreshingSessions.value = true;
     try {
@@ -727,6 +757,46 @@
     editingMember.value = undefined;
     setupError.value = null;
     deleteTarget.value = target;
+  }
+
+  function openClear(): void {
+    clearError.value = null;
+    clearOpen.value = true;
+  }
+
+  async function clearCurrentRoom(): Promise<void> {
+    const roomId = currentRoomId.value;
+    if (!roomId || !clearOpen.value || saving.value || sending.value || pendingPublication.value)
+      return;
+    clearing.value = true;
+    saving.value = true;
+    clearError.value = null;
+    const version = cancelQueries();
+    messageQueue.cancel();
+    try {
+      const result = await roomsStore.clear(roomId);
+      toasts.success(
+        `已清空 ${result.removedMessages} 条消息，移除 ${result.removedMembers} 位成员`,
+      );
+      if (currentRoomId.value !== roomId) return;
+      clearOpen.value = false;
+      roomPanel.reset();
+      messageQueue.reset();
+      replyTo.value = undefined;
+      resetSearch();
+      await loadLatest();
+    } catch (caught) {
+      const message = describeApiError(caught, "清空失败，请稍后重试。");
+      if (currentRoomId.value === roomId) {
+        clearError.value = message;
+        startEvents(roomId, version);
+        void messageQueue.refresh();
+      }
+      toasts.error(message);
+    } finally {
+      clearing.value = false;
+      saving.value = false;
+    }
   }
 
   async function saveSetup(action: () => Promise<void>, successMessage: string): Promise<void> {

@@ -134,6 +134,29 @@ def test_submission_includes_stable_message_lookup_facts_and_capabilities(
     )
 
 
+def test_submission_adds_reference_line_when_message_replies_to_another(
+    work: ClaimedDelivery,
+    delivery_store: Mock,
+    queue_driver: Mock,
+) -> None:
+    work = replace(
+        work,
+        message=work.message.model_copy(update={"reply_to_message_id": "message-0278"}),
+    )
+    DeliveryService(delivery_store, queue_driver, logging.getLogger("tests.delivery")).submit(work)
+    request = queue_driver.submit.call_args.args[2]
+    created_at = work.message.model_dump(mode="json", by_alias=True)["createdAt"]
+    assert request.text == (
+        f"roomId: {work.room_id}\n"
+        f"messageId: {work.message.id}\n"
+        f"seq: {work.message.seq}\n"
+        f"createdAt: {created_at}\n"
+        f"sender: {work.message.sender_name}（{work.message.sender_id}）\n"
+        f"referTo: message-0278\n\n"
+        f"{work.message.content}"
+    )
+
+
 def test_unsaved_receipt_does_not_trigger_activation(
     work: ClaimedDelivery,
     delivery_store: Mock,

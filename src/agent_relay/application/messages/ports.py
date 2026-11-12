@@ -1,11 +1,31 @@
 from datetime import datetime
 from typing import Protocol
 
-from agent_relay.application.dto.messages import CodexQueueTarget
+from agent_relay.application.dto.messages import CodexQueueTarget, MessagePage, MessageQueuePage
 from agent_relay.domain.rooms.models import Message
 
 
 class MessageRepository(Protocol):
+    def message(self, room_id: str, message_id: str) -> Message: ...
+    def page(
+        self,
+        room_id: str,
+        *,
+        topic_id: str | None = None,
+        member_id: str | None = None,
+        keyword: str | None = None,
+        before_seq: int | None = None,
+        limit: int = 50,
+    ) -> MessagePage: ...
+    def queue(
+        self,
+        room_id: str,
+        *,
+        topic_id: str | None = None,
+        member_id: str | None = None,
+        before_seq: int | None = None,
+        limit: int = 50,
+    ) -> MessageQueuePage: ...
     def publication(
         self, room_id: str, publisher_id: str, publication_id: str
     ) -> Message | None: ...

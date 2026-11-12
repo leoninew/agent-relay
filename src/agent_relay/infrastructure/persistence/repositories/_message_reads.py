@@ -21,22 +21,26 @@ from agent_relay.infrastructure.persistence.models import (
 from agent_relay.infrastructure.persistence.sqlite import insertion_order, literal_contains
 
 
-class MessageQueries:
+class SQLAlchemyMessageReads:
     def __init__(self, session: Session) -> None:
         self.session = session
 
     @staticmethod
-    def statement() -> Select[tuple[MessageRecord, str]]:
-        return select(MessageRecord, MemberRecord.name).join(
+    def statement(*, include_deleted: bool = False) -> Select[tuple[MessageRecord, str]]:
+        statement = select(MessageRecord, MemberRecord.name).join(
             MemberRecord,
             (MemberRecord.room_id == MessageRecord.room_id)
             & (MemberRecord.id == MessageRecord.publisher_id),
         )
+        return statement if include_deleted else statement.where(MessageRecord.deleted_at.is_(None))
 
     def scope(
         self, room_id: str, *, topic_id: str | None, member_id: str | None
     ) -> ColumnElement[bool]:
-        criteria: list[ColumnElement[bool]] = [MessageRecord.room_id == room_id]
+        criteria: list[ColumnElement[bool]] = [
+            MessageRecord.room_id == room_id,
+            MessageRecord.deleted_at.is_(None),
+        ]
         if topic_id is not None:
             if self.session.get(TopicRecord, (room_id, topic_id)) is None:
                 raise RoomNotFoundError("话题不存在")
@@ -158,7 +162,7 @@ class MessageQueries:
     def publication(self, room_id: str, publisher_id: str, publication_id: str) -> Message | None:
         messages = self.read(
             room_id,
-            self.statement().where(
+            self.statement(include_deleted=True).where(
                 MessageRecord.room_id == room_id,
                 MessageRecord.publisher_id == publisher_id,
                 MessageRecord.publication_id == publication_id,
@@ -170,7 +174,9 @@ class MessageQueries:
         return (
             self.session.scalar(
                 select(MessageRecord.id).where(
-                    MessageRecord.room_id == room_id, MessageRecord.id == message_id
+                    MessageRecord.room_id == room_id,
+                    MessageRecord.id == message_id,
+                    MessageRecord.deleted_at.is_(None),
                 )
             )
             is not None

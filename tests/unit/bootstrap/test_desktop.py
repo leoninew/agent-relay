@@ -211,9 +211,8 @@ def test_exit_notifications_bound_wait_without_waiting_for_receipts(
     sleep = Mock()
     logger = Mock()
     monkeypatch.setattr(desktop, "DesktopExitNotificationService", lambda *_: notifications)
-    monkeypatch.setattr(desktop, "SQLAlchemyDesktopExitNotificationQueries", lambda _: Mock())
-    monkeypatch.setattr(desktop, "SQLAlchemyRoomStore", lambda _: Mock())
-    monkeypatch.setattr(desktop, "SQLAlchemyRoomQueries", lambda _: queries)
+    monkeypatch.setattr(desktop, "DesktopExitNotificationReader", lambda _: Mock())
+    monkeypatch.setattr(desktop, "create_room_store", lambda _: Mock(queries=queries))
     monkeypatch.setattr("agent_relay.bootstrap.desktop.time.sleep", sleep)
     monkeypatch.setattr(
         "agent_relay.bootstrap.desktop.time.monotonic",
