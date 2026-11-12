@@ -41,6 +41,7 @@ class SQLAlchemyMessageRepository:
                 publisher_id=message.sender_id,
                 publication_id=message.publication_id,
                 content=message.content,
+                capabilities=message.capabilities,
                 reply_to_message_id=message.reply_to_message_id,
                 created_at=message.created_at,
             )

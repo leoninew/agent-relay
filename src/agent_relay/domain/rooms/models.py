@@ -1,7 +1,7 @@
 from datetime import datetime
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic.alias_generators import to_camel
 
 USER_MEMBER_ID = "user"
@@ -76,6 +76,31 @@ class Delivery(RoomModel):
     error: str | None = None
 
 
+class CapabilityReferenceModel(RoomModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    id: str = Field(min_length=1, max_length=256, pattern=r"^[A-Za-z0-9_][A-Za-z0-9_.@-]*$")
+    name: str = Field(min_length=1, max_length=256)
+
+    @field_validator("name")
+    @classmethod
+    def require_name(cls, name: str) -> str:
+        if not name.strip():
+            raise ValueError("Capability name cannot be blank")
+        return name.strip()
+
+
+class SkillReference(CapabilityReferenceModel):
+    type: Literal["skill"] = "skill"
+
+
+class McpServerReference(CapabilityReferenceModel):
+    type: Literal["mcp_server"] = "mcp_server"
+
+
+CapabilityReference = Annotated[SkillReference | McpServerReference, Field(discriminator="type")]
+
+
 class Message(RoomModel):
     id: str
     publication_id: str | None = None
@@ -83,6 +108,7 @@ class Message(RoomModel):
     sender_id: str
     sender_name: str
     content: str
+    capabilities: tuple[CapabilityReference, ...] = ()
     topic_ids: list[str]
     mentioned_member_ids: list[str]
     recipient_ids: list[str]

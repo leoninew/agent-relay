@@ -1,9 +1,16 @@
+from collections.abc import Sequence
 from datetime import datetime
 from pathlib import PurePosixPath, PureWindowsPath
 from uuid import uuid4
 
 from agent_relay.domain.rooms.errors import RoomConflictError, RoomInputError
-from agent_relay.domain.rooms.models import USER_MEMBER_ID, Delivery, Member, Message
+from agent_relay.domain.rooms.models import (
+    USER_MEMBER_ID,
+    CapabilityReference,
+    Delivery,
+    Member,
+    Message,
+)
 from agent_relay.domain.rooms.state import RoomState
 
 
@@ -70,12 +77,15 @@ def validate_publication_replay(
     topic_ids: list[str],
     mentions: list[str],
     reply_to_message_id: str | None,
+    capabilities: Sequence[CapabilityReference] = (),
 ) -> None:
     if (
         existing.content != content
         or set(existing.topic_ids) != set(topic_ids)
         or set(existing.mentioned_member_ids) != set(mentions)
         or existing.reply_to_message_id != reply_to_message_id
+        or {(item.type, item.id) for item in existing.capabilities}
+        != {(item.type, item.id) for item in capabilities}
     ):
         raise RoomConflictError("发布编号已用于另一条消息")
 
@@ -92,10 +102,14 @@ def build_message(
     seq: int,
     reply_to_message_id: str | None = None,
     publication_id: str | None = None,
+    capabilities: Sequence[CapabilityReference] = (),
 ) -> Message:
     recipient_ids = resolve_recipient_ids(
         state, topic_ids, mentioned_member_ids, sender_id=sender_id
     )
+    references: dict[tuple[str, str], CapabilityReference] = {}
+    for capability in capabilities:
+        references.setdefault((capability.type, capability.id), capability)
     message_id = f"{state.room.id}-msg-{seq:04d}"
     return Message(
         id=message_id,
@@ -104,6 +118,7 @@ def build_message(
         sender_id=sender_id,
         sender_name=sender_name,
         content=content,
+        capabilities=tuple(references.values()),
         topic_ids=topic_ids,
         mentioned_member_ids=mentioned_member_ids,
         recipient_ids=recipient_ids,

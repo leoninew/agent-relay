@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Protocol
 
-from agent_relay.domain.rooms.models import Delivery, Message, Room
+from agent_relay.domain.rooms.models import CapabilityReference, Delivery, Message, Room
 
 
 class QueueRejected(RuntimeError):
@@ -10,6 +10,13 @@ class QueueRejected(RuntimeError):
 
 class ActivationRejected(RuntimeError):
     pass
+
+
+@dataclass(frozen=True)
+class QueueRequest:
+    text: str
+    project_path: str
+    capabilities: tuple[CapabilityReference, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -46,7 +53,9 @@ class ClaimedDelivery:
 
 
 class QueueDriver(Protocol):
-    def enqueue(self, thread_id: str, client_message_id: str, text: str) -> QueueReceipt: ...
+    def enqueue(
+        self, thread_id: str, client_message_id: str, request: QueueRequest
+    ) -> QueueReceipt: ...
     def delete(self, thread_id: str, queued_submission_id: str) -> bool: ...
     def activation_candidate(self, thread_id: str) -> QueueHead | None: ...
     def activate(self, thread_id: str, queued_submission_id: str) -> str: ...

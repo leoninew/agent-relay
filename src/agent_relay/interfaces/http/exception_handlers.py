@@ -3,6 +3,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from agent_relay.application.capabilities.ports import CapabilityUnavailableError
 from agent_relay.application.members.sessions import SessionUnavailableError
 from agent_relay.domain.rooms.errors import (
     RoomConflictError,
@@ -16,6 +17,7 @@ from agent_relay.interfaces.http.middleware import log_request_failure
 
 def register_exception_handlers(app: FastAPI) -> None:
     app.exception_handler(SessionUnavailableError)(session_unavailable_handler)
+    app.exception_handler(CapabilityUnavailableError)(session_unavailable_handler)
     app.exception_handler(StarletteHTTPException)(http_exception_handler)
     app.exception_handler(RequestValidationError)(request_validation_exception_handler)
     for error_type in (RoomNotFoundError, RoomConflictError, RoomInputError):
@@ -63,7 +65,7 @@ async def unexpected_exception_handler(request: Request, exc: Exception) -> JSON
 
 
 async def session_unavailable_handler(
-    request: Request, exc: SessionUnavailableError
+    request: Request, exc: SessionUnavailableError | CapabilityUnavailableError
 ) -> JSONResponse:
     response = error_json_response(request, 503)
     get_logger(request).error(

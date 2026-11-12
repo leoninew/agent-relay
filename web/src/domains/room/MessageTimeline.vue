@@ -110,6 +110,7 @@
                 <span>引用 {{ referenceLabel(message.replyToMessageId) }}</span>
               </button>
               <div class="message-content" v-html="renderedContent"></div>
+              <CapabilityTags :capabilities="message.capabilities" />
             </div>
             <div class="message-actions">
               <button
@@ -152,6 +153,7 @@
 </template>
 
 <script setup lang="ts">
+  import CapabilityTags from "@/domains/room/CapabilityTags.vue";
   import { computed, ref } from "vue";
   import MarkdownIt from "markdown-it";
 

@@ -2,6 +2,7 @@ import type { AxiosAdapter, InternalAxiosRequestConfig } from "axios";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { apiClient } from "@/services/api";
+import type { CreateMessage } from "@/services/roomApi";
 import {
   addRoomMember,
   clearMessageQueue,
@@ -14,6 +15,7 @@ import {
   fetchMessageQueue,
   fetchRoomSessions,
   fetchRooms,
+  fetchRoomSkills,
   postRoomMessage,
   updateRoom,
 } from "@/services/roomApi";
@@ -44,6 +46,16 @@ describe("room API", () => {
   afterEach(() => {
     apiClient.defaults.adapter = originalAdapter;
     vi.clearAllMocks();
+  });
+
+  it("requests room skills with an escaped identity and explicit reload", async () => {
+    const signal = new AbortController().signal;
+    await fetchRoomSkills("room/a", true, signal);
+    expect(adapterMock.mock.calls[0][0]).toMatchObject({
+      url: "/api/room/room%2Fa/skills",
+      params: { force_reload: true },
+      signal,
+    });
   });
 
   it("loads a room and sends combined filters and a pagination cursor", async () => {
@@ -105,13 +117,17 @@ describe("room API", () => {
     );
   });
 
-  it("posts structured routing fields to the message endpoint", async () => {
-    const request = {
+  it("posts structured routing and capability references to the message endpoint", async () => {
+    const request: CreateMessage = {
       publicationId: "test-publication",
       content: "核对契约",
       topicIds: ["frontend", "backend"],
       mentionedMemberIds: ["test-worker"],
       replyToMessageId: "msg-0001",
+      capabilities: [
+        { type: "skill", id: "skill-example", name: "Example skill" },
+        { type: "mcp_server", id: "example", name: "Example MCP" },
+      ],
     };
     await expect(postRoomMessage("agent-relay", request)).resolves.toEqual(
       roomFixture().messages[0],

@@ -91,6 +91,24 @@
     root.value?.querySelector<HTMLInputElement | HTMLTextAreaElement>("input, textarea")?.focus();
   }
 
+  function selection(): { start: number; end: number } | undefined {
+    const control = root.value?.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+      "input, textarea",
+    );
+    if (control?.selectionStart == null || control.selectionEnd == null) return;
+    return { start: control.selectionStart, end: control.selectionEnd };
+  }
+
+  async function setSelection(start: number, end = start): Promise<void> {
+    await nextTick();
+    if (props.disabled || props.readonly || composing.value) return;
+    const control = root.value?.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+      "input, textarea",
+    );
+    control?.focus();
+    control?.setSelectionRange(start, end);
+  }
+
   async function clear(): Promise<void> {
     if (props.disabled || props.readonly) return;
     model.value = "";
@@ -98,5 +116,5 @@
     focus();
   }
 
-  defineExpose({ focus });
+  defineExpose({ focus, selection, setSelection });
 </script>

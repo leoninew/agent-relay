@@ -1,174 +1,194 @@
 import logging
 from dataclasses import replace
+from unittest.mock import MagicMock, Mock
 
 import pytest
-from support.fakes.rooms import MemoryRoomStore, sample_room
-from support.session_fixtures import FakeSessionDriver
 
 from agent_relay.application.members.contracts import CreateMember
 from agent_relay.application.members.service import MemberService
-from agent_relay.application.members.sessions import SessionInfo, SessionUnavailableError
+from agent_relay.application.members.sessions import (
+    SessionDriver,
+    SessionInfo,
+    SessionUnavailableError,
+)
 from agent_relay.domain.rooms.errors import RoomConflictError, RoomInputError
+from agent_relay.domain.rooms.state import RoomState
 
 
-@pytest.mark.parametrize("concurrent_conflict", [False, True])
-def test_join_releases_the_read_scope_before_inspection_and_rechecks_current_facts(
-    concurrent_conflict: bool,
+@pytest.fixture
+def session_driver() -> Mock:
+    driver = Mock(spec=SessionDriver)
+    driver.list_sessions.return_value = []
+    return driver
+
+
+@pytest.mark.parametrize("changed_facts", [False, True])
+def test_join_releases_read_scope_and_validates_current_resources_before_saving(
+    room_state: RoomState,
+    room_store: MagicMock,
+    room_repository: Mock,
+    session_driver: Mock,
+    changed_facts: bool,
 ) -> None:
-    state = sample_room()
-    store = MemoryRoomStore(state)
+    def inspect(thread_id: str) -> SessionInfo:
+        room_store.read.return_value.__exit__.assert_called_once()
+        if changed_facts:
+            room_state.members[0].name = "New member"
+        return SessionInfo(thread_id, "D:/project", "codex", "Original", "idle")
 
-    class ObservingDriver(FakeSessionDriver):
-        def inspect(self, thread_id: str) -> SessionInfo:
-            assert store.active_scopes == 0
-            if concurrent_conflict:
-                store.data.states[state.room.id].members[0].name = "New member"
-            return super().inspect(thread_id)
-
-    driver = ObservingDriver([SessionInfo("fresh", "D:/project", "codex", "Original", "idle")])
-    members = MemberService(store, driver)
+    session_driver.inspect.side_effect = inspect
+    service = MemberService(room_store, session_driver)
     request = CreateMember(name="New member", session_id="fresh", topic_ids=[])
-    if concurrent_conflict:
+    if changed_facts:
         with pytest.raises(RoomConflictError, match="同名"):
-            members.add(state.room.id, request)
-        assert all(
-            member.session_id != "fresh" for member in store.data.states[state.room.id].members
-        )
+            service.add(room_state.room.id, request)
+        room_repository.save_resources.assert_not_called()
     else:
-        member = members.add(state.room.id, request)
+        member = service.add(room_state.room.id, request)
         assert member.session_id == "fresh" and member.topic_ids == []
         assert member.metadata.members[-1].id == member.id
-    assert driver.inspected == ["fresh"] and store.active_scopes == 0
+        room_repository.save_resources.assert_called_once()
+    session_driver.inspect.assert_called_once_with("fresh")
 
 
-def test_empty_sessions_and_driver_failure_do_not_create_members() -> None:
-    state = sample_room()
-    state.members = [member for member in state.members if member.kind == "human"]
-    store = MemoryRoomStore(state)
-    driver = FakeSessionDriver()
-    service = MemberService(store, driver)
-    assert service.candidates(state.room.id) == []
-    driver.error = TimeoutError("secret upstream detail")
+def test_empty_sessions_and_driver_failure_do_not_create_members(
+    room_store: MagicMock,
+    room_repository: Mock,
+    session_driver: Mock,
+) -> None:
+    service = MemberService(room_store, session_driver)
+    assert service.candidates("agent-relay") == []
+    session_driver.list_sessions.side_effect = TimeoutError("secret upstream detail")
+    session_driver.inspect.side_effect = TimeoutError("secret upstream detail")
     with pytest.raises(SessionUnavailableError):
-        service.candidates(state.room.id)
+        service.candidates("agent-relay")
     with pytest.raises(SessionUnavailableError):
-        service.add(
-            state.room.id, CreateMember(name="Worker", session_id="one", topic_ids=["frontend"])
+        service.add("agent-relay", CreateMember(name="Worker", session_id="one", topic_ids=[]))
+    room_repository.save_resources.assert_not_called()
+
+
+def test_discovery_keeps_posix_paths_case_sensitive(
+    room_state: RoomState,
+    room_store: MagicMock,
+    session_driver: Mock,
+) -> None:
+    room_state.room.project_path = "/Work/project"
+    session_driver.list_sessions.return_value = [
+        SessionInfo("exact", "/Work/project/", "codex", "Exact", "idle"),
+        SessionInfo("wrong-case", "/work/project", "codex", "Wrong", "idle"),
+    ]
+    candidates = MemberService(room_store, session_driver).candidates("agent-relay")
+    assert [candidate.id for candidate in candidates] == ["exact"]
+
+
+@pytest.mark.parametrize(
+    ("info", "topics", "error", "message"),
+    [
+        (SessionInfo("one", "D:/other", "codex", "Other", "idle"), [], RoomInputError, "不属于"),
+        (
+            SessionInfo("one", "D:/project/subdir", "codex", "Child", "idle"),
+            [],
+            RoomInputError,
+            "不属于",
+        ),
+        (
+            SessionInfo("other", "D:/project", "codex", "Other", "idle"),
+            [],
+            SessionUnavailableError,
+            "身份不匹配",
+        ),
+        (
+            SessionInfo("one", "D:/project", "codex", "One", "idle"),
+            ["missing"],
+            RoomInputError,
+            "话题不存在",
+        ),
+    ],
+)
+def test_invalid_join_does_not_save_resources(
+    room_store: MagicMock,
+    room_repository: Mock,
+    session_driver: Mock,
+    info: SessionInfo,
+    topics: list[str],
+    error: type[Exception],
+    message: str,
+) -> None:
+    session_driver.inspect.return_value = info
+    with pytest.raises(error, match=message):
+        MemberService(room_store, session_driver).add(
+            "agent-relay", CreateMember(name="Worker", session_id="one", topic_ids=topics)
         )
-    assert [member.id for member in store.data.resources(state.room.id).members] == ["user"]
-
-
-def test_discovery_keeps_posix_paths_case_sensitive() -> None:
-    state = sample_room()
-    state.room.project_path = "/Work/project"
-    state.members = [member for member in state.members if member.kind == "human"]
-    driver = FakeSessionDriver(
-        [
-            SessionInfo("exact", "/Work/project/", "a", "Exact", "idle"),
-            SessionInfo("wrong-case", "/work/project", "a", "Wrong", "idle"),
-        ]
-    )
-    service = MemberService(MemoryRoomStore(state), driver)
-    assert [candidate.id for candidate in service.candidates(state.room.id)] == ["exact"]
-
-
-def test_join_rejects_wrong_directory_identity_and_topic_without_writing() -> None:
-    state = sample_room()
-    state.members = [member for member in state.members if member.kind == "human"]
-    store = MemoryRoomStore(state)
-    driver = FakeSessionDriver(
-        [
-            SessionInfo("one", "D:/project", "codex", "Original", "idle"),
-            SessionInfo("other", "D:/other", "codex", "Other", "idle"),
-            SessionInfo("child", "D:/project/subdir", "codex", "Child", "idle"),
-        ]
-    )
-    service = MemberService(store, driver)
-    for session_id in ("other", "child"):
-        with pytest.raises(RoomInputError, match="不属于"):
-            service.add(
-                state.room.id,
-                CreateMember(name="Worker", session_id=session_id, topic_ids=["frontend"]),
-            )
-    driver.sessions["one"] = driver.sessions["other"]
-    with pytest.raises(SessionUnavailableError, match="身份不匹配"):
-        service.add(
-            state.room.id, CreateMember(name="Worker", session_id="one", topic_ids=["frontend"])
-        )
-    with pytest.raises(RoomInputError, match="话题不存在"):
-        service.add(
-            state.room.id, CreateMember(name="Worker", session_id="one", topic_ids=["missing"])
-        )
-    assert [member.id for member in store.data.resources(state.room.id).members] == ["user"]
+    room_repository.save_resources.assert_not_called()
+    if topics == ["missing"]:
+        session_driver.inspect.assert_not_called()
 
 
 @pytest.mark.parametrize("failure", ["unavailable", "identity", "directory"])
 def test_presence_failure_records_unknown_and_continues_other_members(
-    failure: str, monkeypatch: pytest.MonkeyPatch
+    failure: str,
+    room_store: MagicMock,
+    room_repository: Mock,
+    session_driver: Mock,
 ) -> None:
-    state = sample_room()
-    state.members = [
-        member
-        for member in state.members
-        if member.id in {"frontend-worker", "backend-worker", "user"}
+    room_repository.bindings.return_value = [
+        ("agent-relay", "frontend-worker-session"),
+        ("agent-relay", "backend-worker-session"),
     ]
-    store = MemoryRoomStore(state)
-    driver = FakeSessionDriver(
-        [
-            SessionInfo(member.session_id, "D:/project", "codex", member.name, "idle")
-            for member in state.members
-            if member.session_id is not None
-        ]
-    )
-    inspect = driver.inspect
+    room_repository.joined_members.return_value = {
+        "frontend-worker-session": "frontend-worker",
+        "backend-worker-session": "backend-worker",
+    }
 
-    def inspect_with_failure(session_id: str) -> SessionInfo:
-        assert store.active_scopes == 0
-        if session_id != "frontend-worker-session":
-            return inspect(session_id)
+    def inspect(session_id: str) -> SessionInfo:
+        room_store.read.return_value.__exit__.assert_called_once()
+        info = SessionInfo(session_id, "D:/project", "codex", "Original", "idle")
+        if session_id == "backend-worker-session":
+            return info
         if failure == "unavailable":
             raise TimeoutError("upstream unavailable")
         if failure == "identity":
-            return replace(driver.sessions[session_id], id="different")
-        return replace(driver.sessions[session_id], cwd="D:/other")
+            return replace(info, id="different")
+        return replace(info, cwd="D:/other")
 
-    monkeypatch.setattr(driver, "inspect", inspect_with_failure)
-    service = MemberService(store, driver)
-    logger = logging.getLogger("tests.member-presence")
-    service.refresh_presence(logger, lambda: False)
-
-    observations = {item.member_id: item for item in store.data.observations}
+    session_driver.inspect.side_effect = inspect
+    MemberService(room_store, session_driver).refresh_presence(
+        logging.getLogger("tests.member-presence"), lambda: False
+    )
+    observations = {
+        observation.args[1]: observation
+        for observation in room_repository.save_observation.call_args_list
+    }
     assert set(observations) == {"frontend-worker", "backend-worker"}
     failed = observations["frontend-worker"]
-    assert failed.presence == "unknown" and failed.session_name is None
-    assert "未能核验" in failed.activity
-    assert observations["backend-worker"].presence == "available"
-    assert failed.refresh_cutoff < failed.observed_at
-    assert driver.listed == 0
-
-    monkeypatch.setattr(driver, "inspect", inspect)
-    store.data.observations.clear()
-    service.refresh_presence(logger, lambda: False)
-    assert all(item.presence == "available" for item in store.data.observations)
+    assert failed.args[3] == "unknown" and failed.args[6] is None
+    assert "未能核验" in failed.args[4]
+    assert failed.kwargs["refresh_cutoff"] < failed.args[5]
+    assert observations["backend-worker"].args[3] == "available"
+    session_driver.list_sessions.assert_not_called()
 
 
-def test_candidates_record_current_presence_and_explain_unavailable_sessions() -> None:
-    state = sample_room()
-    store = MemoryRoomStore(state)
-    session_id = "frontend-worker-session"
-    driver = FakeSessionDriver(
-        [SessionInfo(session_id, "D:/project", "codex", "Existing", "unavailable")]
-    )
-    service = MemberService(store, driver)
-    candidate = service.candidates(state.room.id)[0]
+@pytest.mark.parametrize("status", ["unavailable", "idle"])
+def test_candidates_explain_unavailable_sessions_and_record_presence(
+    status: str,
+    room_store: MagicMock,
+    room_repository: Mock,
+    session_driver: Mock,
+) -> None:
+    info = SessionInfo("frontend-worker-session", "D:/project", "codex", "Existing", "idle")
+    if status == "unavailable":
+        info = replace(info, status="unavailable")
+    session_driver.list_sessions.return_value = [info]
+    candidate = MemberService(room_store, session_driver).candidates("agent-relay")[0]
     assert candidate.member_id == "frontend-worker"
-    assert candidate.presence == "unknown" and not candidate.usable
-    assert candidate.unavailable_reason and "独立实例" in candidate.unavailable_reason
-    recorded = next(item for item in store.data.observations if item.session_id == session_id)
-    assert recorded.presence == "unknown" and recorded.activity == candidate.unavailable_reason
-
-    store.data.observations.clear()
-    driver.sessions[session_id] = replace(driver.sessions[session_id], status="idle")
-    assert service.candidates(state.room.id)[0].usable
-    recorded = next(item for item in store.data.observations if item.session_id == session_id)
-    assert recorded.presence == "available"
+    assert candidate.usable is (status == "idle")
+    if status == "unavailable":
+        assert candidate.unavailable_reason and "独立实例" in candidate.unavailable_reason
+    recorded = next(
+        observation
+        for observation in room_repository.save_observation.call_args_list
+        if observation.args[2] == info.id
+    )
+    assert recorded.args[3] == candidate.presence
+    if not candidate.usable:
+        assert recorded.args[4] == candidate.unavailable_reason

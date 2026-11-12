@@ -9,6 +9,7 @@ from agent_relay.application.delivery.ports import (
     DeliveryRepository,
     QueueDriver,
     QueueRejected,
+    QueueRequest,
 )
 from agent_relay.domain.rooms.delivery import (
     PROCESSING_FAILURE,
@@ -59,7 +60,7 @@ class DeliveryService:
             receipt = self.driver.enqueue(
                 delivery.target_session_id,
                 delivery.client_message_id,
-                text,
+                QueueRequest(text, work.room.project_path, work.message.capabilities),
             )
             delivery = queue_accepted(delivery, receipt.id, receipt.metadata, datetime.now(UTC))
         except QueueRejected:

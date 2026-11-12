@@ -80,7 +80,7 @@ src/agent_relay/
 
 正式运行时仅保留 SQLAlchemy 实现。`Database` 规范化现有 `database.path`，创建 Engine 和禁用 autobegin/autoflush 的 sessionmaker；读事务显式 BEGIN，写事务在序号、幂等或唯一性检查前 BEGIN IMMEDIATE。后台锁仍使用同一规范化数据库路径加 `.dispatch.lock`，调度频率与并发设置保持原值。
 
-ORM 映射当前 `queue_deleted_20261110` 的 14 张表；SQL-first Alembic 仍是 schema 来源，不调用 create_all，不隐式修复/升级不匹配的库。`migrate_on_startup` 显式开关和独立 migrate 入口保持原方式。ISO 文本类型保留时区与精度，回执类型仅保存额外 metadata，标识由独立列重建并校验。首版默认数据库仍为 SQLite。
+ORM 映射当前 `capabilities_json_20261111` 的 14 张表，消息能力引用直接保存在 `messages.capabilities` JSON 列；SQL-first Alembic 仍是 schema 来源，不调用 create_all，不隐式修复/升级不匹配的库。`migrate_on_startup` 显式开关和独立 migrate 入口保持原方式。ISO 文本类型保留时区与精度，回执类型仅保存额外 metadata，标识由独立列重建并校验。首版默认数据库仍为 SQLite。
 
 运行时 CRUD 和动态筛选使用 SQLAlchemy 表达式。`persistence/sqlite.py` 集中保留：连接时的 `PRAGMA foreign_keys = ON`、`PRAGMA busy_timeout = 5000`，事务开始时的 `BEGIN`/`BEGIN IMMEDIATE`，白名单表的固定 rowid 排序列，以及 `instr` 字面子串、`julianday(value) <= julianday(cutoff)` 时间窗口函数。其他仓储不拼接 SQL，也不使用 text() 包装旧查询。产品源码不直接依赖 sqlite3 API；SQLAlchemy 底层仍使用 SQLite DBAPI，历史迁移 SQL 保留。
 

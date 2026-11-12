@@ -1,6 +1,13 @@
 from copy import deepcopy
 
-from agent_relay.domain.rooms.models import Delivery, Member, Message, Room, Session, Topic
+from agent_relay.domain.rooms.models import (
+    Delivery,
+    Member,
+    Message,
+    Room,
+    Session,
+    Topic,
+)
 from agent_relay.infrastructure.persistence.models import (
     DeliveryRecord,
     MemberRecord,
@@ -130,6 +137,7 @@ def message_from_model(
         sender_id=record.publisher_id,
         sender_name=sender_name,
         content=record.content,
+        capabilities=record.capabilities,
         topic_ids=list(topic_ids),
         mentioned_member_ids=list(mentioned_member_ids),
         recipient_ids=list(recipient_ids),

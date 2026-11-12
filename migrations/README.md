@@ -25,7 +25,7 @@ uv run --locked python -m agent_relay.migrate
 2. 在 `sqlite/versions/` 添加 revision，以 `down_revision` 连接当前 head，并在 `upgrade()` 中通过 `execute_sql_file()` 显式调用 SQL 文件。
 3. 同步更新 `src/agent_relay/infrastructure/persistence/migrations.py` 中的 `MIGRATION_HEAD`，以及对应持久化读写实现。
 
-主外键、查询和索引字段使用列或关联表，JSON 仅保存额外元数据。不从业务模型自动生成 DDL。
+主外键、查询和索引字段使用列或关联表；消息能力引用等附属值数组使用 JSON。不从业务模型自动生成 DDL。
 
 ## 离线核对 SQL
 
@@ -39,6 +39,8 @@ uv run --locked alembic upgrade queue_deleted_20261110:head --sql
 
 ## 基线与旧库
 
-当前基线和 head 均为 `queue_deleted_20261110`。新库一次创建完整结构，包括投递记录的可空 `deleted_at`；已在此 revision 的数据库无需重建或重新标记。
+当前迁移链为 `0001_baseline` → `0002_capabilities_json`，对应 revision 为 `queue_deleted_20261110` → `capabilities_json_20261111`。未发布的原 `0002`、`0003` 已合并，直接增加 `messages.capabilities` JSON 数组列，旧消息默认为空数组，不创建中间关系表。
+
+最终 head 保持不变，已升级到 `capabilities_json_20261111` 的开发库无需重复迁移或修改版本记录。
 
 旧 revision（包括 `baseline_20261110`）不在合并后的迁移链上，不提供自动升级、旧数据转换或降级。需重建时，先停止相关服务、核对路径并按需保留数据，再对空库执行迁移。迁移命令不会自动删除或重建旧库。

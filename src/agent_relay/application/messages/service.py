@@ -38,6 +38,7 @@ class MessageService:
                     topic_ids=topic_ids,
                     mentions=mentions,
                     reply_to_message_id=request.reply_to_message_id,
+                    capabilities=request.capabilities,
                 )
                 return existing.model_copy(deep=True)
             if request.reply_to_message_id is not None and not rooms.message_exists(
@@ -55,6 +56,7 @@ class MessageService:
                 reply_to_message_id=request.reply_to_message_id,
                 publication_id=request.publication_id,
                 seq=rooms.next_message_seq(room_id),
+                capabilities=request.capabilities,
             )
             rooms.insert_message(room_id, message)
             return message.model_copy(deep=True)

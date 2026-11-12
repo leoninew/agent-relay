@@ -7,10 +7,16 @@ from sqlalchemy import (
     Index,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-from agent_relay.infrastructure.persistence.types import ISODateTime, ReceiptMetadata
+from agent_relay.domain.rooms.models import CapabilityReference
+from agent_relay.infrastructure.persistence.types import (
+    CapabilityReferences,
+    ISODateTime,
+    ReceiptMetadata,
+)
 
 
 class Base(DeclarativeBase):
@@ -117,6 +123,9 @@ class MessageRecord(Base):
     publisher_id: Mapped[str] = mapped_column(Text)
     publication_id: Mapped[str | None] = mapped_column(Text)
     content: Mapped[str] = mapped_column(Text)
+    capabilities: Mapped[tuple[CapabilityReference, ...]] = mapped_column(
+        CapabilityReferences, nullable=False, default=tuple, server_default=text("'[]'")
+    )
     reply_to_message_id: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(ISODateTime)
 
@@ -127,6 +136,7 @@ class MessageRecord(Base):
         ForeignKeyConstraint(
             ["room_id", "reply_to_message_id"], ["messages.room_id", "messages.id"]
         ),
+        CheckConstraint("json_valid(capabilities) AND json_type(capabilities) = 'array'"),
         Index("messages_publication", "room_id", "publisher_id", "publication_id", unique=True),
         Index("messages_sender_page", "room_id", "publisher_id", "seq"),
     )

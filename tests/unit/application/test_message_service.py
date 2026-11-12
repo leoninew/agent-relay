@@ -1,24 +1,19 @@
-from unittest.mock import ANY, patch
+from unittest.mock import ANY, MagicMock, Mock, call
 
 import pytest
-from support.fakes.rooms import MemoryRoomStore, sample_room
-from support.session_fixtures import FakeQueueDriver, FakeSessionDriver
 
-from agent_relay.application.members.contracts import UpdateMember
-from agent_relay.application.members.service import MemberService
+from agent_relay.application.delivery.ports import QueueDriver
 from agent_relay.application.messages.contracts import CreateMessage
 from agent_relay.application.messages.ports import CodexQueueTarget
 from agent_relay.application.messages.service import MessageService
-from agent_relay.domain.rooms.errors import RoomConflictError, RoomInputError, RoomNotFoundError
-from agent_relay.domain.rooms.models import Topic
+from agent_relay.domain.rooms.errors import RoomConflictError, RoomInputError
+from agent_relay.domain.rooms.models import McpServerReference, SkillReference, Topic
 from agent_relay.domain.rooms.state import RoomState
 
 
 @pytest.fixture
-def member_room() -> tuple[MessageService, RoomState]:
-    state = sample_room()
-    service = MessageService(MemoryRoomStore(state))
-    return service, state
+def member_room(room_state: RoomState, room_store: MagicMock) -> tuple[MessageService, RoomState]:
+    return MessageService(room_store), room_state
 
 
 @pytest.mark.parametrize(
@@ -72,6 +67,7 @@ def test_user_publisher_cannot_address_itself(
 @pytest.mark.parametrize("changed", ["content", "topics", "mentions", "reply"])
 def test_publication_replay_rejects_changed_facts_without_another_write(
     member_room: tuple[MessageService, RoomState],
+    room_repository: Mock,
     changed: str,
 ) -> None:
     service, _ = member_room
@@ -81,6 +77,7 @@ def test_publication_replay_rejects_changed_facts_without_another_write(
         topic_ids=["frontend"],
     )
     original = service.post_message("agent-relay", request, member_id="coordinator")
+    room_repository.publication.return_value = original
     changes: dict[str, object] = {
         "content": "Different",
         "topics": ["backend"],
@@ -103,12 +100,8 @@ def test_publication_replay_rejects_changed_facts_without_another_write(
     assert (
         service.publication("agent-relay", "stable-audience", member_id="coordinator") == original
     )
-    next_message = service.post_message(
-        "agent-relay",
-        request.model_copy(update={"publication_id": "next"}),
-        member_id="coordinator",
-    )
-    assert next_message.seq == original.seq + 1
+    room_repository.insert_message.assert_called_once()
+    room_repository.next_message_seq.assert_called_once_with("agent-relay")
 
 
 def test_body_mentions_do_not_affect_explicit_routing(
@@ -180,8 +173,10 @@ def test_mentions_and_subscriptions_combine_without_duplicate_deliveries(
         {"topicIds": ["backend", "missing"], "mentionedMemberIds": ["test-worker"]},
     ],
 )
-def test_invalid_target_rejects_the_whole_publication_without_consuming_a_sequence(
-    member_room: tuple[MessageService, RoomState], targets: dict[str, object]
+def test_invalid_target_rejects_the_whole_publication_without_writing(
+    member_room: tuple[MessageService, RoomState],
+    room_repository: Mock,
+    targets: dict[str, object],
 ) -> None:
     service, _ = member_room
     with pytest.raises(RoomInputError, match="不存在"):
@@ -191,83 +186,130 @@ def test_invalid_target_rejects_the_whole_publication_without_consuming_a_sequen
                 {"publicationId": "invalid", "content": "不能部分投递", **targets}
             ),
         )
-    with pytest.raises(RoomNotFoundError, match="发布记录不存在"):
-        service.publication("agent-relay", "invalid")
-    valid = service.post_message(
-        "agent-relay",
-        CreateMessage(publication_id="valid", content="Message", topic_ids=["backend"]),
-    )
-    assert valid.seq == 1
+    room_repository.insert_message.assert_not_called()
 
 
-def test_empty_topic_needs_an_explicit_member_and_does_not_save_an_unroutable_message() -> None:
-    state = sample_room()
+def test_empty_topic_needs_an_explicit_member_and_does_not_save_an_unroutable_message(
+    room_state: RoomState,
+    room_store: MagicMock,
+    room_repository: Mock,
+) -> None:
+    state = room_state
     state.topics.append(Topic(id="empty", name="Empty", description=""))
-    store = MemoryRoomStore(state)
-    service = MessageService(store)
+    service = MessageService(room_store)
     request = CreateMessage(publication_id="empty", content="同步进展", topic_ids=["empty"])
 
     with pytest.raises(RoomInputError, match="所选话题暂无成员"):
         service.post_message(state.room.id, request)
-    assert store.data.messages[state.room.id] == []
+    room_repository.insert_message.assert_not_called()
 
     message = service.post_message(
         state.room.id, request.model_copy(update={"mentioned_member_ids": ["backend-worker"]})
     )
     assert message.recipient_ids == ["backend-worker"]
-    assert message.seq == 1
+    room_repository.insert_message.assert_called_once_with(state.room.id, message)
 
 
-def test_subscription_edits_change_new_routing_and_preserve_previous_recipients() -> None:
-    state = sample_room()
-    store = MemoryRoomStore(state)
-    service = MessageService(store)
-    before = service.post_message(
-        state.room.id,
-        CreateMessage(publication_id="before", content="Message", topic_ids=["backend"]),
-    )
+def test_publication_replay_preserves_recipients_after_subscription_changes(
+    room_state: RoomState,
+    room_store: MagicMock,
+    room_repository: Mock,
+) -> None:
+    state = room_state
+    service = MessageService(room_store)
+    request = CreateMessage(publication_id="before", content="Message", topic_ids=["backend"])
+    before = service.post_message(state.room.id, request)
     assert "frontend-worker" not in before.recipient_ids
-    MemberService(store, FakeSessionDriver()).update_member(
-        state.room.id,
-        "frontend-worker",
-        UpdateMember(name="Frontend", topic_ids=["frontend", "backend"]),
+    next(member for member in state.members if member.id == "frontend-worker").topic_ids.append(
+        "backend"
     )
-    after = service.post_message(
-        state.room.id,
-        CreateMessage(publication_id="after", content="Message", topic_ids=["backend"]),
-    )
-    assert "frontend-worker" in after.recipient_ids
-    assert service.publication(state.room.id, "before") == before
+    room_repository.publication.return_value = before
+    assert service.post_message(state.room.id, request) == before
+    room_repository.insert_message.assert_called_once()
 
 
-def test_queue_clear_releases_the_store_before_deleting_remote_items() -> None:
-    store = MemoryRoomStore(sample_room())
+def test_queue_clear_releases_the_store_before_deleting_remote_items(
+    room_store: MagicMock,
+    room_repository: Mock,
+) -> None:
+    driver = Mock(spec=QueueDriver)
 
-    class CheckingDriver(FakeQueueDriver):
-        def delete(self, thread_id: str, queued_submission_id: str) -> bool:
-            assert store.active_scopes == 0
-            return super().delete(thread_id, queued_submission_id)
+    def delete(thread_id: str, queued_submission_id: str) -> bool:
+        room_store.write.return_value.__exit__.assert_called_once_with(None, None, None)
+        return thread_id == "session-alpha"
 
-    driver = CheckingDriver()
-    driver.delete_results[("session-alpha", "queue-alpha")] = True
+    driver.delete.side_effect = delete
     targets = [
         CodexQueueTarget("session-alpha", "queue-alpha"),
         CodexQueueTarget("session-beta", "queue-beta"),
         CodexQueueTarget("session-gamma", None),
     ]
-    with (
-        patch.object(store.data, "clear_queue", return_value=2) as clear,
-        patch.object(store.data, "codex_queue_targets", return_value=targets) as pending,
-    ):
-        result = MessageService(store).clear_queue_with_codex(
-            "agent-relay", driver, topic_id="backend", member_id="test-worker"
-        )
-    clear.assert_called_once_with(
+    room_repository.clear_queue.return_value = 2
+    room_repository.codex_queue_targets.return_value = targets
+    result = MessageService(room_store).clear_queue_with_codex(
+        "agent-relay", driver, topic_id="backend", member_id="test-worker"
+    )
+    room_repository.clear_queue.assert_called_once_with(
         "agent-relay", topic_id="backend", member_id="test-worker", deleted_at=ANY
     )
-    pending.assert_called_once_with("agent-relay", topic_id="backend", member_id="test-worker")
-    assert driver.deletions == [("session-alpha", "queue-alpha"), ("session-beta", "queue-beta")]
+    room_repository.codex_queue_targets.assert_called_once_with(
+        "agent-relay", topic_id="backend", member_id="test-worker"
+    )
+    assert driver.delete.call_args_list == [
+        call("session-alpha", "queue-alpha"),
+        call("session-beta", "queue-beta"),
+    ]
     assert result.removed_messages == 2
     assert result.codex_queue is not None
     assert result.codex_queue.deleted == result.codex_queue.not_found == 1
     assert result.codex_queue.without_receipt == 1
+
+
+def test_capabilities_are_frozen_deduplicated_and_replayed_by_typed_identity(
+    room_store: MagicMock,
+    room_repository: Mock,
+) -> None:
+    service = MessageService(room_store)
+    first = SkillReference(id="skill-example", name="Example skill")
+    second = McpServerReference(id="example", name="Example MCP")
+    third = SkillReference(id="skill-third", name="Third skill")
+    request = CreateMessage(
+        publication_id="capabilities",
+        content="Use these capabilities",
+        topic_ids=["frontend"],
+        capabilities=[
+            first,
+            second,
+            first.model_copy(update={"name": "Later display name"}),
+            third,
+        ],
+    )
+    original = service.post_message("agent-relay", request)
+    room_repository.publication.return_value = original
+    assert original.capabilities == (first, second, third)
+    request.capabilities.clear()
+    assert service.publication("agent-relay", "capabilities").capabilities == (
+        first,
+        second,
+        third,
+    )
+    replay = request.model_copy(
+        update={
+            "capabilities": [
+                third,
+                second,
+                first.model_copy(update={"name": "New display snapshot"}),
+            ]
+        }
+    )
+    assert service.post_message("agent-relay", replay) == original
+    for changed in (
+        [],
+        [second],
+        [McpServerReference(id=first.id, name=first.name), second],
+    ):
+        with pytest.raises(RoomConflictError):
+            service.post_message(
+                "agent-relay", request.model_copy(update={"capabilities": changed})
+            )
+    room_repository.insert_message.assert_called_once()

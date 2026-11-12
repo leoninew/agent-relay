@@ -122,6 +122,8 @@
         :sending="sending"
         :locked="Boolean(pendingPublication)"
         :error="sendError"
+        :catalog="capabilities.catalog.value"
+        @refresh-capabilities="capabilities.refresh"
         @send="sendMessage"
         @cancel-reply="replyTo = undefined"
       />
@@ -222,6 +224,7 @@
   import TopicSidebar from "@/domains/room/TopicSidebar.vue";
   import { useMessageQueue } from "@/domains/room/useMessageQueue";
   import { useRoomPanel } from "@/domains/room/useRoomPanel";
+  import { useRoomCapabilities } from "@/domains/room/useRoomCapabilities";
   import { ApiClientError, describeApiError } from "@/services/api";
   import {
     addRoomMember,
@@ -322,6 +325,9 @@
   const composer = ref<InstanceType<typeof RoomComposer>>();
   const timeline = ref<InstanceType<typeof MessageTimeline>>();
   const drafts = ref<Record<string, MessageDraft>>({});
+  const capabilities = useRoomCapabilities(() =>
+    roomsStore.rooms.find((room) => room.id === currentRoomId.value),
+  );
   const pendingPublication = ref<CreateMessage>();
   const setupMode = ref<"member" | "topic">();
   const editingMember = ref<Member>();

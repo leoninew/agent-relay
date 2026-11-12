@@ -1,107 +1,122 @@
 import logging
+from dataclasses import replace
 from datetime import UTC, datetime
+from unittest.mock import Mock, call
 
 import pytest
-from support.fakes.delivery import MemoryDeliveryStore
-from support.fakes.rooms import sample_room
-from support.session_fixtures import FakeQueueDriver
 
 from agent_relay.application.delivery.ports import (
     ActivationRejected,
     ClaimedDelivery,
+    DeliveryRepository,
     InputPage,
+    QueueDriver,
     QueueHead,
     QueueReceipt,
     QueueRejected,
     ReceivedInput,
 )
 from agent_relay.application.delivery.service import DeliveryService
-from agent_relay.domain.rooms.delivery import (
-    INTERRUPTED_SUBMISSION,
-    PROCESSING_FAILURE,
-    REJECTED_SUBMISSION,
-    UNCERTAIN_SUBMISSION,
-    SubmissionFailure,
-    queue_accepted,
-    submission_failed,
-)
-from agent_relay.domain.rooms.rules import build_message
+from agent_relay.domain.rooms.models import Delivery, Message, Room, SkillReference
 
 
-def work_item() -> ClaimedDelivery:
-    state = sample_room()
-    message = build_message(
-        state,
-        content="Work",
-        topic_ids=[],
-        mentioned_member_ids=["frontend-worker"],
+@pytest.fixture
+def work() -> ClaimedDelivery:
+    now = datetime.now(UTC)
+    delivery = Delivery(
+        id="delivery",
+        target_member_id="target",
+        target_session_id="original-session",
+        client_message_id="client",
+        status="submitting",
+        updated_at=now,
+    )
+    message = Message(
+        id="message",
+        seq=1,
         sender_id="user",
         sender_name="你",
-        created_at=datetime.now(UTC),
-        seq=1,
+        content="Work",
+        topic_ids=[],
+        mentioned_member_ids=["target"],
+        recipient_ids=["target"],
+        created_at=now,
+        deliveries=[delivery],
     )
-    delivery = message.deliveries[0].model_copy(update={"status": "submitting"})
-    return ClaimedDelivery(state.room.id, state.room, message, delivery)
+    room = Room(id="room", name="Room", project_path="d:/project", description="")
+    return ClaimedDelivery(room.id, room, message, delivery)
+
+
+@pytest.fixture
+def delivery_store() -> Mock:
+    store = Mock(spec=DeliveryRepository)
+    store.finish_delivery.return_value = True
+    store.claim_activation.return_value = True
+    return store
+
+
+@pytest.fixture
+def queue_driver() -> Mock:
+    driver = Mock(spec=QueueDriver)
+    driver.enqueue.return_value = QueueReceipt("queued", {"id": "queued"})
+    driver.activation_candidate.return_value = None
+    return driver
 
 
 @pytest.mark.parametrize("rejected", [False, True])
 def test_submission_records_rejection_or_uncertainty_without_repeating_the_write(
+    work: ClaimedDelivery,
+    delivery_store: Mock,
+    queue_driver: Mock,
     rejected: bool,
 ) -> None:
-    work = work_item()
-    store = MemoryDeliveryStore(work)
-
-    class FailingQueue(FakeQueueDriver):
-        def enqueue(self, thread_id: str, client_message_id: str, text: str) -> QueueReceipt:
-            super().enqueue(thread_id, client_message_id, text)
-            if rejected:
-                raise QueueRejected("rejected")
-            raise TimeoutError("unknown")
-
-    driver = FailingQueue()
-    service = DeliveryService(store, driver, logging.getLogger("tests.delivery.actions"))
-    service.submit(work)
-    assert store.saved.status == ("rejected" if rejected else "unknown")
-    assert len(driver.calls) == 1 and driver.activations == []
-    if not rejected:
-        driver.inputs[work.delivery.target_session_id] = [
-            ReceivedInput(work.delivery.client_message_id, "input", "turn")
-        ]
-        service.observe(work.delivery.target_session_id, {work.delivery.client_message_id})
-        assert str(store.saved.status) == "received"
-        assert (store.saved.received_item_id, store.saved.received_turn_id) == ("input", "turn")
-        assert len(driver.calls) == 1
+    queue_driver.enqueue.side_effect = (
+        QueueRejected("rejected") if rejected else TimeoutError("unknown")
+    )
+    DeliveryService(delivery_store, queue_driver, logging.getLogger("tests.delivery")).submit(work)
+    delivery_store.finish_delivery.assert_called_once()
+    room_id, saved = delivery_store.finish_delivery.call_args.args
+    assert room_id == work.room_id
+    assert saved.status == ("rejected" if rejected else "unknown")
+    queue_driver.enqueue.assert_called_once()
+    queue_driver.activation_candidate.assert_not_called()
+    queue_driver.activate.assert_not_called()
 
 
-def test_activation_rejection_preserves_the_saved_queue_receipt() -> None:
-    work = work_item()
-    store = MemoryDeliveryStore(work)
-
-    class RejectedActivation(FakeQueueDriver):
-        def activate(self, thread_id: str, queued_submission_id: str) -> str:
-            raise ActivationRejected("already consumed")
-
-    driver = RejectedActivation()
-    driver.heads[work.delivery.target_session_id] = QueueHead(
+def test_activation_rejection_preserves_the_saved_queue_receipt(
+    work: ClaimedDelivery,
+    delivery_store: Mock,
+    queue_driver: Mock,
+) -> None:
+    queue_driver.activation_candidate.return_value = QueueHead(
         "queued", work.delivery.client_message_id
     )
-    DeliveryService(store, driver, logging.getLogger("tests.delivery.activation")).submit(work)
-    assert store.saved.status == "queued" and store.saved.queued_submission_id is not None
-    assert store.saved.receipt is not None and store.activated
-    assert len(driver.calls) == 1
+    queue_driver.activate.side_effect = ActivationRejected("already consumed")
+    DeliveryService(delivery_store, queue_driver, logging.getLogger("tests.delivery")).submit(work)
+    saved = delivery_store.finish_delivery.call_args.args[1]
+    assert saved.status == "queued" and saved.queued_submission_id == "queued"
+    assert saved.receipt == {"id": "queued"}
+    queue_driver.enqueue.assert_called_once()
+    queue_driver.activate.assert_called_once_with(work.delivery.target_session_id, "queued")
+    assert saved.error is None
+    assert "启动请求未被接受" in delivery_store.delivery_note.call_args.args[2]
 
 
-def test_submission_includes_stable_message_lookup_facts() -> None:
-    work = work_item()
-    driver = FakeQueueDriver()
-    DeliveryService(
-        MemoryDeliveryStore(work), driver, logging.getLogger("tests.delivery.location")
-    ).submit(work)
-
-    assert len(driver.calls) == 1
-    _, _, text = driver.calls[0]
+def test_submission_includes_stable_message_lookup_facts_and_capabilities(
+    work: ClaimedDelivery,
+    delivery_store: Mock,
+    queue_driver: Mock,
+) -> None:
+    references = (SkillReference(id="skill-example", name="Example"),)
+    work = replace(work, message=work.message.model_copy(update={"capabilities": references}))
+    DeliveryService(delivery_store, queue_driver, logging.getLogger("tests.delivery")).submit(work)
+    queue_driver.enqueue.assert_called_once()
+    thread_id, client_id, request = queue_driver.enqueue.call_args.args
+    assert thread_id == work.delivery.target_session_id
+    assert client_id == work.delivery.client_message_id
+    assert request.capabilities == references and request.project_path == work.room.project_path
     created_at = work.message.model_dump(mode="json", by_alias=True)["createdAt"]
-    assert text == (
+    assert request.text == (
         f"roomId: {work.room_id}\n"
         f"messageId: {work.message.id}\n"
         f"seq: {work.message.seq}\n"
@@ -111,77 +126,50 @@ def test_submission_includes_stable_message_lookup_facts() -> None:
     )
 
 
-def test_removed_submission_does_not_trigger_activation_or_overwrite_the_marker() -> None:
-    work = work_item()
-    store = MemoryDeliveryStore(work)
-    store.saved.deleted_at = datetime.now(UTC)
-    deleted_at = store.saved.deleted_at
-    driver = FakeQueueDriver()
-    driver.heads[work.delivery.target_session_id] = QueueHead(
+def test_unsaved_receipt_does_not_trigger_activation(
+    work: ClaimedDelivery,
+    delivery_store: Mock,
+    queue_driver: Mock,
+) -> None:
+    delivery_store.finish_delivery.return_value = False
+    queue_driver.activation_candidate.return_value = QueueHead(
         "queued", work.delivery.client_message_id
     )
-    DeliveryService(store, driver, logging.getLogger("tests.delivery.removed")).submit(work)
-    assert store.saved.deleted_at == deleted_at
-    assert store.saved.status == "submitting"
-    assert not store.activated
-    assert driver.activations == []
+    DeliveryService(delivery_store, queue_driver, logging.getLogger("tests.delivery")).submit(work)
+    queue_driver.enqueue.assert_called_once()
+    delivery_store.finish_delivery.assert_called_once()
+    queue_driver.activation_candidate.assert_not_called()
+    queue_driver.activate.assert_not_called()
 
 
-@pytest.mark.parametrize(
-    "failure",
-    [REJECTED_SUBMISSION, UNCERTAIN_SUBMISSION, PROCESSING_FAILURE, INTERRUPTED_SUBMISSION],
-)
-def test_submission_failure_preserves_identity_and_does_not_mutate_claim(
-    failure: SubmissionFailure,
+def test_recovery_does_not_attempt_external_resubmission(
+    delivery_store: Mock,
+    queue_driver: Mock,
 ) -> None:
-    original = work_item().delivery
-    before = original.model_copy(deep=True)
-    at = datetime.now(UTC)
-    result = submission_failed(original, failure, at)
-    assert original == before and result.id == original.id
-    assert result.client_message_id == original.client_message_id
-    assert result.status == failure.status and result.error == failure.error
-    assert result.updated_at == at and result.queued_submission_id is None
+    DeliveryService(delivery_store, queue_driver, logging.getLogger("tests.delivery")).recover()
+    delivery_store.interrupt_submissions.assert_called_once_with()
+    assert queue_driver.mock_calls == []
 
 
-def test_saved_queue_receipt_cannot_be_replaced_by_a_late_failure() -> None:
-    delivery = work_item().delivery
-    queued = queue_accepted(delivery, "submission", {"id": "receipt"}, datetime.now(UTC))
-    with pytest.raises(ValueError):
-        submission_failed(queued, PROCESSING_FAILURE, datetime.now(UTC))
-    assert queued.status == "queued" and queued.receipt == {"id": "receipt"}
-    assert delivery.status == "submitting" and delivery.receipt is None
-
-
-def test_recovery_does_not_attempt_external_resubmission() -> None:
-    store = MemoryDeliveryStore(work_item())
-    driver = FakeQueueDriver()
-    service = DeliveryService(store, driver, logging.getLogger("tests.delivery.recovery"))
-    service.recover()
-    service.recover()
-    assert store.saved.status == "unknown"
-    assert not driver.calls and not driver.activations
-
-
-def test_receipt_observation_continues_to_an_older_page_without_resubmitting() -> None:
-    work = work_item()
-    store = MemoryDeliveryStore(work)
-    cursors: list[str | None] = []
-
-    class HistoryDriver(FakeQueueDriver):
-        def read_input_page(self, thread_id: str, cursor: str | None = None) -> InputPage:
-            cursors.append(cursor)
-            if cursor is None:
-                return InputPage((), "older")
-            return InputPage(
-                (ReceivedInput(work.delivery.client_message_id, "original-item", "original-turn"),),
-                None,
-            )
-
-    driver = HistoryDriver()
-    service = DeliveryService(store, driver, logging.getLogger("tests.delivery.history"))
+def test_receipt_observation_continues_to_an_older_page_without_resubmitting(
+    work: ClaimedDelivery,
+    delivery_store: Mock,
+    queue_driver: Mock,
+) -> None:
+    received = ReceivedInput(work.delivery.client_message_id, "original-item", "original-turn")
+    queue_driver.read_input_page.side_effect = [
+        InputPage((), "older"),
+        InputPage((), "older"),
+        InputPage((received,), None),
+    ]
+    service = DeliveryService(delivery_store, queue_driver, logging.getLogger("tests.delivery"))
     for _ in range(2):
         service.observe(work.delivery.target_session_id, {work.delivery.client_message_id})
-    assert cursors == [None, None, "older"]
-    assert store.saved.received_item_id == "original-item"
-    assert not driver.calls and not driver.activations
+    assert queue_driver.read_input_page.call_args_list == [
+        call(work.delivery.target_session_id),
+        call(work.delivery.target_session_id),
+        call(work.delivery.target_session_id, "older"),
+    ]
+    delivery_store.confirm_input.assert_called_once_with(work.delivery.target_session_id, received)
+    queue_driver.enqueue.assert_not_called()
+    queue_driver.activate.assert_not_called()

@@ -2,7 +2,7 @@ from typing import Self
 
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
-from agent_relay.domain.rooms.models import Message, RoomModel
+from agent_relay.domain.rooms.models import CapabilityReference, Message, RoomModel
 
 
 class MessagePage(RoomModel):
@@ -37,6 +37,7 @@ class CreateMessage(RoomModel):
 
     publication_id: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
     content: str = Field(min_length=1, max_length=6000)
+    capabilities: list[CapabilityReference] = Field(default_factory=list, max_length=100)
     topic_ids: list[str] = Field(default_factory=list)
     mentioned_member_ids: list[str] = Field(default_factory=list)
     reply_to_message_id: str | None = None

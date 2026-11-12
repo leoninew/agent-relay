@@ -6,10 +6,15 @@ from pathlib import Path
 from fastapi import FastAPI
 from starlette.concurrency import run_in_threadpool
 
+from agent_relay.application.capabilities.ports import CapabilityDriver
 from agent_relay.application.delivery.ports import QueueDriver
 from agent_relay.application.members.sessions import SessionDriver
 from agent_relay.bootstrap.config import Settings, load_settings
-from agent_relay.infrastructure.codex.dependencies import create_queue_driver, create_session_driver
+from agent_relay.infrastructure.codex.dependencies import (
+    create_capability_driver,
+    create_queue_driver,
+    create_session_driver,
+)
 from agent_relay.infrastructure.dispatch.dependencies import (
     create_delivery_runner,
     create_presence_runner,
@@ -36,6 +41,7 @@ def create_app(
     database: Database | None = None,
     session_driver: SessionDriver | None = None,
     queue_driver: QueueDriver | None = None,
+    capability_driver: CapabilityDriver | None = None,
 ) -> FastAPI:
     configured = settings if settings is not None else load_settings()
     owned = database is None
@@ -55,6 +61,7 @@ def create_app(
             static_directory=static_directory,
             session_driver=session_driver,
             queue_driver=queue_driver,
+            capability_driver=capability_driver,
         )
     except BaseException:
         if owned:
@@ -71,6 +78,7 @@ def _configure_app(
     static_directory: Path | None,
     session_driver: SessionDriver | None,
     queue_driver: QueueDriver | None,
+    capability_driver: CapabilityDriver | None,
 ) -> FastAPI:
     codex = configured.codex
     sessions = (
@@ -108,6 +116,11 @@ def _configure_app(
     app.state.database = database
     app.state.session_driver = sessions
     app.state.queue_driver = queue
+    app.state.capability_driver = (
+        capability_driver
+        if capability_driver is not None
+        else create_capability_driver(codex.command, codex.rpc_timeout)
+    )
     app.state.delivery_runner = delivery_runner
     app.state.presence_runner = presence_runner
     app.add_middleware(
@@ -127,6 +140,7 @@ def build_app(
     database: Database | None = None,
     session_driver: SessionDriver | None = None,
     queue_driver: QueueDriver | None = None,
+    capability_driver: CapabilityDriver | None = None,
 ) -> FastAPI:
     return create_app(
         logging.getLogger("agent_relay.http"),
@@ -135,4 +149,5 @@ def build_app(
         database=database,
         session_driver=session_driver,
         queue_driver=queue_driver,
+        capability_driver=capability_driver,
     )

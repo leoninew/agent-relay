@@ -14,15 +14,25 @@ from typing import Any, cast
 
 from websockets.sync.client import ClientConnection, connect
 
+from agent_relay.application.capabilities.contracts import McpCatalog, SkillCatalog
 from agent_relay.application.delivery.ports import (
     ActivationRejected,
     InputPage,
     QueueHead,
     QueueReceipt,
     QueueRejected,
+    QueueRequest,
     ReceivedInput,
 )
 from agent_relay.application.members.sessions import SessionInfo, SessionStatus
+from agent_relay.domain.rooms.rules import normalize_project_path
+from agent_relay.infrastructure.codex.catalog import (
+    McpPage,
+    SkillBinding,
+    SkillDiscovery,
+    decode_skills,
+    server_option,
+)
 
 SOURCE_KINDS = [
     "cli",
@@ -312,33 +322,134 @@ class CodexDriver:
             result = rpc.call("thread/read", {"threadId": thread_id, "includeTurns": False})
             return self._session(result.get("thread"))
 
-    def enqueue(self, thread_id: str, client_message_id: str, text: str) -> QueueReceipt:
+    def discover_skills(self, project_path: str, *, force_reload: bool = False) -> SkillDiscovery:
+        with ProxyRpc(self.command, self.timeout) as rpc:
+            payload = rpc.call("skills/list", {"cwds": [project_path], "forceReload": force_reload})
+            return decode_skills(payload, project_path)
+
+    def list_skills(self, project_path: str, *, force_reload: bool = False) -> SkillCatalog:
+        return self.discover_skills(project_path, force_reload=force_reload).public_catalog()
+
+    def resolve_skill(self, project_path: str, skill_id: str) -> SkillBinding:
+        discovery = self.discover_skills(project_path, force_reload=True)
+        for binding in discovery.bindings:
+            if binding.option.id == skill_id and binding.option.enabled:
+                return binding
+        raise RpcDisconnected("Selected skill is unavailable")
+
+    def list_mcp_servers(self, thread_id: str, project_path: str) -> McpCatalog:
         with ProxyRpc(self.command, self.timeout) as rpc:
             metadata = rpc.call("thread/read", {"threadId": thread_id, "includeTurns": False})
             session = self._session(metadata.get("thread"))
-            catalog = rpc.call("skills/list", {"cwds": [session.cwd], "forceReload": True})
-            skills = [
-                skill
-                for entry in catalog["data"]
-                if entry["cwd"] == session.cwd
-                for skill in entry["skills"]
-                if skill.get("name") == "agent-relay:agent-relay"
-                and skill.get("pluginId") == "agent-relay@agent-relay-local"
-                and skill.get("enabled") is True
-            ]
-            if len(skills) != 1:
-                raise RpcDisconnected("Agent Relay skill unavailable; run make install for Codex")
-            skill = skills[0]
+            if (
+                session.id != thread_id
+                or not session.usable
+                or normalize_project_path(session.cwd) != normalize_project_path(project_path)
+            ):
+                raise RpcDisconnected("Target Codex session is unavailable or outside this room")
+            return self._mcp_catalog(rpc, thread_id)
+
+    @staticmethod
+    def _mcp_catalog(rpc: ProxyRpc, thread_id: str) -> McpCatalog:
+        servers = []
+        cursor: str | None = None
+        seen_cursors: set[str] = set()
+        seen_servers: set[str] = set()
+        while True:
+            page = McpPage.model_validate(
+                rpc.call(
+                    "mcpServerStatus/list",
+                    {
+                        "threadId": thread_id,
+                        "cursor": cursor,
+                        "limit": 100,
+                        "detail": "toolsAndAuthOnly",
+                    },
+                )
+            )
+            for server in page.data:
+                if server.name in seen_servers:
+                    raise RpcDisconnected("Duplicate MCP server identity")
+                seen_servers.add(server.name)
+                servers.append(server_option(server))
+            cursor = page.next_cursor
+            if cursor is None:
+                return McpCatalog(servers=servers)
+            if not cursor or cursor in seen_cursors:
+                raise RpcDisconnected("Invalid MCP pagination cursor")
+            seen_cursors.add(cursor)
+
+    def _queue_inputs(
+        self, rpc: ProxyRpc, thread_id: str, request: QueueRequest
+    ) -> list[dict[str, Any]]:
+        metadata = rpc.call("thread/read", {"threadId": thread_id, "includeTurns": False})
+        session = self._session(metadata.get("thread"))
+        if (
+            session.id != thread_id
+            or not session.usable
+            or normalize_project_path(session.cwd) != normalize_project_path(request.project_path)
+        ):
+            raise QueueRejected("Target Codex session is unavailable or outside this room")
+        discovery = decode_skills(
+            rpc.call("skills/list", {"cwds": [session.cwd], "forceReload": True}), session.cwd
+        )
+        required = [
+            binding
+            for binding in discovery.bindings
+            if binding.native_name == "agent-relay:agent-relay"
+            and binding.option.plugin_id == "agent-relay@agent-relay-local"
+            and binding.option.enabled
+        ]
+        if len(required) != 1:
+            raise QueueRejected("Agent Relay skill unavailable; run make install for Codex")
+        relay = required[0]
+        inputs: list[dict[str, Any]] = [
+            {"type": "text", "text": request.text},
+            {"type": "skill", "name": relay.native_name, "path": relay.native_path},
+        ]
+        seen = {("skill", relay.option.id)}
+        skills = {binding.option.id: binding for binding in discovery.bindings}
+        servers = (
+            {server.id: server for server in self._mcp_catalog(rpc, thread_id).servers}
+            if any(reference.type == "mcp_server" for reference in request.capabilities)
+            else {}
+        )
+        for reference in request.capabilities:
+            key = (reference.type, reference.id)
+            if key in seen:
+                continue
+            seen.add(key)
+            if reference.type == "skill":
+                binding = skills.get(reference.id)
+                if binding is None or not binding.option.enabled:
+                    raise QueueRejected("Selected skill is unavailable")
+                inputs.append(
+                    {"type": "skill", "name": binding.native_name, "path": binding.native_path}
+                )
+            else:
+                server = servers.get(reference.id)
+                if server is None or not server.available:
+                    raise QueueRejected("Selected MCP server is unavailable in this session")
+                inputs.append(
+                    {"type": "mention", "name": server.name, "path": f"mcp://{server.name}"}
+                )
+        return inputs
+
+    def enqueue(
+        self, thread_id: str, client_message_id: str, request: QueueRequest
+    ) -> QueueReceipt:
+        with ProxyRpc(self.command, self.timeout) as rpc:
+            try:
+                inputs = self._queue_inputs(rpc, thread_id, request)
+            except Exception as exc:
+                raise QueueRejected("Capability validation failed before queue submission") from exc
             try:
                 result = rpc.call(
                     "thread/queue/add",
                     {
                         "threadId": thread_id,
                         "clientUserMessageId": client_message_id,
-                        "input": [
-                            {"type": "text", "text": text},
-                            {"type": "skill", "name": skill["name"], "path": skill["path"]},
-                        ],
+                        "input": inputs,
                     },
                 )
             except RpcRejected as exc:

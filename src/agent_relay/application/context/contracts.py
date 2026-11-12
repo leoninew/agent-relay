@@ -4,7 +4,7 @@ from typing import Literal, Self
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from agent_relay.application.rooms.views import TopicPosition
-from agent_relay.domain.rooms.models import RoomModel
+from agent_relay.domain.rooms.models import CapabilityReference, RoomModel
 
 
 class CatalogTopic(RoomModel):
@@ -74,6 +74,7 @@ class ContextMessage(RoomModel):
     sender_id: str
     sender_name: str
     content: str
+    capabilities: tuple[CapabilityReference, ...] = ()
     topic_ids: list[str]
     mentioned_member_ids: list[str]
     reply_to_message_id: str | None

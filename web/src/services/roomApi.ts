@@ -41,6 +41,43 @@ export type Delivery = {
   error: string | null;
 };
 
+export type SkillReference = {
+  type: "skill";
+  id: string;
+  name: string;
+};
+
+export type McpServerReference = {
+  type: "mcp_server";
+  id: string;
+  name: string;
+};
+
+export type CapabilityReference = SkillReference | McpServerReference;
+
+export type CatalogIssue = { code: string; error: string };
+export type SkillOption = SkillReference & {
+  displayName: string;
+  description: string;
+  scope: "user" | "repo" | "system" | "admin";
+  source: "plugin" | "user" | "repo" | "system" | "admin";
+  pluginId: string | null;
+  enabled: boolean;
+};
+export type SkillCatalog = { skills: SkillOption[]; errors: CatalogIssue[] };
+
+export async function fetchRoomSkills(
+  roomId: string,
+  forceReload = false,
+  signal?: AbortSignal,
+): Promise<SkillCatalog> {
+  const { data } = await apiClient.get<SkillCatalog>(
+    `/api/room/${encodeURIComponent(roomId)}/skills`,
+    { params: { force_reload: forceReload }, signal },
+  );
+  return data;
+}
+
 export type RoomMessage = {
   id: string;
   publicationId: string | null;
@@ -48,6 +85,7 @@ export type RoomMessage = {
   senderId: string;
   senderName: string;
   content: string;
+  capabilities?: CapabilityReference[];
   topicIds: string[];
   mentionedMemberIds: string[];
   recipientIds: string[];
@@ -131,6 +169,7 @@ export type RoomEventPage = {
 export type CreateMessage = {
   publicationId: string;
   content: string;
+  capabilities?: CapabilityReference[];
   topicIds: string[];
   mentionedMemberIds: string[];
   replyToMessageId?: string;
