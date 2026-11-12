@@ -1,5 +1,5 @@
 # Codex 接入能力核验与方案建议
-最后修改时间: 2026-11-12 10:26:01
+最后修改时间: 2026-11-12 13:43:01
 
 ## 状态与结论
 
@@ -39,12 +39,12 @@ D07 保持显式结构化目标、受控成员身份与来源幂等规则；已�
 - [OpenAI App Server 文档](https://developers.openai.com/codex/app-server/)和本机 schema 均提供 `turn/interrupt(threadId, turnId)`。它对正在运行的指定轮次发起取消；以同一轮次的 `turn/completed`、`status=interrupted` 确认结果。它不删除等待项，也不回滚已经发生的副作用。
 - 本轮没有实测中断后是否会自动消费下一条。若将来提供类似 Esc 的“中断并继续”，先等中断确认，再检查原会话是否已自动接手下一项；只有仍空闲且目标仍是原队首时，才考虑使用实验接口 `thread/queue/start`。不将中断或启动下一项绑定到清空操作。
 
-## 证据与可重复入口
+## 历史核验证据
 
 - 父记录：[总意图](../intent/20261107-backend-from-web.md)、[总计划](../plan/20261107-backend-from-web.md)、[T01](../task/20261107-backend-from-web/T01-capabilities.md)。
 - 可审查的脱敏证据：[20261107-codex-0.167.0.json](evidence/20261107-codex-0.167.0.json)。包含真实队列回执、active 状态下的队列分页、回调上下文、历史字段、重载观察和 12 个 schema 指纹，不含认证配置、其他会话正文或账号用量通知。
-- 独立探测脚本：[codex_capabilities.py](../../scripts/probes/codex_capabilities.py)。不导入、复制或依赖 housekeeper；不属于产品驱动实现。
-- 本轮队列恢复：[脱敏证据](evidence/20261107-codex-queue-recovery.json)、[codex_queue_recovery.py](../../scripts/probes/codex_queue_recovery.py)。新建临时会话 active 时确认两条待处理项，强制结束自有 app-server，恢复原 thread 后两条 clientId 均进入历史，没有再次 add；测试会话已归档。
+- 历史独立探测脚本已按用户要求删除；其验证职责归测试，`scripts/` 仅保留实际安装和制品压缩入口。历史脱敏证据继续保留对应版本范围。
+- 队列恢复[脱敏证据](evidence/20261107-codex-queue-recovery.json)：新建临时会话 active 时确认两条待处理项，强制结束自有 app-server，恢复原 thread 后两条 clientId 均进入历史，没有再次 add；测试会话已归档。
 - 临时原始产物目录：`C:/Users/leon/AppData/Local/Temp/agent-relay-t01-20261107-1213`；schema 由本机 CLI 生成，原始通知仅供本地调查，长期审查使用仓库内脱敏证据。
 - CLI 与共享 daemon 均为 `0.167.0`；模型沿用本机默认 `auto/gpt-6.1-terra`，没有指定其他模型。运行平台是 Windows，结论不扩展到其他宿主或版本。
 - 探测创建的会话明确标为 `[T01 isolated probe]`，工作目录均位于临时目录。已归档测试会话，移除测试自身的待处理队列项；没有归档或删除用户工作会话。
@@ -54,23 +54,7 @@ D07 保持显式结构化目标、受控成员身份与来源幂等规则；已�
 - [OpenAI app-server 文档](https://developers.openai.com/codex/app-server/)；本轮跳转到 [app-server 页面](https://learn.chatgpt.com/docs/app-server)。说明初始化、版本对应的 schema、动态工具 `item/tool/call` 流程及工具持久恢复。
 - [OpenAI MCP 文档](https://developers.openai.com/codex/mcp/)；本轮跳转到 [MCP 配置页面](https://learn.chatgpt.com/docs/extend/mcp?surface=cli)。说明 stdio/HTTP MCP 与凭证配置；未据此宣称已有宿主的成员身份接入已通过实测。
 
-PowerShell 复现示例，`$t01Codex` 需指向所测版本的原生 `codex.exe`，不使用另一仓库的 CLI：
-
-```powershell
-# 只读共享 daemon 元数据；不会启动 daemon 或读取其他会话正文。
-uv run --locked --no-sync python scripts/probes/codex_capabilities.py --codex $t01Codex --mode metadata --cwd 'D:\SourceCodes\mywork\agent-relay' --output $t01Metadata
-
-# 独立进程新建测试会话，--run-model 明确允许测试会话的真实入队与推理。
-uv run --locked --no-sync python scripts/probes/codex_capabilities.py --codex $t01Codex --mode isolated --run-model --output $t01Evidence
-
-# 只恢复上述证据证明由本探测创建的临时会话，不接受任意工作会话 ID。
-uv run --locked --no-sync python scripts/probes/codex_capabilities.py --codex $t01Codex --mode isolated --run-model --resume-evidence $t01Evidence --output $t01ResumeEvidence
-
-# 新建自己的临时会话，验证待处理队列跨进程恢复，不接受外部 thread ID。
-uv run --locked --no-sync python scripts/probes/codex_queue_recovery.py --codex $t01Codex --run-model --output $t01QueueRecoveryEvidence
-```
-
-独立子进程使用临时的 CLI 配置覆盖禁用其他 MCP、插件、Shell、Hook 和多 Agent 能力；不改用户配置。队列提交本身可能启动推理，因此脚本现将所有入队测试放在 `--run-model` 后；没有该参数只验证会话建立和空查询。初次无工具排队试验也发生在隔离会话，随后已归档，不能将其描述成“完全没有模型启动可能”的试验。
+历史独立子进程使用临时 CLI 配置禁用其他 MCP、插件、Shell、Hook 和多 Agent 能力，未改用户配置。队列提交本身可能启动推理，历史脚本要求显式允许后才执行入队；初次无工具排队试验也发生在隔离会话，随后已归档，不能描述为“完全没有模型启动可能”。这些流程已不再作为可运行脚本提供。
 
 ## 能力矩阵
 
@@ -184,7 +168,7 @@ D02、D03 已有明确用户决定，D07 入口按修订 9 在已有会话中重
 
 ## T02 产品实现核验（修订 9）
 
-当前检查使用 [只读成员绑定烟测](../../scripts/probes/member_session_smoke.py)，证据见 [现有会话绑定证据](evidence/20261107-t02-existing-session.json)，最终结果见 [T02 交付](../task/20261107-backend-from-web/T02-durable-rooms.md)。已有会话发现和绑定不等于真实 queue 或成员发布入口已验收。
+历史成员绑定检查见[现有会话绑定证据](evidence/20261107-t02-existing-session.json)，当时结果见 [T02 交付](../task/20261107-backend-from-web/T02-durable-rooms.md)。原只读烟测脚本已删除；已有会话发现和绑定不等于真实 queue 或成员发布入口已验收。
 
 2026-11-07 19:05:29 补测修复默认命令：此前绝对原生路径烟测漏掉 Windows npm codex.cmd 被拒绝的问题。当前证据以默认 `[codex, app-server, proxy]` 重新生成，保留当前源码指纹；真实后端及 Web 代理刷新均为 200，找到 2 条本项目会话，请求结束无残留 proxy。后端 107 项测试及 Mypy/Ruff/格式检查通过。
 

@@ -1,0 +1,73 @@
+name: Build Windows desktop
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  windows-x64:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+          architecture: x64
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Set up GNU Make
+        shell: pwsh
+        run: choco install make --yes --no-progress
+
+      - name: Set up Corepack and pnpm
+        working-directory: web
+        run: |
+          test -x "$(command -v corepack)" || npm install --global corepack
+          corepack.cmd enable
+          corepack.cmd prepare pnpm@10.34.9 --activate
+          corepack.cmd pnpm --version
+
+      - name: Install locked dependencies
+        run: make deps
+
+      - name: Check version tag
+        run: uv run --locked --no-sync python scripts/binary.py --check-version
+
+      - name: Check types, lint and format
+        run: make check
+
+      - name: Run unit tests
+        run: make test
+
+      - name: Build and package Windows binaries
+        id: binary
+        run: make binary
+
+      - name: Upload Windows ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.binary.outputs.artifact_name }}
+          path: ${{ steps.binary.outputs.archive }}
+          if-no-files-found: error
+          compression-level: 0
