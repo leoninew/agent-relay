@@ -1,0 +1,57 @@
+stages:
+  - package
+  - release
+
+workflow:
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/'
+
+package_windows:
+  stage: package
+  tags:
+    - windows-bash
+  script:
+    - python --version
+    - node --version
+    - uv --version
+    - make --version
+    - bash --noprofile --norc -e -o pipefail -c 'make deps'
+    - uv run --locked --no-sync python scripts/binary.py --check-version
+    - bash --noprofile --norc -e -o pipefail -c 'make check'
+    - bash --noprofile --norc -e -o pipefail -c 'make test'
+    - bash --noprofile --norc -e -o pipefail -c 'make binary'
+    - |
+      $archivePath = "dist/agent-relay-$($env:CI_COMMIT_TAG.Substring(1))-windows-x64.zip"
+      if (!(Test-Path -LiteralPath $archivePath -PathType Leaf) -or (Get-Item -LiteralPath $archivePath).Length -eq 0) {
+        throw "Missing or empty archive: $archivePath"
+      }
+      $packageUrl = "$env:CI_API_V4_URL/projects/$env:CI_PROJECT_ID/packages/generic/agent-relay/$env:CI_COMMIT_TAG/agent-relay-windows-x64.zip"
+      curl.exe --fail --show-error --location --header "JOB-TOKEN: $env:CI_JOB_TOKEN" --upload-file $archivePath $packageUrl
+      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+  artifacts:
+    name: "agent-relay-${CI_COMMIT_TAG}-windows-x64"
+    paths:
+      - dist/agent-relay-*-windows-x64.zip
+    expire_in: 1 week
+
+create_release:
+  stage: release
+  image: registry.gitlab.com/gitlab-org/cli:latest
+  tags:
+    - linux-docker
+  variables:
+    GLAB_ENABLE_CI_AUTOLOGIN: "true"
+  needs:
+    - job: package_windows
+      artifacts: false
+  script:
+    - echo "Publishing GitLab Release ${CI_COMMIT_TAG}"
+  release:
+    tag_name: "$CI_COMMIT_TAG"
+    name: "Agent Relay $CI_COMMIT_TAG"
+    description: "Windows x64 desktop binaries for $CI_COMMIT_TAG."
+    assets:
+      links:
+        - name: Windows x64 desktop package
+          url: "$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/agent-relay/$CI_COMMIT_TAG/agent-relay-windows-x64.zip"
+          link_type: package

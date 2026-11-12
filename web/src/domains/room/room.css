@@ -391,7 +391,7 @@
 .message {
   position: relative;
   width: fit-content;
-  max-width: min(88%, 88ch);
+  max-width: min(92%, 120ch);
   margin: 0 auto 12px 0;
   padding-bottom: 8px;
 }

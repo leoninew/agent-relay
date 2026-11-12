@@ -35,40 +35,19 @@ make web
 
 ## Windows 桌面应用
 
-桌面与浏览器使用同一前端和 API。源码启动会先构建前端，再打开 WebView2 窗口：
+需要 Windows、Microsoft Edge WebView2 Runtime 和 .NET Framework 4.7.2+。源码启动：
 
 ```bash
 make desktop
 ```
 
-需要 Windows、Microsoft Edge WebView2 Runtime 和 .NET Framework 4.7.2+。Codex CLI 仍须预先安装并认证。桌面默认使用 `127.0.0.1:9080`；该端口被占用时显示启动错误，日志位于 `~/.agent-relay/logs/agent-relay.log`。
-
-桌面固定使用 `app` profile，配置依次读取内置 `config/app.yaml`、`~/.agent-relay/.env`、系统环境变量。用户覆盖示例：
-
-```dotenv
-AGENT_RELAY_SERVER__PORT=9080
-AGENT_RELAY_DATABASE__PATH=./data/agent-relay.sqlite3
-```
-
-数据库相对路径从 `~/.agent-relay/` 解析；前端相对路径从程序资源目录解析。数据库默认在 `~/.agent-relay/data/`，日志在 `logs/`，桌面排序等浏览器偏好在 `webview/`。更换程序目录保留这些数据；桌面不读取开发 `.env.dev`。修改服务端口后，CLI/MCP 的 `AGENT_RELAY_URL` 也需指向相同端口。
-
-关闭窗口先确认。取消继续运行；确认后向本次运行发送过管理端消息的聊天室当前 Agent 发布“管理端已离线。”。通知复用正常投递，失败记录日志后退出，不等待 Agent 回复；正在提交的 RPC 完成后才释放数据库和后台锁。
-
-## Windows 目录包
-
-在 Windows 的 GNU Make/Bash 环境中构建，入口会同步锁定的桌面依赖并构建前端：
+桌面默认服务地址为 `http://127.0.0.1:9080`，用户配置和数据位于 `~/.agent-relay/`。构建完整目录包与 ZIP：
 
 ```bash
 make binary
 ```
 
-产物为 `dist/AgentRelay/`。必须保留整个目录，包括 `agent-relay-gui.exe`（桌面窗口）、`agent-relay.exe`（控制台 CLI/MCP）及 `_internal/`（Python、WebView 依赖、默认配置、前端和迁移资源）。目标机器无需 Python 或 Node.js；仍需前述 WebView2/.NET 和 Codex 运行前提。
-
-`make binary` 同时将整个目录压缩为 `dist/agent-relay-<version>-windows-x64.zip`，版本取自 `pyproject.toml`。代码实现阶段保留单元与静态检查；实际窗口、数据库迁移和 CLI/MCP 使用真实制品验证，不增加集成测试入口。
-
-直接使用 `agent-relay.exe mcp` 启动 stdio MCP。现有插件使用 `agent-relay mcp`，可将完整目录加入 `PATH`，或将 MCP 的 `command` 配置为该控制台 EXE 的绝对路径。双击 GUI 前确认 CLI/MCP 指向同一服务地址。
-
-GitHub Actions 的 `Build Windows desktop` 支持手动 `workflow_dispatch` 和 `v*` tag push。Windows x64 runner 按版本文件准备工具，通过 `make deps`、`make check`、`make test` 和 `make binary` 生成完整 ZIP，在对应 run 的 Artifacts 下载。tag 必须等于项目版本前加 `v`（例如 `v0.1.0`）；此 workflow 只上传 Actions artifact。
+产物位于 `dist/AgentRelay/`，提供 `agent-relay-gui.exe`（桌面）和 `agent-relay.exe`（CLI/MCP），运行时须保留整个目录。详见[桌面使用指南](docs/guide/windows-desktop.md)；CI 下载与 GitLab Release 配置见[发布指南](docs/guide/releases.md)。
 
 ## 开发检查
 
@@ -100,10 +79,7 @@ agent-relay --help
 | `web/` | Vue 前端 |
 | `tests/unit/` | 后端单元测试 |
 | `migrations/` | SQLite SQL 与 Alembic revision |
-| `scripts/install.py` | 本地插件/skill 的预检、安装同步和状态查询，供 `make install` 使用 |
-| `scripts/binary.py` | 读取项目版本、核对 tag、压缩完整桌面目录并输出 CI artifact 路径，供 `make binary` 使用 |
-
-`scripts/` 只保留实际安装和制品操作，独立验证探针已删除。
+| `scripts/` | 本地安装与制品打包 |
 
 - [后端架构](docs/design/backend-architecture.md)
 - [协作设计](docs/design/codex-session-chat-collaboration.md)

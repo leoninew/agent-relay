@@ -10,10 +10,11 @@ ROOT = Path(__file__).resolve().parents[1]
 def project_version() -> str:
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
     version = str(project["version"])
-    if os.environ.get("GITHUB_REF_TYPE") == "tag":
+    tag = os.environ.get("CI_COMMIT_TAG")
+    if tag is None and os.environ.get("GITHUB_REF_TYPE") == "tag":
         tag = os.environ.get("GITHUB_REF_NAME")
-        if tag != f"v{version}":
-            raise ValueError(f"Tag {tag!r} does not match project version v{version}")
+    if tag is not None and tag != f"v{version}":
+        raise ValueError(f"Tag {tag!r} does not match project version v{version}")
     return version
 
 
