@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from starlette.concurrency import run_in_threadpool
 
 from agent_relay.application.capabilities.ports import CapabilityDriver
-from agent_relay.application.delivery.ports import QueueDriver
+from agent_relay.application.delivery.ports import DeliveryDriver
 from agent_relay.application.members.sessions import SessionDriver
 from agent_relay.bootstrap.config import Settings, load_settings
 from agent_relay.infrastructure.codex.dependencies import (
@@ -40,7 +40,7 @@ def create_app(
     static_directory: Path | None = None,
     database: Database | None = None,
     session_driver: SessionDriver | None = None,
-    queue_driver: QueueDriver | None = None,
+    queue_driver: DeliveryDriver | None = None,
     capability_driver: CapabilityDriver | None = None,
 ) -> FastAPI:
     configured = settings if settings is not None else load_settings()
@@ -77,7 +77,7 @@ def _configure_app(
     owned: bool,
     static_directory: Path | None,
     session_driver: SessionDriver | None,
-    queue_driver: QueueDriver | None,
+    queue_driver: DeliveryDriver | None,
     capability_driver: CapabilityDriver | None,
 ) -> FastAPI:
     codex = configured.codex
@@ -139,7 +139,7 @@ def build_app(
     static_directory: Path | None = None,
     database: Database | None = None,
     session_driver: SessionDriver | None = None,
-    queue_driver: QueueDriver | None = None,
+    queue_driver: DeliveryDriver | None = None,
     capability_driver: CapabilityDriver | None = None,
 ) -> FastAPI:
     return create_app(

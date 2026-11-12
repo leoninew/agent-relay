@@ -6,7 +6,7 @@ from alembic import command
 from alembic.config import Config
 from sqlalchemy.engine import Connection
 
-MIGRATION_HEAD = "capabilities_json_20261111"
+MIGRATION_HEAD = "delivery_steer_20261112"
 
 
 def _configuration(path: Path) -> Config:

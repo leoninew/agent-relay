@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from pydantic.alias_generators import to_camel
 
 USER_MEMBER_ID = "user"
+type SubmissionMethod = Literal["queue", "steer"]
 
 
 class RoomModel(BaseModel):
@@ -74,6 +75,33 @@ class Delivery(RoomModel):
     queued_submission_id: str | None = None
     receipt: dict[str, object] | None = None
     error: str | None = None
+    submission_method: SubmissionMethod | None = None
+    steered_turn_id: str | None = None
+
+    @model_validator(mode="after")
+    def validate_submission(self) -> Self:
+        if self.submission_method == "steer":
+            if any(
+                value is not None
+                for value in (
+                    self.queued_at,
+                    self.queued_submission_id,
+                    self.receipt,
+                    self.activation_attempted_at,
+                )
+            ):
+                raise ValueError("Steered input cannot have queue receipt or activation facts")
+            if self.status == "queued" and not self.steered_turn_id:
+                raise ValueError("Accepted steered input requires a turn identity")
+            if self.status == "received" and (
+                self.received_at is None or not self.received_item_id or not self.received_turn_id
+            ):
+                raise ValueError("Received steered input requires history evidence")
+        if self.steered_turn_id is not None and (
+            self.submission_method != "steer" or not self.steered_turn_id.strip()
+        ):
+            raise ValueError("Steer turn identity requires a steered submission")
+        return self
 
 
 class CapabilityReferenceModel(RoomModel):

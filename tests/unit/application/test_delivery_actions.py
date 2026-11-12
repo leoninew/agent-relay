@@ -8,13 +8,15 @@ import pytest
 from agent_relay.application.delivery.ports import (
     ActivationRejected,
     ClaimedDelivery,
+    DeliveryDriver,
     DeliveryRepository,
     InputPage,
-    QueueDriver,
     QueueHead,
     QueueReceipt,
-    QueueRejected,
     ReceivedInput,
+    SteerReceipt,
+    SubmissionRejected,
+    SubmissionUnknown,
 )
 from agent_relay.application.delivery.service import DeliveryService
 from agent_relay.domain.rooms.models import Delivery, Message, Room, SkillReference
@@ -57,8 +59,8 @@ def delivery_store() -> Mock:
 
 @pytest.fixture
 def queue_driver() -> Mock:
-    driver = Mock(spec=QueueDriver)
-    driver.enqueue.return_value = QueueReceipt("queued", {"id": "queued"})
+    driver = Mock(spec=DeliveryDriver)
+    driver.submit.return_value = QueueReceipt("queued", {"id": "queued"})
     driver.activation_candidate.return_value = None
     return driver
 
@@ -70,15 +72,18 @@ def test_submission_records_rejection_or_uncertainty_without_repeating_the_write
     queue_driver: Mock,
     rejected: bool,
 ) -> None:
-    queue_driver.enqueue.side_effect = (
-        QueueRejected("rejected") if rejected else TimeoutError("unknown")
+    queue_driver.submit.side_effect = (
+        SubmissionRejected("rejected", "steer")
+        if rejected
+        else SubmissionUnknown("unknown", "steer")
     )
     DeliveryService(delivery_store, queue_driver, logging.getLogger("tests.delivery")).submit(work)
     delivery_store.finish_delivery.assert_called_once()
     room_id, saved = delivery_store.finish_delivery.call_args.args
     assert room_id == work.room_id
     assert saved.status == ("rejected" if rejected else "unknown")
-    queue_driver.enqueue.assert_called_once()
+    assert saved.submission_method == "steer"
+    queue_driver.submit.assert_called_once()
     queue_driver.activation_candidate.assert_not_called()
     queue_driver.activate.assert_not_called()
 
@@ -96,7 +101,7 @@ def test_activation_rejection_preserves_the_saved_queue_receipt(
     saved = delivery_store.finish_delivery.call_args.args[1]
     assert saved.status == "queued" and saved.queued_submission_id == "queued"
     assert saved.receipt == {"id": "queued"}
-    queue_driver.enqueue.assert_called_once()
+    queue_driver.submit.assert_called_once()
     queue_driver.activate.assert_called_once_with(work.delivery.target_session_id, "queued")
     assert saved.error is None
     assert "启动请求未被接受" in delivery_store.delivery_note.call_args.args[2]
@@ -110,8 +115,8 @@ def test_submission_includes_stable_message_lookup_facts_and_capabilities(
     references = (SkillReference(id="skill-example", name="Example"),)
     work = replace(work, message=work.message.model_copy(update={"capabilities": references}))
     DeliveryService(delivery_store, queue_driver, logging.getLogger("tests.delivery")).submit(work)
-    queue_driver.enqueue.assert_called_once()
-    thread_id, client_id, request = queue_driver.enqueue.call_args.args
+    queue_driver.submit.assert_called_once()
+    thread_id, client_id, request = queue_driver.submit.call_args.args
     assert thread_id == work.delivery.target_session_id
     assert client_id == work.delivery.client_message_id
     assert request.capabilities == references and request.project_path == work.room.project_path
@@ -136,7 +141,7 @@ def test_unsaved_receipt_does_not_trigger_activation(
         "queued", work.delivery.client_message_id
     )
     DeliveryService(delivery_store, queue_driver, logging.getLogger("tests.delivery")).submit(work)
-    queue_driver.enqueue.assert_called_once()
+    queue_driver.submit.assert_called_once()
     delivery_store.finish_delivery.assert_called_once()
     queue_driver.activation_candidate.assert_not_called()
     queue_driver.activate.assert_not_called()
@@ -171,5 +176,44 @@ def test_receipt_observation_continues_to_an_older_page_without_resubmitting(
         call(work.delivery.target_session_id, "older"),
     ]
     delivery_store.confirm_input.assert_called_once_with(work.delivery.target_session_id, received)
-    queue_driver.enqueue.assert_not_called()
+    queue_driver.submit.assert_not_called()
+    queue_driver.activate.assert_not_called()
+
+
+def test_steer_receipt_is_saved_without_queue_activation_or_false_history_confirmation(
+    work: ClaimedDelivery, delivery_store: Mock, queue_driver: Mock
+) -> None:
+    queue_driver.submit.return_value = SteerReceipt("active-turn")
+    DeliveryService(delivery_store, queue_driver, logging.getLogger("tests.delivery")).submit(work)
+    saved = delivery_store.finish_delivery.call_args.args[1]
+    assert saved.status == "queued" and saved.submission_method == "steer"
+    assert saved.steered_turn_id == "active-turn"
+    assert saved.received_at is None and saved.received_turn_id is None
+    assert saved.queued_submission_id is None and saved.receipt is None
+    queue_driver.activation_candidate.assert_not_called()
+    queue_driver.activate.assert_not_called()
+    delivery_store.confirm_input.assert_not_called()
+
+
+def test_queue_fallback_reason_survives_activation_note(
+    work: ClaimedDelivery, delivery_store: Mock, queue_driver: Mock
+) -> None:
+    queue_driver.submit.return_value = QueueReceipt("queued", {"id": "queued"}, "Fallback reason")
+    DeliveryService(delivery_store, queue_driver, logging.getLogger("tests.delivery")).submit(work)
+    assert delivery_store.finish_delivery.call_args.args[1].note == "Fallback reason"
+    assert delivery_store.delivery_note.call_args.args[2] == "Fallback reason"
+
+
+def test_observation_failure_or_unrelated_input_never_confirms_or_resends(
+    delivery_store: Mock, queue_driver: Mock
+) -> None:
+    queue_driver.read_input_page.side_effect = [
+        TimeoutError("Unavailable"),
+        InputPage((ReceivedInput("other-client", "item", "turn"),), None),
+    ]
+    service = DeliveryService(delivery_store, queue_driver, logging.getLogger("tests.delivery"))
+    service.observe("original-session", {"client"})
+    service.observe("original-session", {"client"})
+    delivery_store.confirm_input.assert_not_called()
+    queue_driver.submit.assert_not_called()
     queue_driver.activate.assert_not_called()

@@ -39,8 +39,10 @@ uv run --locked alembic upgrade queue_deleted_20261110:head --sql
 
 ## 基线与旧库
 
-当前迁移链为 `0001_baseline` → `0002_capabilities_json`，对应 revision 为 `queue_deleted_20261110` → `capabilities_json_20261111`。未发布的原 `0002`、`0003` 已合并，直接增加 `messages.capabilities` JSON 数组列，旧消息默认为空数组，不创建中间关系表。
+当前迁移链为 `0001_baseline` → `0002_capabilities_json` → `0003_delivery_steering`，对应 revision 为 `queue_deleted_20261110` → `capabilities_json_20261111` → `delivery_steer_20261112`。
 
-最终 head 保持不变，已升级到 `capabilities_json_20261111` 的开发库无需重复迁移或修改版本记录。
+`0002` 直接增加 `messages.capabilities` JSON 数组列，旧消息默认为空数组。此前未发布的能力引用中间迁移已合并，不创建中间关系表。
+
+`0003` 增加投递的 `submission_method` 与 `steered_turn_id`，区分原生队列与当前轮次输入。旧非 pending 投递标记为 queue，旧 pending 在实际发送时自动选择；不重放或移动已有队列消息。使用前按原入口升级到新 head，不修改旧 revision 或手工更改版本记录。新旧服务不能混跑，新服务的 steer 事实不得交给旧代码重写。
 
 旧 revision（包括 `baseline_20261110`）不在合并后的迁移链上，不提供自动升级、旧数据转换或降级。需重建时，先停止相关服务、核对路径并按需保留数据，再对空库执行迁移。迁移命令不会自动删除或重建旧库。

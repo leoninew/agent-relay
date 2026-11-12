@@ -1,7 +1,13 @@
 from dataclasses import dataclass
 from typing import Protocol
 
-from agent_relay.domain.rooms.models import CapabilityReference, Delivery, Message, Room
+from agent_relay.domain.rooms.models import (
+    CapabilityReference,
+    Delivery,
+    Message,
+    Room,
+    SubmissionMethod,
+)
 
 
 class QueueRejected(RuntimeError):
@@ -10,6 +16,18 @@ class QueueRejected(RuntimeError):
 
 class ActivationRejected(RuntimeError):
     pass
+
+
+class SubmissionRejected(RuntimeError):
+    def __init__(self, message: str, method: SubmissionMethod | None = None) -> None:
+        super().__init__(message)
+        self.method = method
+
+
+class SubmissionUnknown(RuntimeError):
+    def __init__(self, message: str, method: SubmissionMethod | None = None) -> None:
+        super().__init__(message)
+        self.method = method
 
 
 @dataclass(frozen=True)
@@ -23,6 +41,12 @@ class QueueRequest:
 class QueueReceipt:
     id: str
     metadata: dict[str, object]
+    note: str | None = None
+
+
+@dataclass(frozen=True)
+class SteerReceipt:
+    turn_id: str
 
 
 @dataclass(frozen=True)
@@ -60,6 +84,12 @@ class QueueDriver(Protocol):
     def activation_candidate(self, thread_id: str) -> QueueHead | None: ...
     def activate(self, thread_id: str, queued_submission_id: str) -> str: ...
     def read_input_page(self, thread_id: str, cursor: str | None = None) -> InputPage: ...
+
+
+class DeliveryDriver(QueueDriver, Protocol):
+    def submit(
+        self, thread_id: str, client_message_id: str, request: QueueRequest
+    ) -> QueueReceipt | SteerReceipt: ...
 
 
 class DeliveryRepository(Protocol):

@@ -69,6 +69,7 @@ def member_from_model(record: MemberRecord, topic_ids: list[str]) -> Member:
 
 
 def delivery_values(delivery: Delivery) -> dict[str, object]:
+    delivery = Delivery.model_validate(delivery.model_dump())
     values = delivery.model_dump(exclude={"receipt"})
     receipt = delivery.receipt
     if receipt is not None and (
@@ -117,6 +118,8 @@ def delivery_from_model(record: DeliveryRecord) -> Delivery:
             "queued_submission_id": record.queued_submission_id,
             "receipt": receipt,
             "error": record.error,
+            "submission_method": record.submission_method,
+            "steered_turn_id": record.steered_turn_id,
         }
     )
 

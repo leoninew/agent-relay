@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal
 
-from agent_relay.domain.rooms.models import Delivery
+from agent_relay.domain.rooms.models import Delivery, SubmissionMethod
 
 ACTIVE_DELIVERY_STATUSES = ("pending", "submitting", "queued")
 UNCONFIRMED_DELIVERY_STATUSES = ("queued", "unknown")
@@ -16,12 +16,12 @@ class SubmissionFailure:
     error: str
 
 
-REJECTED_SUBMISSION = SubmissionFailure("rejected", "Codex 明确拒绝本次入队")
-UNCERTAIN_SUBMISSION = SubmissionFailure("unknown", "无法确认入队结果；不会自动重发")
+REJECTED_SUBMISSION = SubmissionFailure("rejected", "Codex 未接受本次发送")
+UNCERTAIN_SUBMISSION = SubmissionFailure("unknown", "无法确认发送结果；不会自动重发")
 PROCESSING_FAILURE = SubmissionFailure(
-    "unknown", "本次投递处理失败，无法确认入队结果；不会自动重发"
+    "unknown", "本次投递处理失败，无法确认发送结果；不会自动重发"
 )
-INTERRUPTED_SUBMISSION = SubmissionFailure("unknown", "提交中断，入队结果未知；不会自动重发")
+INTERRUPTED_SUBMISSION = SubmissionFailure("unknown", "提交中断，发送结果未知；不会自动重发")
 
 
 def queue_accepted(
@@ -31,6 +31,7 @@ def queue_accepted(
         raise ValueError("Only a submitting delivery can receive a queue result")
     result = delivery.model_copy(deep=True)
     result.status = "queued"
+    result.submission_method = "queue"
     result.queued_at = at
     result.updated_at = at
     result.note = QUEUED_NOTE
@@ -39,11 +40,30 @@ def queue_accepted(
     return result
 
 
-def submission_failed(delivery: Delivery, failure: SubmissionFailure, at: datetime) -> Delivery:
+def steer_accepted(delivery: Delivery, turn_id: str, at: datetime) -> Delivery:
+    if delivery.status != "submitting" or not turn_id.strip():
+        raise ValueError("Only a submitting delivery can receive a valid steer result")
+    result = delivery.model_copy(deep=True)
+    result.status = "queued"
+    result.submission_method = "steer"
+    result.steered_turn_id = turn_id
+    result.updated_at = at
+    result.note = "已送入当前轮次，等待输入接收确认"
+    return result
+
+
+def submission_failed(
+    delivery: Delivery,
+    failure: SubmissionFailure,
+    at: datetime,
+    method: SubmissionMethod | None = None,
+) -> Delivery:
     if delivery.status != "submitting":
         raise ValueError("Only a submitting delivery can receive a queue result")
     result = delivery.model_copy(deep=True)
     result.status = failure.status
     result.error = failure.error
+    if method is not None:
+        result.submission_method = method
     result.updated_at = at
     return result

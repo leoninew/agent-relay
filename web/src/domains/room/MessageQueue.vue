@@ -16,6 +16,7 @@
           type="button"
           class="icon-button"
           aria-label="清空队列"
+          title="移除待办记录，不会撤回已送入会话的内容"
           :aria-busy="clearing"
           :disabled="loading || loadingMore || clearing || totalMessages === 0"
           @click="$emit('clear')"
@@ -24,6 +25,7 @@
         </button>
       </div>
     </header>
+    <p class="detail-empty">清空仅移除待办记录，不会撤回已送入会话的内容。</p>
     <div class="queue-content" :aria-busy="loading || loadingMore || clearing">
       <div v-if="error" class="queue-error" role="alert">
         <span>{{ error }}</span>
@@ -33,7 +35,7 @@
       </div>
       <p v-if="clearError" class="queue-error" role="alert">{{ clearError }}</p>
       <AppLoading v-if="loading && !messages.length">正在加载队列…</AppLoading>
-      <p v-else-if="!messages.length && !error" class="detail-empty">暂无入队中或接收中的消息</p>
+      <p v-else-if="!messages.length && !error" class="detail-empty">暂无发送中或接收中的消息</p>
       <table v-if="rows.length" class="queue-table" aria-label="队列记录">
         <thead>
           <tr>

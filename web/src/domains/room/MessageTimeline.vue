@@ -247,10 +247,10 @@
   ): { label: string; tone: "info" | "success" | "error" | "warning" } | undefined {
     const deliveries = message.deliveries.filter((delivery) => !delivery.deletedAt);
     if (deliveries.some((delivery) => delivery.status === "rejected")) {
-      return { label: "入队失败", tone: "error" };
+      return { label: "发送失败", tone: "error" };
     }
     if (deliveries.some((delivery) => delivery.status === "unknown")) {
-      return { label: "入队待确认", tone: "warning" };
+      return { label: "发送待确认", tone: "warning" };
     }
     const stage = deliveryStage(deliveries);
     return stage ? { label: stage, tone: stage === "已接收" ? "success" : "info" } : undefined;

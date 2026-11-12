@@ -1,9 +1,17 @@
+import json
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 from pytest import MonkeyPatch
 
-from agent_relay.infrastructure.codex.driver import CodexDriver, _launch_command
+from agent_relay.infrastructure.codex.driver import (
+    CodexDriver,
+    ProxyRpc,
+    RpcDisconnected,
+    RpcRejected,
+    _launch_command,
+)
 
 
 @pytest.mark.parametrize("suffix", [".cmd", ".ps1"])
@@ -95,3 +103,28 @@ def test_session_display_name_uses_preview_before_an_unnamed_label(
     )
     assert info.name == expected
     assert info.id == "original-id"
+
+
+def test_rpc_rejection_retains_code_and_data_for_safe_fallback_classification() -> None:
+    socket = Mock()
+    socket.recv.return_value = json.dumps(
+        {"id": 1, "error": {"code": -32600, "message": "Invalid turn", "data": {"reason": "ended"}}}
+    )
+    rpc = ProxyRpc(["unused"], 1)
+    rpc.ws = socket
+    with pytest.raises(RpcRejected) as raised:
+        rpc.call("turn/steer", {})
+    assert raised.value.code == -32600
+    assert raised.value.data == {"reason": "ended"}
+
+
+@pytest.mark.parametrize(
+    "error", ["invalid", {"message": "Missing code"}, {"code": True, "message": "Bad code"}]
+)
+def test_malformed_rpc_error_is_uncertain_instead_of_an_explicit_rejection(error: object) -> None:
+    socket = Mock()
+    socket.recv.return_value = json.dumps({"id": 1, "error": error})
+    rpc = ProxyRpc(["unused"], 1)
+    rpc.ws = socket
+    with pytest.raises(RpcDisconnected):
+        rpc.call("turn/steer", {})

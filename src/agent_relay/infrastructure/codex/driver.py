@@ -23,8 +23,12 @@ from agent_relay.application.delivery.ports import (
     QueueRejected,
     QueueRequest,
     ReceivedInput,
+    SteerReceipt,
+    SubmissionRejected,
+    SubmissionUnknown,
 )
 from agent_relay.application.members.sessions import SessionInfo, SessionStatus
+from agent_relay.domain.rooms.models import SubmissionMethod
 from agent_relay.domain.rooms.rules import normalize_project_path
 from agent_relay.infrastructure.codex.catalog import (
     McpPage,
@@ -50,6 +54,11 @@ SOURCE_KINDS = [
 
 class RpcRejected(RuntimeError):
     """The server returned an explicit JSON-RPC error response."""
+
+    def __init__(self, message: str, code: int | None = None, data: object = None) -> None:
+        super().__init__(message)
+        self.code = code
+        self.data = data
 
 
 class RpcDisconnected(RuntimeError):
@@ -185,7 +194,14 @@ class ProxyRpc:
             if message.get("id") != request_id:
                 raise RpcDisconnected("Unexpected Codex RPC response ID")
             if "error" in message:
-                raise RpcRejected(str(message["error"]))
+                error = message["error"]
+                if (
+                    not isinstance(error, dict)
+                    or type(error.get("code")) is not int
+                    or not isinstance(error.get("message"), str)
+                ):
+                    raise RpcDisconnected("Invalid Codex RPC error")
+                raise RpcRejected(error["message"], error["code"], error.get("data"))
             if not isinstance(message.get("result"), dict):
                 raise RpcDisconnected("Invalid Codex RPC result")
             return cast(dict[str, Any], message["result"])
@@ -379,17 +395,21 @@ class CodexDriver:
                 raise RpcDisconnected("Invalid MCP pagination cursor")
             seen_cursors.add(cursor)
 
-    def _queue_inputs(
-        self, rpc: ProxyRpc, thread_id: str, request: QueueRequest
-    ) -> list[dict[str, Any]]:
+    def _target_session(self, rpc: ProxyRpc, thread_id: str, project_path: str) -> SessionInfo:
         metadata = rpc.call("thread/read", {"threadId": thread_id, "includeTurns": False})
         session = self._session(metadata.get("thread"))
         if (
             session.id != thread_id
             or not session.usable
-            or normalize_project_path(session.cwd) != normalize_project_path(request.project_path)
+            or normalize_project_path(session.cwd) != normalize_project_path(project_path)
         ):
             raise QueueRejected("Target Codex session is unavailable or outside this room")
+        return session
+
+    def _queue_inputs(
+        self, rpc: ProxyRpc, thread_id: str, request: QueueRequest
+    ) -> list[dict[str, Any]]:
+        session = self._target_session(rpc, thread_id, request.project_path)
         discovery = decode_skills(
             rpc.call("skills/list", {"cwds": [session.cwd], "forceReload": True}), session.cwd
         )
@@ -443,28 +463,129 @@ class CodexDriver:
                 inputs = self._queue_inputs(rpc, thread_id, request)
             except Exception as exc:
                 raise QueueRejected("Capability validation failed before queue submission") from exc
-            try:
-                result = rpc.call(
-                    "thread/queue/add",
-                    {
-                        "threadId": thread_id,
-                        "clientUserMessageId": client_message_id,
-                        "input": inputs,
-                    },
-                )
-            except RpcRejected as exc:
-                raise QueueRejected(str(exc)) from exc
-            receipt = result.get("queuedSubmission")
-            if (
-                not isinstance(receipt, dict)
-                or not isinstance(receipt.get("id"), str)
-                or not receipt["id"]
-                or receipt.get("clientUserMessageId") != client_message_id
-            ):
-                raise RpcDisconnected("Queue receipt does not match this submission")
-            return QueueReceipt(
-                receipt["id"], {key: value for key, value in receipt.items() if key != "input"}
+            return self._enqueue(rpc, thread_id, client_message_id, inputs)
+
+    @staticmethod
+    def _enqueue(
+        rpc: ProxyRpc, thread_id: str, client_message_id: str, inputs: list[dict[str, Any]]
+    ) -> QueueReceipt:
+        try:
+            result = rpc.call(
+                "thread/queue/add",
+                {
+                    "threadId": thread_id,
+                    "clientUserMessageId": client_message_id,
+                    "input": inputs,
+                },
             )
+        except RpcRejected as exc:
+            raise QueueRejected(str(exc)) from exc
+        receipt = result.get("queuedSubmission")
+        if (
+            not isinstance(receipt, dict)
+            or not isinstance(receipt.get("id"), str)
+            or not receipt["id"]
+            or receipt.get("clientUserMessageId") != client_message_id
+        ):
+            raise RpcDisconnected("Queue receipt does not match this submission")
+        return QueueReceipt(
+            receipt["id"], {key: value for key, value in receipt.items() if key != "input"}
+        )
+
+    @staticmethod
+    def _active_turn(rpc: ProxyRpc, thread_id: str) -> str | None:
+        try:
+            result = rpc.call(
+                "thread/turns/list",
+                {
+                    "threadId": thread_id,
+                    "limit": 1,
+                    "sortDirection": "desc",
+                    "itemsView": "notLoaded",
+                },
+            )
+        except RpcRejected as exc:
+            if exc.code == -32601:
+                return None
+            raise
+        data = result.get("data")
+        if not isinstance(data, list):
+            raise RpcDisconnected("Missing Codex turn page")
+        if not data:
+            return None
+        turn = data[0]
+        if not isinstance(turn, dict):
+            raise RpcDisconnected("Invalid Codex turn")
+        if turn.get("status") != "inProgress":
+            return None
+        turn_id = turn.get("id")
+        if not isinstance(turn_id, str) or not turn_id.strip():
+            raise RpcDisconnected("Missing Codex active turn identity")
+        return turn_id
+
+    def _steer_fallback(
+        self, rpc: ProxyRpc, thread_id: str, project_path: str, expected_turn_id: str
+    ) -> bool:
+        try:
+            session = self._target_session(rpc, thread_id, project_path)
+            if session.status == "idle":
+                return True
+            turn_id = self._active_turn(rpc, thread_id)
+            return turn_id is not None and turn_id != expected_turn_id
+        except Exception:
+            return False
+
+    def submit(
+        self, thread_id: str, client_message_id: str, request: QueueRequest
+    ) -> QueueReceipt | SteerReceipt:
+        method: SubmissionMethod | None = None
+        try:
+            with ProxyRpc(self.command, self.timeout) as rpc:
+                inputs = self._queue_inputs(rpc, thread_id, request)
+                session = self._target_session(rpc, thread_id, request.project_path)
+                turn_id = self._active_turn(rpc, thread_id) if session.status == "active" else None
+                note = None
+                if turn_id is not None:
+                    method = "steer"
+                    try:
+                        result = rpc.call(
+                            "turn/steer",
+                            {
+                                "threadId": thread_id,
+                                "expectedTurnId": turn_id,
+                                "clientUserMessageId": client_message_id,
+                                "input": inputs,
+                            },
+                        )
+                    except RpcRejected as exc:
+                        if exc.code == -32601:
+                            note = "当前输入通道不支持即时送达，已入队等待接收"
+                        elif exc.code in {-32600, -32602}:
+                            if not self._steer_fallback(
+                                rpc, thread_id, request.project_path, turn_id
+                            ):
+                                raise SubmissionRejected(
+                                    "Steer request was not accepted", method
+                                ) from exc
+                            note = "当前轮次已变化，已入队等待接收"
+                        else:
+                            raise SubmissionUnknown("Steer result is uncertain", method) from exc
+                    else:
+                        if result.get("turnId") != turn_id:
+                            raise RpcDisconnected("Steer response does not match the active turn")
+                        return SteerReceipt(turn_id)
+                elif session.status == "active":
+                    note = "暂时无法定位当前轮次，已入队等待接收"
+                method = "queue"
+                return replace(self._enqueue(rpc, thread_id, client_message_id, inputs), note=note)
+        except (SubmissionRejected, SubmissionUnknown):
+            raise
+        except QueueRejected as exc:
+            raise SubmissionRejected("Codex submission was not accepted", method) from exc
+        except Exception as exc:
+            if method is None:
+                raise SubmissionRejected("Validation failed before submission") from exc
+            raise SubmissionUnknown("Codex submission result is uncertain", method) from exc
 
     def delete(self, thread_id: str, queued_submission_id: str) -> bool:
         with ProxyRpc(self.command, self.timeout) as rpc:

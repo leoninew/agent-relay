@@ -125,6 +125,7 @@ class SQLAlchemyDeliveryRepository:
                 .where(
                     DeliveryRecord.target_session_id == session_id,
                     DeliveryRecord.status == "queued",
+                    DeliveryRecord.submission_method.is_distinct_from("steer"),
                     DeliveryRecord.deleted_at.is_(None),
                     DeliveryRecord.queued_submission_id == head.id,
                     DeliveryRecord.client_message_id == head.client_message_id,

@@ -209,6 +209,8 @@ class DeliveryRecord(Base):
     note: Mapped[str | None] = mapped_column(Text)
     queued_submission_id: Mapped[str | None] = mapped_column(Text)
     receipt_metadata: Mapped[dict[str, object] | None] = mapped_column(ReceiptMetadata)
+    submission_method: Mapped[str | None] = mapped_column(Text)
+    steered_turn_id: Mapped[str | None] = mapped_column(Text)
     error: Mapped[str | None] = mapped_column(Text)
     deleted_at: Mapped[datetime | None] = mapped_column(ISODateTime)
 
@@ -221,6 +223,24 @@ class DeliveryRecord(Base):
             "AND json_valid(receipt_metadata) AND json_type(receipt_metadata) = 'object' "
             "AND json_type(receipt_metadata, '$.id') IS NULL "
             "AND json_type(receipt_metadata, '$.clientUserMessageId') IS NULL)"
+        ),
+        CheckConstraint("submission_method IS NULL OR submission_method IN ('queue', 'steer')"),
+        CheckConstraint(
+            "submission_method IS NOT 'steer' OR (queued_submission_id IS NULL "
+            "AND receipt_metadata IS NULL AND queued_at IS NULL "
+            "AND activation_attempted_at IS NULL)"
+        ),
+        CheckConstraint(
+            "steered_turn_id IS NULL OR (submission_method IS 'steer' "
+            "AND length(trim(steered_turn_id)) > 0)"
+        ),
+        CheckConstraint(
+            "submission_method IS NOT 'steer' OR status <> 'queued' OR steered_turn_id IS NOT NULL"
+        ),
+        CheckConstraint(
+            "submission_method IS NOT 'steer' OR status <> 'received' OR "
+            "(received_at IS NOT NULL AND received_item_id IS NOT NULL "
+            "AND received_turn_id IS NOT NULL)"
         ),
         UniqueConstraint("room_id", "message_id", "target_member_id"),
         ForeignKeyConstraint(["room_id", "message_id"], ["messages.room_id", "messages.id"]),

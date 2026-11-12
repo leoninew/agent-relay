@@ -37,6 +37,8 @@ export type Delivery = {
   activationAttemptedAt: string | null;
   note: string | null;
   queuedSubmissionId: string | null;
+  submissionMethod?: "queue" | "steer" | null;
+  steeredTurnId?: string | null;
   receipt: Record<string, unknown> | null;
   error: string | null;
 };

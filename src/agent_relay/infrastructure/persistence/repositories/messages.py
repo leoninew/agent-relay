@@ -128,6 +128,7 @@ class SQLAlchemyMessageRepository:
                     DeliveryRecord.room_id == room_id,
                     DeliveryRecord.deleted_at.is_not(None),
                     DeliveryRecord.status.in_(("submitting", "queued")),
+                    DeliveryRecord.submission_method.is_distinct_from("steer"),
                     DeliveryRecord.message_id.in_(select(MessageRecord.id).where(scope)),
                 )
             )

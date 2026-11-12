@@ -6,10 +6,13 @@ from datetime import UTC, datetime
 from agent_relay.application.delivery.ports import (
     ActivationRejected,
     ClaimedDelivery,
+    DeliveryDriver,
     DeliveryRepository,
-    QueueDriver,
-    QueueRejected,
+    QueueReceipt,
     QueueRequest,
+    SteerReceipt,
+    SubmissionRejected,
+    SubmissionUnknown,
 )
 from agent_relay.domain.rooms.delivery import (
     PROCESSING_FAILURE,
@@ -17,6 +20,7 @@ from agent_relay.domain.rooms.delivery import (
     REJECTED_SUBMISSION,
     UNCERTAIN_SUBMISSION,
     queue_accepted,
+    steer_accepted,
     submission_failed,
 )
 
@@ -25,7 +29,7 @@ class DeliveryService:
     def __init__(
         self,
         store: DeliveryRepository,
-        driver: QueueDriver,
+        driver: DeliveryDriver,
         logger: logging.Logger,
     ) -> None:
         self.store = store
@@ -57,38 +61,55 @@ class DeliveryService:
             f"{work.message.content}"
         )
         try:
-            receipt = self.driver.enqueue(
+            receipt = self.driver.submit(
                 delivery.target_session_id,
                 delivery.client_message_id,
                 QueueRequest(text, work.room.project_path, work.message.capabilities),
             )
-            delivery = queue_accepted(delivery, receipt.id, receipt.metadata, datetime.now(UTC))
-        except QueueRejected:
-            delivery = submission_failed(delivery, REJECTED_SUBMISSION, datetime.now(UTC))
-            self.logger.exception("Queue rejected delivery=%s", delivery.id)
+            if isinstance(receipt, SteerReceipt):
+                delivery = steer_accepted(delivery, receipt.turn_id, datetime.now(UTC))
+            else:
+                delivery = queue_accepted(delivery, receipt.id, receipt.metadata, datetime.now(UTC))
+                if receipt.note:
+                    delivery.note = receipt.note
+        except SubmissionRejected as exc:
+            delivery = submission_failed(
+                delivery, REJECTED_SUBMISSION, datetime.now(UTC), exc.method
+            )
+            self.logger.exception("Submission rejected delivery=%s", delivery.id)
+        except SubmissionUnknown as exc:
+            delivery = submission_failed(
+                delivery, UNCERTAIN_SUBMISSION, datetime.now(UTC), exc.method
+            )
+            self.logger.exception("Submission result unknown delivery=%s", delivery.id)
         except Exception:
             delivery = submission_failed(delivery, UNCERTAIN_SUBMISSION, datetime.now(UTC))
-            self.logger.exception("Queue result unknown delivery=%s", delivery.id)
+            self.logger.exception("Submission result unknown delivery=%s", delivery.id)
         saved = self.store.finish_delivery(work.room_id, delivery)
-        if saved and delivery.status == "queued":
-            self.activate_after_submission(delivery.target_session_id, delivery.client_message_id)
+        if saved and delivery.status == "queued" and isinstance(receipt, QueueReceipt):
+            self.activate_after_submission(
+                delivery.target_session_id, delivery.client_message_id, receipt.note
+            )
 
-    def activate_after_submission(self, session_id: str, client_message_id: str) -> None:
+    def activate_after_submission(
+        self, session_id: str, client_message_id: str, submission_note: str | None = None
+    ) -> None:
         """Only a new submission can trigger one guarded start of an existing FIFO head."""
+        prefix = f"{submission_note}；" if submission_note else ""
         try:
             head = self.driver.activation_candidate(session_id)
             if head is None or not self.store.claim_activation(session_id, head):
                 self.store.delivery_note(
                     session_id,
                     client_message_id,
-                    QUEUED_NOTE,
+                    submission_note or QUEUED_NOTE,
                 )
                 return
             self.driver.activate(session_id, head.id)
             self.store.delivery_note(
                 session_id,
                 head.client_message_id or client_message_id,
-                "已请求启动原队列首项，等待接收确认",
+                prefix + "已请求启动原队列首项，等待接收确认",
             )
         except ActivationRejected:
             # A competing consumer may already have taken this exact item. Never
@@ -96,14 +117,14 @@ class DeliveryService:
             self.store.delivery_note(
                 session_id,
                 client_message_id,
-                "已入队；启动请求未被接受，继续核验原会话输入",
+                prefix + "已入队；启动请求未被接受，继续核验原会话输入",
             )
             self.logger.info("Queue activation rejected session=%s", session_id)
         except Exception:
             self.store.delivery_note(
                 session_id,
                 client_message_id,
-                "已入队；无法确认队列启动结果，不重复启动或提交",
+                prefix + "已入队；无法确认队列启动结果，不重复启动或提交",
             )
             self.logger.exception("Queue activation outcome unknown session=%s", session_id)
 

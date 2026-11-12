@@ -1,7 +1,15 @@
 # Codex 接入能力核验与方案建议
-最后修改时间: 2026-11-11 09:17:23
+最后修改时间: 2026-11-12 09:39:00
 
 ## 状态与结论
+
+2026-11-12 的[时效改进方案](../plan/20261112-timely-message-delivery.md)已接入自动输入选择：通过原有 CLI proxy 连接共享 daemon，active 时查询最新 `inProgress` 轮次并调用 `turn/steer(threadId, expectedTurnId, clientUserMessageId, input)`，idle 时沿用 queue/add 与保存成功后的单次精确 FIFO 激活。无需模式开关，不新建执行宿主。
+
+本机 `codex-cli 0.167.1` schema 支持 steer 客户端消息 ID 和 text/skill/mention 输入；steer 返回的 turnId 仅表示接纳，不是历史输入或队列凭证。只有 `thread/items/list` 精确匹配客户端 ID 才记 received。steer 保存独立方法/轮次列，queue 专有凭证保持为空；`queued` 兼容字段表示已接纳待核验，`queuedAt` 仍只记录真实 queue 时间，`queuedCount` 为已接纳待确认计数。
+
+轮次无法定位或方法明确不支持可退回 queue；steer 参数类拒绝仅在一次复核确认原目标已空闲/换轮次后允许回退，其他内部错误、超时、断连或坏回执均 unknown、不补投。能力校验在任何输入写入前完成。观察与提交有界公平调度，已有积压不升级重投，清空不能撤回已送入当前轮次的内容。
+
+本次只有 schema、源码与单层 mock 检查，未用用户会话验证真实 steer 或接收时延；工具/审批等待仍可能延后模型处理。以下 N5 与早期证据保留对应历史版本边界。
 
 当前以[总计划修订 19 N5](../plan/20261107-backend-from-web.md#n5-原会话接收闭环修订-19accepted)为准：同一共享 daemon 中未归档的 idle/active 会话可加入，历史和 loaded/list 合并发现；独立实例即使存活也可能不可达，列出禁选并给出共享模式接入办法。新提交后仅尝试启动有真实 Relay 回执且尚未启动过的 FIFO 首项，后台有界匹配原 userMessage.clientId 确认 received，不采集或发布助手输出。
 

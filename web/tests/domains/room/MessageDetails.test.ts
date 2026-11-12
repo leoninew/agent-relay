@@ -147,7 +147,7 @@ describe("MessageDetails", () => {
       "状态",
     ]);
     const submitting = within(deliveries.getByRole("row", { name: /前端 Worker/ }));
-    expect(submitting.getAllByRole("cell")[1].textContent?.trim()).toBe("入队中");
+    expect(submitting.getAllByRole("cell")[1].textContent?.trim()).toBe("发送中");
     const enqueued = within(deliveries.getByRole("row", { name: /测试 Worker/ }));
     expect(enqueued.getAllByRole("cell")[1].textContent?.trim()).toBe("接收中");
   });
@@ -229,7 +229,7 @@ describe("MessageDetails", () => {
     });
 
     const recipient = within(screen.getByRole("row", { name: /前端 Worker/ }));
-    expect(recipient.getByText("入队中")).toBeTruthy();
+    expect(recipient.getByText(status === "rejected" ? "发送失败" : "发送待确认")).toBeTruthy();
     expect(recipient.getByText(error)).toBeTruthy();
   });
 

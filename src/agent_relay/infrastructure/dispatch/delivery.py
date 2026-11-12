@@ -48,45 +48,50 @@ class DeliveryRunner:
             with ThreadPoolExecutor(max_workers=self.concurrency) as pool:
                 active: set[Future[None]] = set()
                 observations: dict[Future[None], str] = {}
+                due_observations: dict[str, set[str]] = {}
                 next_observation = monotonic()
-                observation_offset = 0
+                prefer_observation = True
                 while not self.stop.is_set():
                     done = {future for future in active if future.done()}
                     for future in done:
                         self.collect(future)
                         observations.pop(future, None)
                     active -= done
-                    while len(active) < self.concurrency and not self.stop.is_set():
-                        try:
-                            work = self.store.claim_delivery()
-                        except Exception:
-                            self.logger.exception("Unable to claim a delivery")
-                            break
-                        if work is None:
-                            break
-                        active.add(pool.submit(self.service.submit, work))
-                    if len(active) < self.concurrency and monotonic() >= next_observation:
+                    if monotonic() >= next_observation:
                         try:
                             pending = self.store.unconfirmed_inputs()
                         except Exception:
                             self.logger.exception("Unable to read unconfirmed inputs")
-                            pending = {}
-                        sessions = list(pending)
-                        if sessions:
-                            index = observation_offset % len(sessions)
-                            sessions = sessions[index:] + sessions[:index]
-                        for session_id in sessions:
-                            if len(active) >= self.concurrency:
-                                break
-                            if session_id in observations.values():
-                                continue
+                        else:
+                            due_observations = {
+                                session_id: pending[session_id]
+                                for session_id in due_observations
+                                if session_id in pending
+                            }
+                            for session_id, client_ids in pending.items():
+                                if session_id not in observations.values():
+                                    due_observations[session_id] = client_ids
+                        next_observation = monotonic() + 2
+                    while len(active) < self.concurrency and not self.stop.is_set():
+                        work = None
+                        if not due_observations or not prefer_observation:
+                            try:
+                                work = self.store.claim_delivery()
+                            except Exception:
+                                self.logger.exception("Unable to claim a delivery")
+                        if work is not None:
+                            active.add(pool.submit(self.service.submit, work))
+                            prefer_observation = True
+                        elif due_observations:
+                            session_id = next(iter(due_observations))
                             future = pool.submit(
-                                self.service.observe, session_id, pending[session_id]
+                                self.service.observe, session_id, due_observations.pop(session_id)
                             )
                             active.add(future)
                             observations[future] = session_id
-                            observation_offset += 1
-                        next_observation = monotonic() + 2
+                            prefer_observation = False
+                        else:
+                            break
                     self.stop.wait(0.2)
                 for future in active:
                     self.collect(future)

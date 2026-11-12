@@ -252,8 +252,8 @@ describe("MessageTimeline history", () => {
       },
     });
 
-    expect(screen.getByText("入队中").getAttribute("data-tone")).toBe("info");
-    expect(screen.getByLabelText("分发状态").textContent?.trim()).toBe("入队中");
+    expect(screen.getByText("发送中").getAttribute("data-tone")).toBe("info");
+    expect(screen.getByLabelText("分发状态").textContent?.trim()).toBe("发送中");
 
     await rerender({ messages: [message] });
 
@@ -305,7 +305,7 @@ describe("MessageTimeline history", () => {
     });
     expect(screen.queryByLabelText("分发状态")).toBeNull();
     expect(screen.queryByText("人为删除")).toBeNull();
-    expect(screen.queryByText("入队中")).toBeNull();
+    expect(screen.queryByText("发送中")).toBeNull();
     expect(screen.queryByText("接收中")).toBeNull();
   });
 
@@ -314,15 +314,15 @@ describe("MessageTimeline history", () => {
     label: string;
     tone: string;
   }>([
-    { statuses: ["rejected"], label: "入队失败", tone: "error" },
-    { statuses: ["unknown"], label: "入队待确认", tone: "warning" },
-    { statuses: ["received", "rejected"], label: "入队失败", tone: "error" },
+    { statuses: ["rejected"], label: "发送失败", tone: "error" },
+    { statuses: ["unknown"], label: "发送待确认", tone: "warning" },
+    { statuses: ["received", "rejected"], label: "发送失败", tone: "error" },
     {
       statuses: ["received", "unknown"],
-      label: "入队待确认",
+      label: "发送待确认",
       tone: "warning",
     },
-    { statuses: ["rejected", "unknown"], label: "入队失败", tone: "error" },
+    { statuses: ["rejected", "unknown"], label: "发送失败", tone: "error" },
   ])("reports abnormal delivery outcomes for $statuses", ({ statuses, label, tone }) => {
     const snapshot = roomFixture();
     const message = {
@@ -349,7 +349,7 @@ describe("MessageTimeline history", () => {
 
     expect(screen.getByText(label).getAttribute("data-tone")).toBe(tone);
     expect(screen.getByLabelText("分发状态").textContent?.trim()).toBe(label);
-    expect(screen.queryByText("入队中")).toBeNull();
+    expect(screen.queryByText("发送中")).toBeNull();
     expect(screen.queryByText("接收中")).toBeNull();
     expect(screen.getByLabelText("分发状态").classList.contains("is-complete")).toBe(false);
   });

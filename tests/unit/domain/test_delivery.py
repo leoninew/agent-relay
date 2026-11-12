@@ -9,6 +9,7 @@ from agent_relay.domain.rooms.delivery import (
     UNCERTAIN_SUBMISSION,
     SubmissionFailure,
     queue_accepted,
+    steer_accepted,
     submission_failed,
 )
 from agent_relay.domain.rooms.models import Delivery
@@ -49,3 +50,23 @@ def test_saved_queue_receipt_cannot_be_replaced_by_a_late_failure(delivery: Deli
         submission_failed(queued, PROCESSING_FAILURE, datetime.now(UTC))
     assert queued.status == "queued" and queued.receipt == {"id": "receipt"}
     assert delivery.status == "submitting" and delivery.receipt is None
+
+
+def test_steer_acceptance_is_not_queue_or_history_receipt(delivery: Delivery) -> None:
+    at = datetime.now(UTC)
+    result = steer_accepted(delivery, "active-turn", at)
+    assert result.status == "queued" and result.submission_method == "steer"
+    assert result.steered_turn_id == "active-turn" and result.updated_at == at
+    assert result.queued_submission_id is None and result.receipt is None
+    assert result.queued_at is None and result.activation_attempted_at is None
+    assert result.received_at is None and result.received_turn_id is None
+    assert result.received_item_id is None
+    assert delivery.status == "submitting" and delivery.submission_method is None
+    with pytest.raises(ValueError):
+        submission_failed(result, PROCESSING_FAILURE, at)
+
+
+def test_uncertain_steer_retains_method_without_faking_acceptance(delivery: Delivery) -> None:
+    result = submission_failed(delivery, UNCERTAIN_SUBMISSION, datetime.now(UTC), "steer")
+    assert result.status == "unknown" and result.submission_method == "steer"
+    assert result.steered_turn_id is None and result.received_at is None

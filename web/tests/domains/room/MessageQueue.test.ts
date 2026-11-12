@@ -74,7 +74,7 @@ describe("MessageQueue", () => {
         },
       ],
     });
-    expect(stage()).toBe("入队中");
+    expect(stage()).toBe("发送中");
     await rerender({
       messages: [{ ...message, deliveries: [{ ...message.deliveries[0], status: "received" }] }],
     });
@@ -103,14 +103,14 @@ describe("MessageQueue", () => {
       props: { ...props(), messages: [], totalMessages: 0, loading: true },
     });
     expect(screen.getByText("正在加载队列…")).toBeTruthy();
-    expect(screen.queryByText("暂无入队中或接收中的消息")).toBeNull();
+    expect(screen.queryByText("暂无发送中或接收中的消息")).toBeNull();
     await rerender({ loading: false, error: "队列暂不可用" });
     expect(screen.getByRole("alert").textContent).toContain("队列暂不可用");
-    expect(screen.queryByText("暂无入队中或接收中的消息")).toBeNull();
+    expect(screen.queryByText("暂无发送中或接收中的消息")).toBeNull();
     await fireEvent.click(screen.getByRole("button", { name: "重试" }));
     expect(emitted().refresh).toHaveLength(1);
     await rerender({ error: null });
-    expect(screen.getByText("暂无入队中或接收中的消息")).toBeTruthy();
+    expect(screen.getByText("暂无发送中或接收中的消息")).toBeTruthy();
   });
 
   it("loads older messages on demand", async () => {
