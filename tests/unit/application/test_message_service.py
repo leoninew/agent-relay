@@ -3,12 +3,10 @@ from unittest.mock import ANY, MagicMock, Mock, call
 import pytest
 
 from agent_relay.application.delivery.ports import QueueDriver
-from agent_relay.application.messages.contracts import CreateMessage
-from agent_relay.application.messages.ports import CodexQueueTarget
+from agent_relay.application.dto.messages import CodexQueueTarget, CreateMessage
 from agent_relay.application.messages.service import MessageService
 from agent_relay.domain.rooms.errors import RoomConflictError, RoomInputError, RoomNotFoundError
-from agent_relay.domain.rooms.models import McpServerReference, SkillReference, Topic
-from agent_relay.domain.rooms.state import RoomState
+from agent_relay.domain.rooms.models import McpServerReference, RoomState, SkillReference, Topic
 
 
 @pytest.fixture

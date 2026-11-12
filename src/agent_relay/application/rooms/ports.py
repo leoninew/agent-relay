@@ -1,19 +1,18 @@
 from datetime import datetime
 from typing import Protocol
 
-from agent_relay.application.messages.contracts import (
+from agent_relay.application.dto.messages import (
     MessagePage,
     MessageQueuePage,
 )
-from agent_relay.application.messages.ports import MessageRepository
-from agent_relay.application.rooms.contracts import (
+from agent_relay.application.dto.rooms import (
     RoomEventPage,
     RoomMetadata,
     RoomSnapshot,
 )
+from agent_relay.application.messages.ports import MessageRepository
 from agent_relay.application.transactions import RepositoryScope
-from agent_relay.domain.rooms.models import Member, Message, Room
-from agent_relay.domain.rooms.state import RoomState
+from agent_relay.domain.rooms.models import Member, Message, Room, RoomState
 
 
 class RoomRepository(Protocol):

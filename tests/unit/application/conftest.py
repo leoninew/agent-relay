@@ -2,10 +2,9 @@ from unittest.mock import MagicMock, Mock
 
 import pytest
 
-from agent_relay.application.rooms.contracts import RoomMetadata, RoomSummary
+from agent_relay.application.dto.rooms import RoomMetadata, RoomSummary
 from agent_relay.application.rooms.ports import RoomData, RoomStore
-from agent_relay.domain.rooms.models import Member, Room, Session, Topic
-from agent_relay.domain.rooms.state import RoomState
+from agent_relay.domain.rooms.models import Member, Room, RoomState, Session, Topic
 
 
 @pytest.fixture

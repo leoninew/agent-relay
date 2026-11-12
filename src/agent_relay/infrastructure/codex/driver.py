@@ -14,30 +14,27 @@ from typing import Any, cast
 
 from websockets.sync.client import ClientConnection, connect
 
-from agent_relay.application.capabilities.contracts import McpCatalog, SkillCatalog
 from agent_relay.application.delivery.ports import (
     ActivationRejected,
     InputHistoryUnavailable,
-    InputPage,
-    QueueHead,
-    QueueReceipt,
     QueueRejected,
-    QueueRequest,
-    ReceivedInput,
-    SteerReceipt,
     SubmissionRejected,
     SubmissionUnknown,
 )
-from agent_relay.application.members.sessions import SessionInfo, SessionStatus
+from agent_relay.application.dto.capabilities import McpCatalog, SkillCatalog
+from agent_relay.application.dto.delivery import (
+    InputPage,
+    QueueHead,
+    QueueReceipt,
+    QueueRequest,
+    ReceivedInput,
+    SteerReceipt,
+)
+from agent_relay.application.dto.members import SessionInfo, SessionStatus
 from agent_relay.domain.rooms.models import SubmissionMethod
 from agent_relay.domain.rooms.rules import normalize_project_path
-from agent_relay.infrastructure.codex.catalog import (
-    McpPage,
-    SkillBinding,
-    SkillDiscovery,
-    decode_skills,
-    server_option,
-)
+from agent_relay.infrastructure.codex.catalog import decode_skills, server_option
+from agent_relay.infrastructure.codex.models import McpPage, SkillBinding, SkillDiscovery
 
 SOURCE_KINDS = [
     "cli",

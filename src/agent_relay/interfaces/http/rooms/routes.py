@@ -2,20 +2,20 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
-from agent_relay.application.members.contracts import (
+from agent_relay.application.dto.members import (
     ChangedMember,
     CreatedMember,
     CreateMember,
     SessionCandidate,
     UpdateMember,
 )
-from agent_relay.application.messages.contracts import (
+from agent_relay.application.dto.messages import (
     ClearedMessageQueue,
     CreateMessage,
     MessagePage,
     MessageQueuePage,
 )
-from agent_relay.application.rooms.contracts import (
+from agent_relay.application.dto.rooms import (
     ChangedTopic,
     CreateRoom,
     CreateTopic,

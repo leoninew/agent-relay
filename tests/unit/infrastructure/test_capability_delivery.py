@@ -4,16 +4,15 @@ from typing import Any, Self
 import pytest
 
 from agent_relay.application.delivery.ports import (
-    QueueReceipt,
     QueueRejected,
-    QueueRequest,
-    SteerReceipt,
     SubmissionRejected,
     SubmissionUnknown,
 )
+from agent_relay.application.dto.delivery import QueueReceipt, QueueRequest, SteerReceipt
 from agent_relay.domain.rooms.models import McpServerReference, SkillReference
-from agent_relay.infrastructure.codex.catalog import McpPage, decode_skills, server_option
+from agent_relay.infrastructure.codex.catalog import decode_skills, server_option
 from agent_relay.infrastructure.codex.driver import CodexDriver, RpcDisconnected, RpcRejected
+from agent_relay.infrastructure.codex.models import McpPage
 
 
 class QueueWire:

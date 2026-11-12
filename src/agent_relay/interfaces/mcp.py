@@ -9,7 +9,8 @@ from mcp.server.mcpserver import Context, MCPServer
 from mcp.types import CallToolResult, TextContent, ToolAnnotations
 from starlette.concurrency import run_in_threadpool
 
-from agent_relay.interfaces.client import ApiResult, RelayClient, RelayClientError
+from agent_relay.interfaces.client import RelayClient, RelayClientError
+from agent_relay.interfaces.dto import ApiResult
 
 READ_TOOLS = frozenset(
     {

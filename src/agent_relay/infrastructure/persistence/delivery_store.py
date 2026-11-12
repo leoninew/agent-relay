@@ -1,4 +1,4 @@
-from agent_relay.application.delivery.ports import ClaimedDelivery, QueueHead, ReceivedInput
+from agent_relay.application.dto.delivery import ClaimedDelivery, QueueHead, ReceivedInput
 from agent_relay.domain.rooms.models import Delivery
 from agent_relay.infrastructure.persistence.database import Database
 from agent_relay.infrastructure.persistence.repositories.deliveries import (

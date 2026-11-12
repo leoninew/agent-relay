@@ -1,9 +1,8 @@
 from datetime import datetime, timedelta
 
 from agent_relay.domain.rooms.errors import RoomConflictError, RoomInputError, RoomNotFoundError
-from agent_relay.domain.rooms.models import Member
+from agent_relay.domain.rooms.models import Member, RoomState
 from agent_relay.domain.rooms.rules import validate_member
-from agent_relay.domain.rooms.state import RoomState
 
 OBSERVATION_CHECKPOINT = timedelta(seconds=30)
 

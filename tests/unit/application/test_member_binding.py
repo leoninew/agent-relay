@@ -4,15 +4,14 @@ from unittest.mock import MagicMock, Mock
 
 import pytest
 
-from agent_relay.application.members.contracts import CreateMember
+from agent_relay.application.dto.members import CreateMember, SessionInfo
 from agent_relay.application.members.service import MemberService
 from agent_relay.application.members.sessions import (
     SessionDriver,
-    SessionInfo,
     SessionUnavailableError,
 )
 from agent_relay.domain.rooms.errors import RoomConflictError, RoomInputError
-from agent_relay.domain.rooms.state import RoomState
+from agent_relay.domain.rooms.models import RoomState
 
 
 @pytest.fixture

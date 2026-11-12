@@ -1,19 +1,11 @@
-from dataclasses import dataclass
 from datetime import datetime
-from typing import Literal
 
-from agent_relay.domain.rooms.models import Delivery, SubmissionMethod
+from agent_relay.domain.rooms.models import Delivery, SubmissionFailure, SubmissionMethod
 
 ACTIVE_DELIVERY_STATUSES = ("pending", "submitting", "queued")
 UNCONFIRMED_DELIVERY_STATUSES = ("queued", "unknown")
 
 QUEUED_NOTE = "已入队，等待原会话消费；如已中断，请在原 Codex 会话继续"
-
-
-@dataclass(frozen=True)
-class SubmissionFailure:
-    status: Literal["rejected", "unknown"]
-    error: str
 
 
 REJECTED_SUBMISSION = SubmissionFailure("rejected", "Codex 未接受本次发送")

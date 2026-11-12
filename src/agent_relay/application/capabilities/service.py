@@ -1,7 +1,7 @@
 from collections.abc import Callable
 
-from agent_relay.application.capabilities.contracts import McpCatalog, SkillCatalog
 from agent_relay.application.capabilities.ports import CapabilityDriver, CapabilityUnavailableError
+from agent_relay.application.dto.capabilities import McpCatalog, SkillCatalog
 from agent_relay.application.rooms.ports import RoomStore
 from agent_relay.domain.rooms.errors import RoomConflictError, RoomInputError, RoomNotFoundError
 from agent_relay.domain.rooms.rules import normalize_project_path

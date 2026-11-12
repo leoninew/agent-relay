@@ -3,11 +3,11 @@ from unittest.mock import MagicMock, Mock
 
 import pytest
 
-from agent_relay.application.rooms.contracts import CreateRoom, CreateTopic
+from agent_relay.application.dto.rooms import CreateRoom, CreateTopic
 from agent_relay.application.rooms.service import RoomService
 from agent_relay.domain.rooms.errors import RoomConflictError
+from agent_relay.domain.rooms.models import RoomState
 from agent_relay.domain.rooms.resources import DEFAULT_TOPIC_NAMES
-from agent_relay.domain.rooms.state import RoomState
 
 
 def test_room_creation_persists_business_initialization_without_database_defaults(

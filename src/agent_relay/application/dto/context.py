@@ -3,7 +3,7 @@ from typing import Literal, Self
 
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
-from agent_relay.application.rooms.views import TopicPosition
+from agent_relay.application.dto.positions import TopicPosition
 from agent_relay.domain.rooms.models import CapabilityReference, RoomModel
 
 

@@ -5,7 +5,8 @@ from unittest.mock import MagicMock, Mock, call
 import pytest
 from pytest import MonkeyPatch
 
-from agent_relay.application.delivery.ports import InputHistoryUnavailable, InputPage, ReceivedInput
+from agent_relay.application.delivery.ports import InputHistoryUnavailable
+from agent_relay.application.dto.delivery import InputPage, ReceivedInput
 from agent_relay.infrastructure.codex.driver import (
     CodexDriver,
     ProxyRpc,

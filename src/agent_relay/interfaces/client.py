@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import math
 from collections.abc import Mapping
-from dataclasses import dataclass
 from http.client import HTTPException
 from typing import Annotated, Any, NoReturn, Protocol, cast
 from urllib.error import HTTPError, URLError
@@ -11,6 +10,8 @@ from urllib.parse import quote, urlencode, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from pydantic import Field
+
+from agent_relay.interfaces.dto import ApiResult
 
 
 class HttpResponse(Protocol):
@@ -23,12 +24,6 @@ class HttpResponse(Protocol):
 
 class RequestOpener(Protocol):
     def __call__(self, request: Request, *, timeout: float) -> HttpResponse: ...
-
-
-@dataclass(frozen=True)
-class ApiResult:
-    data: object
-    request_id: str | None
 
 
 class RelayClientError(Exception):

@@ -5,14 +5,13 @@ from pydantic import ValidationError
 
 from agent_relay.domain.rooms.errors import RoomConflictError, RoomInputError
 from agent_relay.domain.rooms.members import rename_member, retire_member
-from agent_relay.domain.rooms.models import Member, Room
+from agent_relay.domain.rooms.models import Member, Room, RoomState
 from agent_relay.domain.rooms.resources import (
     DEFAULT_TOPIC_NAMES,
     new_room_state,
     retire_topic,
     validate_topic_name,
 )
-from agent_relay.domain.rooms.state import RoomState
 
 
 @pytest.fixture

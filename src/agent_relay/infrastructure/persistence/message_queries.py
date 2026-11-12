@@ -4,7 +4,7 @@ from sqlalchemy import Select, and_, func, or_, select
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement
 
-from agent_relay.application.messages.contracts import MessagePage, MessageQueuePage
+from agent_relay.application.dto.messages import MessagePage, MessageQueuePage
 from agent_relay.domain.rooms.delivery import ACTIVE_DELIVERY_STATUSES
 from agent_relay.domain.rooms.errors import RoomNotFoundError
 from agent_relay.domain.rooms.models import Delivery, Message

@@ -1,14 +1,8 @@
-from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 
+from agent_relay.application.dto.messages import CodexQueueTarget
 from agent_relay.domain.rooms.models import Message
-
-
-@dataclass(frozen=True)
-class CodexQueueTarget:
-    session_id: str
-    submission_id: str | None
 
 
 class MessageRepository(Protocol):

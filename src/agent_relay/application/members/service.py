@@ -5,16 +5,16 @@ from datetime import UTC, datetime
 from typing import TypeVar
 from uuid import uuid4
 
-from agent_relay.application.members.contracts import (
+from agent_relay.application.dto.members import (
     ChangedMember,
     CreatedMember,
     CreateMember,
     SessionCandidate,
+    SessionInfo,
     UpdateMember,
 )
 from agent_relay.application.members.sessions import (
     SessionDriver,
-    SessionInfo,
     SessionUnavailableError,
 )
 from agent_relay.application.rooms.ports import RoomStore
@@ -25,9 +25,8 @@ from agent_relay.domain.rooms.members import (
     retire_member,
     validate_join,
 )
-from agent_relay.domain.rooms.models import Member, Session
+from agent_relay.domain.rooms.models import Member, RoomState, Session
 from agent_relay.domain.rooms.rules import normalize_project_path
-from agent_relay.domain.rooms.state import RoomState
 
 T = TypeVar("T")
 

@@ -3,9 +3,8 @@ from datetime import UTC, datetime
 import pytest
 
 from agent_relay.domain.rooms.errors import RoomInputError
-from agent_relay.domain.rooms.models import Member, Room, Topic
+from agent_relay.domain.rooms.models import Member, Room, RoomState, Topic
 from agent_relay.domain.rooms.rules import build_message, normalize_project_path
-from agent_relay.domain.rooms.state import RoomState
 
 
 def room_state() -> RoomState:

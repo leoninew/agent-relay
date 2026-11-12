@@ -4,16 +4,16 @@ from sqlalchemy import or_, select, update
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement
 
-from agent_relay.application.context.contracts import (
+from agent_relay.application.dto.context import (
     CatalogMember,
     CatalogTopic,
     ContextMessage,
     ContextQuery,
     MemberCatalog,
 )
-from agent_relay.application.rooms.views import TopicPosition
-from agent_relay.domain.rooms.context import VisibilityScope
+from agent_relay.application.dto.positions import TopicPosition
 from agent_relay.domain.rooms.errors import RoomNotFoundError
+from agent_relay.domain.rooms.models import VisibilityScope
 from agent_relay.infrastructure.persistence.message_queries import MessageQueries
 from agent_relay.infrastructure.persistence.models import (
     ContextMessageRecord,

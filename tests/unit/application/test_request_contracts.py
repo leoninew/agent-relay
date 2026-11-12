@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from agent_relay.application.messages.contracts import CreateMessage
+from agent_relay.application.dto.messages import CreateMessage
 
 
 @pytest.mark.parametrize(

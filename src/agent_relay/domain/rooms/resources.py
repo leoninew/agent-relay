@@ -2,8 +2,7 @@ from datetime import datetime
 from uuid import uuid4
 
 from agent_relay.domain.rooms.errors import RoomConflictError, RoomNotFoundError
-from agent_relay.domain.rooms.models import USER_MEMBER_ID, Member, Room, Topic
-from agent_relay.domain.rooms.state import RoomState
+from agent_relay.domain.rooms.models import USER_MEMBER_ID, Member, Room, RoomState, Topic
 
 DEFAULT_TOPIC_NAMES = ("产品", "架构", "开发", "测试")
 

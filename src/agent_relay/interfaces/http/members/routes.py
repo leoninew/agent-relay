@@ -1,8 +1,8 @@
 from fastapi import APIRouter
 
-from agent_relay.application.context.contracts import ContextQuery, ContextResult, MemberCatalog
-from agent_relay.application.messages.contracts import CreateMessage
-from agent_relay.application.rooms.views import TopicPosition
+from agent_relay.application.dto.context import ContextQuery, ContextResult, MemberCatalog
+from agent_relay.application.dto.messages import CreateMessage
+from agent_relay.application.dto.positions import TopicPosition
 from agent_relay.domain.rooms.models import Message
 from agent_relay.interfaces.http.persistence import (
     ContextQueriesDependency,

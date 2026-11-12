@@ -2,7 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
-from agent_relay.application.capabilities.contracts import McpCatalog, SkillCatalog
+from agent_relay.application.dto.capabilities import McpCatalog, SkillCatalog
 from agent_relay.interfaces.http.capabilities.dependencies import CapabilityServiceDependency
 
 router = APIRouter(prefix="/room", tags=["capabilities"])

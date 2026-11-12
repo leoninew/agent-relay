@@ -5,15 +5,17 @@ from datetime import UTC, datetime
 
 from agent_relay.application.delivery.ports import (
     ActivationRejected,
-    ClaimedDelivery,
     DeliveryDriver,
     DeliveryRepository,
     InputHistoryUnavailable,
+    SubmissionRejected,
+    SubmissionUnknown,
+)
+from agent_relay.application.dto.delivery import (
+    ClaimedDelivery,
     QueueReceipt,
     QueueRequest,
     SteerReceipt,
-    SubmissionRejected,
-    SubmissionUnknown,
 )
 from agent_relay.domain.rooms.delivery import (
     PROCESSING_FAILURE,

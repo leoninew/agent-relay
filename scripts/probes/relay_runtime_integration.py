@@ -34,8 +34,9 @@ import uvicorn
 from codex_capabilities import Client
 from websockets.sync.client import connect
 
-from agent_relay.bootstrap.config import Settings, load_settings
+from agent_relay.bootstrap.config import load_settings
 from agent_relay.bootstrap.http import create_app
+from agent_relay.bootstrap.settings import Settings
 from agent_relay.infrastructure.codex.driver import CodexDriver, _launch_command
 from agent_relay.infrastructure.dispatch.lock import SubmitterLock
 from agent_relay.infrastructure.persistence.migrations import run_migrations

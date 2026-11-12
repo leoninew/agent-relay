@@ -8,7 +8,7 @@ import uvicorn
 from uvicorn.supervisors.basereload import BaseReload
 from watchfiles import Change, DefaultFilter
 
-from agent_relay.bootstrap.config import ServerSettings
+from agent_relay.bootstrap.settings import ServerSettings
 
 
 class DevelopmentReload(BaseReload):

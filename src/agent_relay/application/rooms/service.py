@@ -2,7 +2,7 @@ from copy import deepcopy
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from agent_relay.application.rooms.contracts import (
+from agent_relay.application.dto.rooms import (
     ChangedTopic,
     CreateRoom,
     CreateTopic,
@@ -10,7 +10,7 @@ from agent_relay.application.rooms.contracts import (
 )
 from agent_relay.application.rooms.ports import RoomStore
 from agent_relay.domain.rooms.errors import RoomConflictError
-from agent_relay.domain.rooms.models import Room, Topic
+from agent_relay.domain.rooms.models import Room, RoomState, Topic
 from agent_relay.domain.rooms.resources import (
     new_room_state,
     require_topic,
@@ -18,7 +18,6 @@ from agent_relay.domain.rooms.resources import (
     validate_topic_name,
 )
 from agent_relay.domain.rooms.rules import normalize_project_path
-from agent_relay.domain.rooms.state import RoomState
 
 
 class RoomService:

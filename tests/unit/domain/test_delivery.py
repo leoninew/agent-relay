@@ -7,12 +7,11 @@ from agent_relay.domain.rooms.delivery import (
     PROCESSING_FAILURE,
     REJECTED_SUBMISSION,
     UNCERTAIN_SUBMISSION,
-    SubmissionFailure,
     queue_accepted,
     steer_accepted,
     submission_failed,
 )
-from agent_relay.domain.rooms.models import Delivery
+from agent_relay.domain.rooms.models import Delivery, SubmissionFailure
 
 
 @pytest.fixture

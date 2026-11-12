@@ -33,24 +33,26 @@ describe("apiClient", () => {
   });
 
   it("returns Axios-parsed JSON response data", async () => {
-    adapterMock.mockResolvedValue(mockResponse({ text: "Hello, Ada!" }));
+    adapterMock.mockResolvedValue(mockResponse([{ id: "room-1", name: "Room" }]));
 
-    await expect(apiClient.get<{ text: string }>("/api/greet")).resolves.toMatchObject({
-      data: { text: "Hello, Ada!" },
-    });
+    await expect(apiClient.get<{ id: string; name: string }[]>("/api/room")).resolves.toMatchObject(
+      {
+        data: [{ id: "room-1", name: "Room" }],
+      },
+    );
 
-    expect(adapterMock).toHaveBeenCalledWith(expect.objectContaining({ url: "/api/greet" }));
+    expect(adapterMock).toHaveBeenCalledWith(expect.objectContaining({ url: "/api/room" }));
   });
 
   it("rejects malformed JSON success responses with their request context", async () => {
     adapterMock.mockResolvedValue(
-      mockResponse('{"text":', 200, {
+      mockResponse('[{"id":', 200, {
         "content-type": "application/json",
         "X-Request-Id": "req_parse",
       }),
     );
 
-    await expect(apiClient.get("/api/greet")).rejects.toMatchObject({
+    await expect(apiClient.get("/api/room")).rejects.toMatchObject({
       kind: "contract_mismatch",
       requestId: "req_parse",
       status: 200,
@@ -86,7 +88,9 @@ describe("apiClient", () => {
       ),
     );
 
-    await expect(apiClient.get("/api/greet", { params: { name: "" } })).rejects.toMatchObject({
+    await expect(
+      apiClient.post("/api/room", { name: "", projectPath: "D:/project" }),
+    ).rejects.toMatchObject({
       code: "validation_error",
       kind: "http_error",
       requestId: "req_blank",
@@ -99,7 +103,7 @@ describe("apiClient", () => {
       new axios.AxiosError("Network unavailable", axios.AxiosError.ERR_NETWORK),
     );
 
-    await expect(apiClient.get("/api/greet")).rejects.toMatchObject({
+    await expect(apiClient.get("/api/room")).rejects.toMatchObject({
       kind: "network_error",
       message: "Network request failed.",
     } satisfies Partial<ApiClientError>);
@@ -110,7 +114,7 @@ describe("apiClient", () => {
     async (code) => {
       adapterMock.mockRejectedValue(new axios.AxiosError("internal transport detail", code));
 
-      await expect(apiClient.get("/api/greet")).rejects.toMatchObject({
+      await expect(apiClient.get("/api/room")).rejects.toMatchObject({
         kind: "timeout",
         message: "Request timed out.",
       } satisfies Partial<ApiClientError>);
@@ -121,7 +125,7 @@ describe("apiClient", () => {
   it("distinguishes cancellation from network failures", async () => {
     adapterMock.mockRejectedValue(new axios.CanceledError("internal cancellation detail"));
 
-    await expect(apiClient.get("/api/greet")).rejects.toMatchObject({
+    await expect(apiClient.get("/api/room")).rejects.toMatchObject({
       kind: "canceled",
       message: "Request canceled.",
     } satisfies Partial<ApiClientError>);
@@ -146,7 +150,7 @@ describe("apiClient", () => {
         new axios.AxiosError("Request failed", undefined, response.config, undefined, response),
       );
 
-      await expect(apiClient.get("/api/greet")).rejects.toMatchObject({
+      await expect(apiClient.get("/api/room")).rejects.toMatchObject({
         kind: "http_error",
         code,
         requestId: "req_policy",
@@ -171,7 +175,7 @@ describe("apiClient", () => {
       new axios.AxiosError("private diagnostic", undefined, response.config, undefined, response),
     );
 
-    await expect(apiClient.get("/api/greet")).rejects.toMatchObject({
+    await expect(apiClient.get("/api/room")).rejects.toMatchObject({
       kind: "contract_mismatch",
       message: "Unexpected API error response.",
       requestId: "req_gateway",
@@ -183,7 +187,7 @@ describe("apiClient", () => {
     const error = new ApiClientError("Request unavailable", "http_error", { status: 503 });
     adapterMock.mockRejectedValue(error);
 
-    await expect(apiClient.get("/api/greet")).rejects.toBe(error);
+    await expect(apiClient.get("/api/room")).rejects.toBe(error);
   });
 
   it("rejects non-contract responses without exposing their body", async () => {
@@ -191,7 +195,7 @@ describe("apiClient", () => {
       mockResponse("<h1>Bad Gateway</h1>", 200, { "content-type": "text/html" }),
     );
 
-    await expect(apiClient.get("/api/greet")).rejects.toMatchObject({
+    await expect(apiClient.get("/api/room")).rejects.toMatchObject({
       kind: "contract_mismatch",
       message: "Unexpected API success response.",
       status: 200,

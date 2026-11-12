@@ -10,8 +10,8 @@ from agent_relay.domain.rooms.models import (
     Delivery,
     Member,
     Message,
+    RoomState,
 )
-from agent_relay.domain.rooms.state import RoomState
 
 
 def normalize_project_path(value: str) -> str:

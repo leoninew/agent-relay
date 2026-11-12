@@ -18,25 +18,25 @@ def test_settings_loads_dotenv_with_environment_override(
     config_dir.mkdir()
     copyfile(CONFIG_FILE, config_dir / "config.yaml")
     env_file.write_text(
-        "AGENT_RELAY_GREETING__PREFIX=Bonjour\nAGENT_RELAY_STATIC__DIRECTORY=./assets\n",
+        "AGENT_RELAY_SERVER__HOST=localhost\nAGENT_RELAY_STATIC__DIRECTORY=./assets\n",
         encoding="utf-8",
     )
-    monkeypatch.setenv("AGENT_RELAY_GREETING__PREFIX", "Hi")
+    monkeypatch.setenv("AGENT_RELAY_SERVER__HOST", "127.0.0.2")
     monkeypatch.setenv("AGENT_RELAY_PROFILE", "prod")
 
     settings = load_settings(tmp_path)
 
-    assert settings.greeting.prefix == "Hi"
+    assert settings.server.host == "127.0.0.2"
     assert settings.static.directory == Path("assets")
 
 
 def test_load_settings_caches_one_settings_instance(monkeypatch: MonkeyPatch) -> None:
-    monkeypatch.setenv("AGENT_RELAY_GREETING__PREFIX", "Hi")
+    monkeypatch.setenv("AGENT_RELAY_SERVER__HOST", "127.0.0.2")
     initial_settings = load_settings()
-    monkeypatch.setenv("AGENT_RELAY_GREETING__PREFIX", "Bonjour")
+    monkeypatch.setenv("AGENT_RELAY_SERVER__HOST", "127.0.0.3")
 
     assert load_settings() is initial_settings
-    assert initial_settings.greeting.prefix == "Hi"
+    assert initial_settings.server.host == "127.0.0.2"
 
 
 @pytest.mark.parametrize("value", ["[]", '[""]', '["codex", ""]'])
@@ -69,7 +69,7 @@ def test_load_settings_allows_zero_body_log_limit(monkeypatch: MonkeyPatch) -> N
     assert load_settings().logging.body.limit == 0
 
 
-@pytest.mark.parametrize("field", ["SERVER__PORRT", "GREETNG__PREFIX"])
+@pytest.mark.parametrize("field", ["SERVER__PORRT", "SERVERR__HOST"])
 def test_unknown_configuration_fields_fail_at_startup(
     tmp_path: Path, monkeypatch: MonkeyPatch, field: str
 ) -> None:

@@ -21,37 +21,37 @@ def test_profile_switch_does_not_pollute_process_environment(
     qa_root = tmp_path / "qa"
     prepare_config(dev_root)
     prepare_config(qa_root)
-    (dev_root / ".env.dev").write_text("AGENT_RELAY_GREETING__PREFIX=你好\n", encoding="utf-8")
-    (qa_root / ".env.qa").write_text("AGENT_RELAY_GREETING__PREFIX=QA\n", encoding="utf-8")
-    monkeypatch.delenv("AGENT_RELAY_GREETING__PREFIX", raising=False)
+    (dev_root / ".env.dev").write_text("AGENT_RELAY_SERVER__PORT=19080\n", encoding="utf-8")
+    (qa_root / ".env.qa").write_text("AGENT_RELAY_SERVER__PORT=19081\n", encoding="utf-8")
+    monkeypatch.delenv("AGENT_RELAY_SERVER__PORT", raising=False)
     monkeypatch.setenv("AGENT_RELAY_PROFILE", "dev")
 
     dev = load_settings(dev_root)
     assert dev.profile == "dev"
-    assert dev.greeting.prefix == "你好"
-    assert "AGENT_RELAY_GREETING__PREFIX" not in os.environ
+    assert dev.server.port == 19080
+    assert "AGENT_RELAY_SERVER__PORT" not in os.environ
 
     monkeypatch.setenv("AGENT_RELAY_PROFILE", "qa")
     qa = load_settings(qa_root)
     assert qa.profile == "qa"
-    assert qa.greeting.prefix == "QA"
+    assert qa.server.port == 19081
 
 
 def test_os_environment_overrides_profile(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
     prepare_config(tmp_path)
     (tmp_path / ".env.qa").write_text(
-        "AGENT_RELAY_GREETING__PREFIX=QA\nAGENT_RELAY_DATABASE__MIGRATE_ON_STARTUP=true\n",
+        "AGENT_RELAY_SERVER__HOST=localhost\nAGENT_RELAY_DATABASE__MIGRATE_ON_STARTUP=true\n",
         encoding="utf-8",
     )
     monkeypatch.setenv("AGENT_RELAY_PROFILE", "qa")
-    monkeypatch.setenv("AGENT_RELAY_GREETING__PREFIX", "Override")
+    monkeypatch.setenv("AGENT_RELAY_SERVER__HOST", "127.0.0.2")
     monkeypatch.setenv("AGENT_RELAY_SERVER__RELOAD_PATHS", '["src/**/*.py", ".env.qa"]')
     monkeypatch.setenv("AGENT_RELAY_DATABASE__MIGRATE_ON_STARTUP", "false")
 
     settings = load_settings(tmp_path)
 
     assert settings.profile == "qa"
-    assert settings.greeting.prefix == "Override"
+    assert settings.server.host == "127.0.0.2"
     assert settings.server.reload_paths == ["src/**/*.py", ".env.qa"]
     assert settings.database.migrate_on_startup is False
 

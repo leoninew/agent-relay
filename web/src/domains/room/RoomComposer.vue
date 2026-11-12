@@ -76,6 +76,7 @@
         </p>
       </fieldset>
       <CapabilityTags
+        class="composer-capabilities"
         :capabilities="draft.capabilities"
         removable
         :disabled="sending || locked"
@@ -477,6 +478,14 @@
 </script>
 
 <style scoped>
+  .composer-capabilities :deep(li) {
+    border-color: hsl(var(--primary) / 0.12);
+    color: hsl(var(--primary));
+    background: hsl(var(--primary) / 0.08);
+  }
+  .composer-capabilities :deep(.icon-button) {
+    color: inherit;
+  }
   .capability-input {
     position: relative;
     flex: 1;

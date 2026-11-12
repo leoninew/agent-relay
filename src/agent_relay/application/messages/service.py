@@ -2,7 +2,7 @@ import logging
 from datetime import UTC, datetime
 
 from agent_relay.application.delivery.ports import QueueDriver, QueueRejected
-from agent_relay.application.messages.contracts import (
+from agent_relay.application.dto.messages import (
     ClearedMessageQueue,
     CodexQueueClearResult,
     CreateMessage,

@@ -8,9 +8,6 @@ server:
     - config/*.yaml
     - .env.{profile}
 
-greeting:
-  prefix: Hello
-
 static:
   directory: ./static
 

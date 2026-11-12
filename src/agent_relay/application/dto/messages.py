@@ -1,8 +1,15 @@
+from dataclasses import dataclass
 from typing import Self
 
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from agent_relay.domain.rooms.models import CapabilityReference, Message, RoomModel
+
+
+@dataclass(frozen=True)
+class CodexQueueTarget:
+    session_id: str
+    submission_id: str | None
 
 
 class MessagePage(RoomModel):

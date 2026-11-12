@@ -1,9 +1,8 @@
 from pydantic import ConfigDict, Field, field_validator
 
-from agent_relay.application.messages.contracts import MessagePage
-from agent_relay.application.rooms.views import TopicPosition
-from agent_relay.domain.rooms.events import RoomChangeKind
-from agent_relay.domain.rooms.models import Member, Room, RoomModel, Session, Topic
+from agent_relay.application.dto.messages import MessagePage
+from agent_relay.application.dto.positions import TopicPosition
+from agent_relay.domain.rooms.models import Member, Room, RoomChangeKind, RoomModel, Session, Topic
 
 
 class RoomSummary(RoomModel):

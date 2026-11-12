@@ -3,11 +3,11 @@ from unittest.mock import MagicMock, Mock
 
 import pytest
 
-from agent_relay.application.capabilities.contracts import McpCatalog, SkillCatalog
 from agent_relay.application.capabilities.ports import CapabilityDriver, CapabilityUnavailableError
 from agent_relay.application.capabilities.service import CapabilityService
+from agent_relay.application.dto.capabilities import McpCatalog, SkillCatalog
 from agent_relay.domain.rooms.errors import RoomConflictError, RoomInputError, RoomNotFoundError
-from agent_relay.domain.rooms.state import RoomState
+from agent_relay.domain.rooms.models import RoomState
 
 
 def test_capability_queries_release_scope_and_pass_exact_room_and_target(

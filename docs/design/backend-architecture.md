@@ -1,5 +1,5 @@
 # Agent Relay 后端结构与边界
-最后修改时间: 2026-11-11 17:33:22
+最后修改时间: 2026-11-12 11:12:59
 
 依据 [Python + FastAPI 架构指南修订 2](../../../best-practices/docs/guides/python-backend-service-architecture.md)。本轮职责调整见[总计划](../plan/20261111-backend-responsibility-alignment.md)及[契约调查](../task/20261111-backend-responsibility-alignment/T01-responsibility-contracts.md)；这是本项目实际结构说明，不复制通用标准。
 
@@ -7,34 +7,54 @@
 
 ```text
 src/agent_relay/
-  domain/rooms/                  # 业务值、初始化、资源/成员约束、路由、可见性、位置与投递规则
+  domain/rooms/
+    models/                      # 领域实体、值对象、状态与类型；按房间、消息、投递等分文件
+    resources.py / members.py    # 初始化、资源及成员生命周期规则
+    rules.py / positions.py      # 路由、发布重放与位置推进规则
+    delivery.py                  # 提交结果与失败转换
+    errors.py                    # 领域错误
   application/
-    rooms/                       # 房间/话题生命周期、资源端口、快照与位置投影
+    dto/                         # 按业务模块组织请求、结果、投影及端口传递的数据
+    rooms/                       # 房间/话题生命周期、资源和查询端口
     members/                     # 加入、编辑、退出、候选会话与状态观测
     messages/                    # 发布、幂等/引用校验、发布查找与队列管理
-    context/                     # 上下文提供用例、提供契约与纯读取端口
+    context/                     # 上下文提供用例与纯读取端口
+    capabilities/                # 技能、MCP 目录查询与可用性核验
     delivery/                    # 恢复、单次提交、启动和接收核验
     transactions.py              # RepositoryScope[T]：read/write 统一作用域
   infrastructure/
     persistence/                 # SQLAlchemy 仓储、查询、事务、SQLite 方言与迁移
-    codex/                       # RPC、进程桥接及协议转换
+    codex/                       # models.py 存放协议数据；catalog/driver 处理转换与 RPC
     dispatch/                    # 锁、轮询、线程池、停止及本能力装配
   interfaces/
     http/                        # 路由、provider、中间件、错误和流式响应
     cli.py                       # Click 输入输出适配
     mcp.py                       # MCP 工具和调用身份适配
     client.py                    # CLI/MCP 共用的 Relay HTTP 客户端
-  bootstrap/                     # 配置、日志、开发重载和 HTTP 组合根
+    dto.py                       # 客户端结果、HTTP 响应等接口数据
+  bootstrap/
+    settings.py                  # 配置模型与字段校验
+    config.py                    # 配置加载与缓存
+    logging.py / reload.py       # 日志与开发重载
+    http.py                      # HTTP 组合根
   server.py / cli.py / migrate.py # 公开模块启动入口
 ```
 
-聊天室、成员、话题和消息仍属于紧密协作的单一业务范围；能力目录不意味着独立部署或按表拆模块。`domain` 不导入 application、协议或存储；`application` 不导入具体基础设施、FastAPI 或启动配置。Pydantic 业务值保持现有 camelCase 编码，不为各层复制同义 DTO。请求和结果放在所属能力的 contracts；`TopicPosition` 包含 `later_count`，归入 `application/rooms/views.py`。`Delivery` 保留业务身份与已核验的回执事实，原始 RPC input/response 不进入业务值。
+聊天室、成员、话题和消息仍属于紧密协作的单一业务范围；能力目录不意味着独立部署或按表拆模块。`domain` 不导入 application、协议或存储；`application` 不导入具体基础设施、FastAPI 或启动配置。Pydantic 业务值保持现有 camelCase 编码，不为各层复制同义 DTO。`Delivery` 保留业务身份与已核验的回执事实，原始 RPC input/response 不进入业务值。
+
+## 数据结构与流程分离
+
+- `domain/rooms/models/` 管理领域实体、值对象及其不变量校验；`RoomState`、`VisibilityScope`、`SubmissionFailure` 与关联领域类型一起存放。包内按房间、消息、能力引用、投递、可见范围分文件，外部通过模型包导入；状态转换、路由和生命周期流程留在规则模块。
+- `application/dto/` 按业务模块集中管理请求、结果、读投影以及端口参数/回执。`TopicPosition` 位于 `positions.py`，投递请求/回执位于 `delivery.py`，会话快照位于 `members.py`。Service 组织用例，ports/sessions 定义协议与错误，不再声明这些数据类。
+- Codex wire schema 和能力绑定快照集中在 `infrastructure/codex/models.py`；`SkillDiscovery.public_catalog()` 保留从已解析绑定到应用目录的简单投影。原始协议解码、身份生成与可用性转换由 `catalog.py` 负责，RPC 留在 `driver.py`。现有 `infrastructure/persistence/models.py` 已独立管理 ORM 映射，继续保留。
+- 接口数据集中在 `interfaces/dto.py`，客户端及路由只负责协议操作；配置模型集中在 `bootstrap/settings.py`，加载入口仍是 `bootstrap/config.py` 的 `load_settings`。
+- 仅在相关数据类型达到需要分组的规模时建立包；少量类型使用独立模块。新增数据类放入所属层的数据模块，避免与 Service、规则函数、驱动或配置加载流程混放。
 
 ## 责任与抽象
 
 | 对象 | 本项目责任与保留理由 |
 | --- | --- |
-| 领域规则 | `resources` 决定固定用户、默认话题及话题约束；`members` 决定成员限制、退出、重命名及观测窗口；`rules` 决定路由/发布重放；`context/positions` 明确可见事实与推进范围；`delivery` 决定提交结果与失败语义 |
+| 领域规则 | `resources` 决定固定用户、默认话题及话题约束；`members` 决定成员限制、退出、重命名及观测窗口；`rules` 决定路由/发布重放；`models/context` 表达可见范围，`positions` 决定推进规则；`delivery` 决定提交结果与失败语义 |
 | Service | 组织完整业务动作、读取所需事实、调用规则并安排一致性边界；不访问 Session，不提交事务 |
 | Repository | 读写持久事实，保留条件更新、原身份/删除标记保护、原子领取、位置单调推进及事件保存；不隐藏完整上下文提供流程 |
 | Query/Reader | 形成无副作用的快照、分页、统计、catalog/positions，可由接口直接调用；无需增加转发 Service |

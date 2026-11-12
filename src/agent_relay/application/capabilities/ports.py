@@ -1,6 +1,6 @@
 from typing import Protocol
 
-from agent_relay.application.capabilities.contracts import McpCatalog, SkillCatalog
+from agent_relay.application.dto.capabilities import McpCatalog, SkillCatalog
 
 
 class CapabilityUnavailableError(RuntimeError):

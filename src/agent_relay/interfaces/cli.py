@@ -8,7 +8,8 @@ from typing import cast
 
 import click
 
-from agent_relay.interfaces.client import ApiResult, RelayClient, RelayClientError, RequestOpener
+from agent_relay.interfaces.client import RelayClient, RelayClientError, RequestOpener
+from agent_relay.interfaces.dto import ApiResult
 
 
 def _validate_keyword(

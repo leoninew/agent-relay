@@ -9,7 +9,8 @@ from starlette.concurrency import run_in_threadpool
 from agent_relay.application.capabilities.ports import CapabilityDriver
 from agent_relay.application.delivery.ports import DeliveryDriver
 from agent_relay.application.members.sessions import SessionDriver
-from agent_relay.bootstrap.config import Settings, load_settings
+from agent_relay.bootstrap.config import load_settings
+from agent_relay.bootstrap.settings import Settings
 from agent_relay.infrastructure.codex.dependencies import (
     create_capability_driver,
     create_queue_driver,

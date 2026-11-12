@@ -3,10 +3,8 @@ from datetime import datetime
 from sqlalchemy import delete, false, func, or_, update
 from sqlalchemy.orm import Session
 
-from agent_relay.application.rooms.contracts import RoomMetadata
-from agent_relay.domain.rooms.events import RoomChangeKind
-from agent_relay.domain.rooms.models import Member, Room
-from agent_relay.domain.rooms.state import RoomState
+from agent_relay.application.dto.rooms import RoomMetadata
+from agent_relay.domain.rooms.models import Member, Room, RoomChangeKind, RoomState
 from agent_relay.infrastructure.persistence.models import (
     ContextMessageRecord,
     ContextQueryRecord,

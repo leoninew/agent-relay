@@ -1,10 +1,10 @@
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from agent_relay.application.context.contracts import ContextQuery, ContextResult
 from agent_relay.application.context.ports import ContextRepository
+from agent_relay.application.dto.context import ContextQuery, ContextResult
 from agent_relay.application.transactions import RepositoryScope
-from agent_relay.domain.rooms.context import VisibilityScope
+from agent_relay.domain.rooms.models import VisibilityScope
 from agent_relay.domain.rooms.positions import position_updates, require_subscribed_topic
 
 

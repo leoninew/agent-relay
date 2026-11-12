@@ -1,11 +1,10 @@
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from agent_relay.application.rooms.contracts import RoomMetadata, RoomSummary
-from agent_relay.application.rooms.views import TopicPosition
+from agent_relay.application.dto.positions import TopicPosition
+from agent_relay.application.dto.rooms import RoomMetadata, RoomSummary
 from agent_relay.domain.rooms.errors import RoomNotFoundError
-from agent_relay.domain.rooms.models import USER_MEMBER_ID, Member, Room
-from agent_relay.domain.rooms.state import RoomState
+from agent_relay.domain.rooms.models import USER_MEMBER_ID, Member, Room, RoomState
 from agent_relay.infrastructure.persistence.mappers import (
     member_from_model,
     room_from_model,

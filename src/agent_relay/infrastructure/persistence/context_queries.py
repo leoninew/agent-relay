@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 
-from agent_relay.application.context.contracts import MemberCatalog
-from agent_relay.application.rooms.views import TopicPosition
+from agent_relay.application.dto.context import MemberCatalog
+from agent_relay.application.dto.positions import TopicPosition
 from agent_relay.infrastructure.persistence.database import Database
 from agent_relay.infrastructure.persistence.repositories.context import SQLAlchemyContextRepository
 from agent_relay.infrastructure.persistence.scopes import SQLAlchemyScope

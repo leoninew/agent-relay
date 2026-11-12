@@ -5,8 +5,9 @@ from unittest.mock import MagicMock, Mock
 
 import pytest
 
-from agent_relay.application.delivery.ports import ClaimedDelivery, DeliveryRepository
+from agent_relay.application.delivery.ports import DeliveryRepository
 from agent_relay.application.delivery.service import DeliveryService
+from agent_relay.application.dto.delivery import ClaimedDelivery
 from agent_relay.infrastructure.dispatch.delivery import DeliveryRunner
 from agent_relay.infrastructure.dispatch.lock import SubmitterLock
 

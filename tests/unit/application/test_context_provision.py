@@ -5,12 +5,12 @@ from datetime import UTC, datetime
 
 import pytest
 
-from agent_relay.application.context.contracts import ContextMessage, ContextQuery
 from agent_relay.application.context.ports import ContextRepository
 from agent_relay.application.context.service import ContextService
-from agent_relay.application.rooms.views import TopicPosition
-from agent_relay.domain.rooms.context import VisibilityScope
+from agent_relay.application.dto.context import ContextMessage, ContextQuery
+from agent_relay.application.dto.positions import TopicPosition
 from agent_relay.domain.rooms.errors import RoomNotFoundError
+from agent_relay.domain.rooms.models import VisibilityScope
 
 
 @dataclass

@@ -3,10 +3,11 @@ import argparse
 import uvicorn
 from fastapi import FastAPI
 
-from agent_relay.bootstrap.config import ServerSettings, load_settings
+from agent_relay.bootstrap.config import load_settings
 from agent_relay.bootstrap.http import build_app
 from agent_relay.bootstrap.logging import configure_logging
 from agent_relay.bootstrap.reload import run_development
+from agent_relay.bootstrap.settings import ServerSettings
 
 
 def create_server_app() -> FastAPI:

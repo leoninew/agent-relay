@@ -4,7 +4,7 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session, aliased
 from sqlalchemy.sql.dml import Update
 
-from agent_relay.application.delivery.ports import ClaimedDelivery, QueueHead, ReceivedInput
+from agent_relay.application.dto.delivery import ClaimedDelivery, QueueHead, ReceivedInput
 from agent_relay.domain.rooms.delivery import INTERRUPTED_SUBMISSION, UNCONFIRMED_DELIVERY_STATUSES
 from agent_relay.domain.rooms.models import Delivery
 from agent_relay.infrastructure.persistence.mappers import delivery_from_model, delivery_values

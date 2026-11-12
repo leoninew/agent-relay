@@ -7,19 +7,21 @@ import pytest
 
 from agent_relay.application.delivery.ports import (
     ActivationRejected,
-    ClaimedDelivery,
     DeliveryDriver,
     DeliveryRepository,
     InputHistoryUnavailable,
+    SubmissionRejected,
+    SubmissionUnknown,
+)
+from agent_relay.application.delivery.service import DeliveryService
+from agent_relay.application.dto.delivery import (
+    ClaimedDelivery,
     InputPage,
     QueueHead,
     QueueReceipt,
     ReceivedInput,
     SteerReceipt,
-    SubmissionRejected,
-    SubmissionUnknown,
 )
-from agent_relay.application.delivery.service import DeliveryService
 from agent_relay.domain.rooms.models import Delivery, Message, Room, SkillReference
 
 
