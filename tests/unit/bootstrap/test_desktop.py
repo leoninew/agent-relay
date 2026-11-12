@@ -176,6 +176,7 @@ def test_run_desktop_persists_webview_and_confirms_close(
     run_desktop(
         settings=settings,
         user_root=tmp_path / "user data",
+        resources=tmp_path / "resources",
         webview_api=webview,
         app_factory=app_with_database,
         on_confirmed_close=on_confirmed_close,
@@ -185,6 +186,9 @@ def test_run_desktop_persists_webview_and_confirms_close(
     assert webview.start_options["gui"] == "edgechromium"
     assert webview.start_options["private_mode"] is False
     assert Path(str(webview.start_options["storage_path"])) == tmp_path / "user data" / "webview"
+    assert Path(str(webview.start_options["icon"])) == (
+        tmp_path / "resources" / "assets" / "agent-relay.ico"
+    )
     assert callback_calls == 1
     notifications.assert_called_once()
 

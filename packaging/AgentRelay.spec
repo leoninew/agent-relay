@@ -7,11 +7,13 @@ if not is_win:
     raise SystemExit("The desktop package must be built on Windows")
 
 root = Path(SPECPATH).parent
+app_icon = root / "assets" / "agent-relay.ico"
 runtime_imports = [
     "uvicorn.loops.asyncio",
     "agent_relay.infrastructure.persistence.migration_sql",
 ]
 resources = [
+    (str(app_icon), "resources/assets"),
     (str(root / "config" / "config.yaml"), "resources/config"),
     (str(root / "config" / "app.yaml"), "resources/config"),
     (str(root / "alembic.ini"), "resources"),
@@ -41,6 +43,7 @@ desktop_exe = EXE(
     exclude_binaries=True,
     name="agent-relay-gui",
     console=False,
+    icon=str(app_icon),
 )
 console_exe = EXE(
     PYZ(console.pure),
@@ -49,6 +52,7 @@ console_exe = EXE(
     exclude_binaries=True,
     name="agent-relay",
     console=True,
+    icon=str(app_icon),
 )
 COLLECT(
     desktop_exe,

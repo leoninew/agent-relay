@@ -35,7 +35,7 @@ make web
 
 ## Windows 桌面应用
 
-需要 Windows、Microsoft Edge WebView2 Runtime 和 .NET Framework 4.7.2+。源码启动：
+需要 Windows 和 Microsoft Edge WebView2 Runtime。源码启动：
 
 ```bash
 make desktop

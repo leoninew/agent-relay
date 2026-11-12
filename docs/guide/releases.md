@@ -4,11 +4,11 @@
 
 在 Windows x64 的 GNU Make/Git Bash 环境中运行 `make binary`，生成完整桌面目录和版本化 ZIP。包内容与运行要求见[桌面使用指南](windows-desktop.md)。
 
-## GitHub Actions 下载
+## GitHub Release
 
-[Build Windows desktop](../../.github/workflows/build-desktop.yml) 支持手动 `workflow_dispatch` 和 `v*` tag push。工作流准备工具、执行 `make deps`、`make check`、`make test`、`make binary`，在对应 run 的 **Artifacts** 下载 ZIP。
+[Build Windows desktop](../../.github/workflows/build-desktop.yml) 支持 `v*` tag push 自动发布，或手动 `workflow_dispatch` 并填写已有版本 tag。工作流检出该 tag，执行 `make deps`、`make check`、`make test`、`make binary`，再将同一个 ZIP 上传到 GitHub Release 的 **Assets**；对应 run 的 **Artifacts** 也保留下载。
 
-tag 必须等于 `pyproject.toml` 的版本前加 `v`。此工作流交付 Actions artifact。
+tag 必须等于 `pyproject.toml` 的版本前加 `v`。首次创建 Release，重跑时复用该 Release 并覆盖同名 ZIP。通用 ZIP 在仓库页的 **Releases** 下载，**Packages** 用于独立的包仓库。
 
 ## GitLab 项目准备
 

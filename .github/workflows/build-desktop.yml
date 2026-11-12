@@ -2,12 +2,24 @@ name: Build Windows desktop
 
 on:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag to build and publish
+        required: true
+        type: string
   push:
     tags:
       - 'v*'
 
 permissions:
   contents: read
+
+env:
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+
+concurrency:
+  group: desktop-release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
 
 jobs:
   windows-x64:
@@ -16,9 +28,23 @@ jobs:
     defaults:
       run:
         shell: bash
+    outputs:
+      artifact_name: ${{ steps.binary.outputs.artifact_name }}
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ env.RELEASE_TAG }}
+          fetch-depth: 0
+
+      - name: Verify checked out release tag
+        run: |
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            printf 'Invalid release tag: %s\n' "$RELEASE_TAG" >&2
+            exit 1
+          fi
+          git show-ref --verify --quiet "refs/tags/$RELEASE_TAG"
+          test "$(git rev-list -n 1 "$RELEASE_TAG")" = "$(git rev-parse HEAD)"
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -52,7 +78,12 @@ jobs:
         run: make deps
 
       - name: Check version tag
-        run: uv run --locked --no-sync python scripts/binary.py --check-version
+        run: |
+          version="$(uv run --locked --no-sync python scripts/binary.py --check-version)"
+          if [[ "$RELEASE_TAG" != "v$version" ]]; then
+            printf 'Release tag %s does not match project version v%s\n' "$RELEASE_TAG" "$version" >&2
+            exit 1
+          fi
 
       - name: Check types, lint and format
         run: make check
@@ -71,3 +102,38 @@ jobs:
           path: ${{ steps.binary.outputs.archive }}
           if-no-files-found: error
           compression-level: 0
+
+  release:
+    name: Publish GitHub Release
+    needs: windows-x64
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      ARTIFACT_NAME: ${{ needs.windows-x64.outputs.artifact_name }}
+    steps:
+      - name: Download Windows ZIP
+        uses: actions/download-artifact@v5
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: dist
+
+      - name: Create Release and upload Windows ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="dist/${ARTIFACT_NAME}.zip"
+          test -s "$archive"
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "$archive" \
+              --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$RELEASE_TAG" "$archive" \
+              --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes \
+              --title "Agent Relay $RELEASE_TAG" --draft
+          fi
+          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false
+          release_url="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json url --jq '.url')"
+          printf '## Windows release\n\n[%s](%s)\n' "$RELEASE_TAG" "$release_url" >> "$GITHUB_STEP_SUMMARY"

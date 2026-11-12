@@ -31,9 +31,11 @@ def main() -> None:
     for relative in (
         "agent-relay-gui.exe",
         "agent-relay.exe",
+        "_internal/resources/assets/agent-relay.ico",
         "_internal/resources/config/app.yaml",
         "_internal/resources/config/config.yaml",
         "_internal/resources/web/dist/index.html",
+        "_internal/resources/web/dist/agent-relay.png",
         "_internal/resources/alembic.ini",
         "_internal/resources/migrations/sqlite/env.py",
         "_internal/agent_relay/logging.yaml",

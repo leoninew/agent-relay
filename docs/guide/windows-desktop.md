@@ -2,7 +2,7 @@
 
 ## 启动与目录包
 
-运行环境需要 Windows x64、Microsoft Edge WebView2 Runtime、.NET Framework 4.7.2+，以及已安装并认证的 Codex CLI。
+运行环境需要 Windows x64、Microsoft Edge WebView2 Runtime，以及已安装并认证的 Codex CLI。
 
 源码启动使用 `make desktop`，会先构建前端。构建可分发制品使用 `make binary`，生成：
 

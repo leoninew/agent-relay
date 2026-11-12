@@ -121,18 +121,11 @@
 }
 
 .brand-mark {
-  display: grid;
-  place-items: center;
+  display: block;
+  flex-shrink: 0;
   width: 32px;
   height: 32px;
-  border-radius: 8px;
-  color: white;
-  background: hsl(var(--primary));
-}
-
-.brand-mark svg {
-  width: 23px;
-  height: 23px;
+  object-fit: contain;
 }
 .app-navigation {
   display: flex;

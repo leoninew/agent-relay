@@ -19,7 +19,7 @@ from agent_relay.application.desktop.service import DesktopExitNotificationServi
 from agent_relay.application.messages.service import MessageService
 from agent_relay.bootstrap.http import build_app
 from agent_relay.bootstrap.logging import configure_logging
-from agent_relay.bootstrap.paths import load_app_settings, user_data_root
+from agent_relay.bootstrap.paths import load_app_settings, resource_root, user_data_root
 from agent_relay.bootstrap.settings import Settings
 from agent_relay.infrastructure.persistence.database import Database
 from agent_relay.infrastructure.persistence.desktop_queries import (
@@ -157,8 +157,12 @@ def run_desktop(
     app_factory: AppFactory = build_app,
 ) -> None:
     active_user_root = (user_root or user_data_root()).resolve()
+    active_resources = (resources or resource_root()).resolve()
     configure_logging(active_user_root)
-    configured = settings or load_app_settings(user_root=active_user_root, resources=resources)
+    configured = settings or load_app_settings(
+        user_root=active_user_root,
+        resources=active_resources,
+    )
     static_directory = configured.static.directory
     if not (static_directory / "index.html").is_file():
         raise FileNotFoundError(f"Built web app not found: {static_directory / 'index.html'}")
@@ -219,6 +223,7 @@ def run_desktop(
             debug=False,
             private_mode=False,
             storage_path=str(storage_path),
+            icon=str(active_resources / "assets" / "agent-relay.ico"),
         )
     logger.info("Desktop window closed")
 
