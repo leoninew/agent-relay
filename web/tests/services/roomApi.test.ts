@@ -5,6 +5,7 @@ import { apiClient } from "@/services/api";
 import type { CreateMessage } from "@/services/roomApi";
 import {
   addRoomMember,
+  clearRoom,
   deleteQueueMessage,
   deleteRoom,
   fetchRoom,
@@ -236,6 +237,24 @@ describe("room API", () => {
     expect(adapterMock).toHaveBeenLastCalledWith(
       expect.objectContaining({ method: "delete", url: "/api/room/room%2Fone" }),
     );
+  });
+
+  it("clears the entire room without passing message filters", async () => {
+    const result = { removedMessages: 2, removedMembers: 1, metadata: roomFixture() };
+    adapterMock.mockImplementationOnce(async (config: InternalAxiosRequestConfig) => ({
+      config,
+      data: result,
+      headers: { "content-type": "application/json" },
+      status: 200,
+      statusText: "OK",
+    }));
+
+    await expect(clearRoom("room/one")).resolves.toEqual(result);
+    expect(adapterMock).toHaveBeenCalledOnce();
+    expect(adapterMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ method: "post", url: "/api/room/room%2Fone/clear" }),
+    );
+    expect(adapterMock.mock.calls[0][0].params).toBeUndefined();
   });
 
   it("renames a room without sending its project path", async () => {

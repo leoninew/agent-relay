@@ -1,13 +1,14 @@
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { addRoomTopic, deleteRoom, updateRoom } from "@/services/roomApi";
+import { addRoomTopic, clearRoom, deleteRoom, updateRoom } from "@/services/roomApi";
 import { useRoomsStore } from "@/stores/rooms";
 
 import { roomFixture } from "../fixtures/room";
 
 vi.mock("@/services/roomApi", () => ({
   addRoomTopic: vi.fn(),
+  clearRoom: vi.fn(),
   createRoom: vi.fn(),
   deleteRoom: vi.fn(),
   fetchRooms: vi.fn(),
@@ -46,6 +47,57 @@ describe("room state", () => {
 
     await expect(store.remove(snapshot.room.id)).rejects.toThrow("unavailable");
     expect(store.rooms).toEqual([snapshot.room]);
+    expect(store.snapshots[snapshot.room.id]).toEqual(snapshot);
+  });
+
+  it("clears messages and pagination while applying member changes only to that room", async () => {
+    const store = useRoomsStore();
+    const snapshot = roomFixture();
+    const other = { ...roomFixture(), room: { ...snapshot.room, id: "other" } };
+    store.rooms = [snapshot.room, other.room];
+    store.sync({ ...snapshot, hasMore: true, hasNewer: true, nextBeforeSeq: 10 });
+    store.sync(other);
+    const metadata = {
+      ...snapshot,
+      members: snapshot.members.map((member, index) =>
+        index === 0 ? { ...member, deletedAt: "2026-11-12T10:00:00Z", topicIds: [] } : member,
+      ),
+      positions: [],
+      summary: {
+        totalMessages: 0,
+        queuedCount: 0,
+        receivedCount: 0,
+        pendingCount: 0,
+        submittingCount: 0,
+        rejectedCount: 0,
+        unknownCount: 0,
+      },
+      eventId: 20,
+    };
+    vi.mocked(clearRoom).mockResolvedValue({ removedMessages: 2, removedMembers: 1, metadata });
+
+    await store.clear(snapshot.room.id);
+
+    expect(store.rooms).toEqual([snapshot.room, other.room]);
+    expect(store.snapshots[snapshot.room.id]).toEqual({
+      ...metadata,
+      messages: [],
+      hasMore: false,
+      hasNewer: false,
+      nextBeforeSeq: null,
+    });
+    expect(store.snapshots[other.room.id]).toEqual(other);
+    store.syncMetadata({ ...snapshot, eventId: 15 });
+    expect(store.snapshots[snapshot.room.id].members[0].deletedAt).toBeTruthy();
+  });
+
+  it("retains messages and members when clearing fails", async () => {
+    const store = useRoomsStore();
+    const snapshot = roomFixture();
+    store.sync(snapshot);
+    vi.mocked(clearRoom).mockRejectedValue(new Error("unavailable"));
+
+    await expect(store.clear(snapshot.room.id)).rejects.toThrow("unavailable");
     expect(store.snapshots[snapshot.room.id]).toEqual(snapshot);
   });
 

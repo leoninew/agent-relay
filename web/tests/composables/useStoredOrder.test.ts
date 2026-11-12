@@ -1,14 +1,25 @@
 import { effectScope, ref } from "vue";
 import type { EffectScope } from "vue";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { useSidebarOrder } from "@/domains/room/useSidebarOrder";
+import { useStoredOrder } from "@/composables/useStoredOrder";
+import type * as storage from "@/services/storage";
 
-describe("useSidebarOrder", () => {
+const saved = vi.hoisted(() => new Map<string, string>());
+vi.mock("@/services/storage", async (importOriginal) => ({
+  ...(await importOriginal<typeof storage>()),
+  browserStorage: () => ({
+    getItem: (key: string) => saved.get(key) ?? null,
+    setItem: (key: string, value: string) => saved.set(key, value),
+    removeItem: (key: string) => saved.delete(key),
+  }),
+}));
+
+describe("useStoredOrder", () => {
   let scope: EffectScope;
 
   beforeEach(() => {
-    localStorage.clear();
+    saved.clear();
     scope = effectScope();
   });
   afterEach(() => scope.stop());
@@ -19,9 +30,8 @@ describe("useSidebarOrder", () => {
       { id: "second", name: "Second" },
     ]);
     const { orderedItems, moveItem } = scope.run(() =>
-      useSidebarOrder(
+      useStoredOrder(
         () => "room-a",
-        "topics",
         () => items.value,
       ),
     )!;
@@ -43,37 +53,25 @@ describe("useSidebarOrder", () => {
     expect(orderedItems.value.map((item) => item.id)).toEqual(["first", "third"]);
   });
 
-  it("stores topics and members separately for each room and restores their orders", () => {
-    const roomId = ref("room-a");
+  it("isolates storage keys and restores saved order when the key changes or reopens", () => {
+    const storageKey = ref("first");
     const items = [{ id: "first" }, { id: "second" }];
-    const { orderedItems: topics } = scope.run(() =>
-      useSidebarOrder(
-        () => roomId.value,
-        "topics",
-        () => items,
-      ),
-    )!;
-    const { orderedItems: members } = scope.run(() =>
-      useSidebarOrder(
-        () => roomId.value,
-        "members",
+    const { orderedItems } = scope.run(() =>
+      useStoredOrder(
+        () => storageKey.value,
         () => items,
       ),
     )!;
 
-    topics.value = items.toReversed();
-    expect(members.value).toEqual(items);
-    roomId.value = "room-b";
-    expect(topics.value).toEqual(items);
-    members.value = items.toReversed();
-    roomId.value = "room-a";
-    expect(topics.value).toEqual(items.toReversed());
-    expect(members.value).toEqual(items);
+    orderedItems.value = items.toReversed();
+    storageKey.value = "second";
+    expect(orderedItems.value).toEqual(items);
+    storageKey.value = "first";
+    expect(orderedItems.value).toEqual(items.toReversed());
 
     const reopened = scope.run(() =>
-      useSidebarOrder(
-        () => "room-b",
-        "members",
+      useStoredOrder(
+        () => "first",
         () => items,
       ),
     )!;
@@ -81,12 +79,11 @@ describe("useSidebarOrder", () => {
   });
 
   it("uses the default order when a stored preference has an invalid shape", () => {
-    localStorage.setItem("relay-sidebar-order:room-a:topics", '{"order":"invalid"}');
+    saved.set("room-a", '{"order":"invalid"}');
     const items = [{ id: "first" }, { id: "second" }];
     const { orderedItems } = scope.run(() =>
-      useSidebarOrder(
+      useStoredOrder(
         () => "room-a",
-        "topics",
         () => items,
       ),
     )!;

@@ -1,4 +1,4 @@
-import { flushPromises } from "@vue/test-utils";
+import { setImmediate } from "node:timers/promises";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { effectScope, ref } from "vue";
 
@@ -39,24 +39,24 @@ describe("room skill loading", () => {
 
   it("preloads skills, reuses the project catalog and refreshes explicitly", async () => {
     const { room, capabilities } = setup();
-    await flushPromises();
+    await setImmediate();
     expect(fetchRoomSkills).toHaveBeenCalledTimes(1);
     room.value = { ...room.value, id: "same-project" };
-    await flushPromises();
+    await setImmediate();
     expect(fetchRoomSkills).toHaveBeenCalledTimes(1);
     expect(capabilities.catalog.value.skills).toHaveLength(3);
     capabilities.refresh();
-    await flushPromises();
+    await setImmediate();
     expect(fetchRoomSkills).toHaveBeenCalledTimes(2);
     expect(vi.mocked(fetchRoomSkills).mock.calls[1].slice(0, 2)).toEqual(["same-project", true]);
   });
 
   it("loads the current project catalog when the room changes", async () => {
     const { room, capabilities } = setup();
-    await flushPromises();
+    await setImmediate();
     vi.mocked(fetchRoomSkills).mockResolvedValueOnce({ skills: [], errors: [] });
     room.value = { ...room.value, id: "other", projectPath: "D:/other" };
-    await flushPromises();
+    await setImmediate();
     expect(capabilities.catalog.value.skills).toEqual([]);
     expect(capabilities.catalog.value.skillsLoading).toBe(false);
   });
@@ -67,16 +67,16 @@ describe("room skill loading", () => {
       errors: [{ code: "skill_load_failed", error: "部分技能加载失败" }],
     });
     const { capabilities } = setup();
-    await flushPromises();
+    await setImmediate();
     expect(capabilities.catalog.value.skills).toHaveLength(3);
     expect(capabilities.catalog.value.issues).toEqual(["部分技能加载失败"]);
     vi.mocked(fetchRoomSkills).mockRejectedValueOnce(new Error("offline"));
     capabilities.refresh();
-    await flushPromises();
+    await setImmediate();
     expect(capabilities.catalog.value.skills).toEqual([]);
     expect(capabilities.catalog.value.issues.join()).toContain("Skill 目录加载失败");
     capabilities.refresh();
-    await flushPromises();
+    await setImmediate();
     expect(capabilities.catalog.value.skills).toHaveLength(3);
     expect(capabilities.catalog.value.issues).toEqual([]);
   });
