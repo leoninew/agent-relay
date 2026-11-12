@@ -87,23 +87,19 @@ ORM 映射当前 `queue_deleted_20261110` 的 14 张表；SQL-first Alembic 仍�
 ## 测试与运行入口
 
 - `uv run --locked pytest`：默认单元测试，按领域、应用、基础设施、配置与接口分类，不建 SQLite、不启动 FastAPI 或协议子进程。
-- `uv run --locked pytest -o addopts=-ra tests/integration`：覆盖默认 marker 过滤，运行数据库、HTTP/WebSocket、CLI/MCP、Codex fixture 协议子进程及后台生命周期测试；数据库统一使用 SQLite 内存模式，协议使用自有模拟进程。
-- `uv run --locked pytest -o addopts=-ra tests -q`：完整后端开发回归；类型检查包括 `mypy src tests` 与 `mypy migrations`。历史 DDL 专用 `test_migration_sql.py` 是直接 sqlite3 验证例外。
+- `uv run --locked mypy src tests`、`uv run --locked mypy migrations`：检查源码、单测和迁移脚本类型。
+- 迁移链及 SQL 使用 `alembic history`、`alembic heads`、`alembic upgrade queue_deleted_20261110:head --sql` 离线核对，不执行真实 SQLite 测试。
 - `make test`：后端与前端单元测试；`make check`：既有类型、lint 和格式入口，可用 `fix=1` 自动修复。
 - `python -m agent_relay.server`、`python -m agent_relay.cli`、`python -m agent_relay.migrate` 及 `agent-relay` script 保持原调用方式。旧内部 Python 模块路径随职责迁移，仓库内消费者已更新。
 
-测试支持代码集中在 `tests/support`。业务策略、编排与协议转换优先使用轻量 fake；SQL 条件、跨事务竞争、协议子进程以及真实 HTTP/CLI/MCP 连接保留必要集成测试，不用集成测试重复枚举纯规则。
+单测 fixture 按需放在对应目录的 `conftest.py`，仓储和驱动使用端口 Mock 或局部内存替身。已移除依赖旧 `tests/support` 的集成测试及协议子进程脚手架，不恢复共享模拟仓储。
 
 测试按责任选择最小范围：
 
 - 领域测试直接验证路由、去重、固定用户、订阅和位置等规则；应用测试使用轻量仓储、驱动 fake 验证编排、保存的事实及 RPC 前退出作用域。
-- 持久化集成测试验证真实 SQL 的筛选与分页、外键、原子回滚和并发条件。同类约束、回滚和状态保护选代表场景，不对每个写入阶段注入失败，也不固定内部 SELECT 次数。
-- HTTP 保留主要资源操作、协作流程及事务/错误接线；CLI、MCP 各保留资源管理和当前会话身份两个端到端用例。业务规则不通过每个入口重复验证。
+- 基础设施测试验证 DTO/ORM 转换、序列化、事务提交/回滚编排和 RPC 输入输出，数据库会话及 RPC 均使用替身。
+- 接口测试验证参数、请求编码、错误契约、MCP 工具目录及事务中间件，不启动真实 HTTP 服务或连接数据库。
 
-重复断言和没有实际风险依据的冷门异常组合直接删除，不要求逐项迁为单元测试。新增集成用例应能说明它验证了哪个单元测试无法证明的数据库或协议边界。
-
-数据库夹具 `MemoryDatabases` 使用 SQLite `vfs=memdb` URI，每个测试隔离数据库，通过独立 Engine 和连接保留真实事务、外键与并发竞争。Alembic 借用内存连接执行原迁移 SQL；`Database` 可接收显式 Engine，仍检查迁移版本。测试中的 Path 仅用于标识数据库及验证配置、调度锁路径，不创建数据库文件，夹具结束时检查没有 `.sqlite3` 文件。迁移 SQL 的直接 DBAPI 测试使用 `:memory:`。
-
-内存库未提交写入期间，其他连接读取会被锁阻塞；隔离测试验证阻塞，以及提交或回滚后最终可见的事实。跨进程磁盘持久化用例已改为关闭并重建 Engine 后读取，不将内存测试视为磁盘耐久性或操作系统进程重启验证。
+重复断言和没有实际风险依据的冷门异常组合直接删除，不要求逐项迁为单元测试。按当前用户约束，不增加跨层、真实 SQLite、集成或端到端测试。
 
 协议端口增加类型化回执属于 Python 内部契约，HTTP、CLI 和 MCP 仍返回原有字段。暂无生成协议代码，不创建空 `gen` 层。

@@ -27,15 +27,15 @@ uv run --locked python -m agent_relay.migrate
 
 主外键、查询和索引字段使用列或关联表，JSON 仅保存额外元数据。不从业务模型自动生成 DDL。
 
-## 手动验证 SQL
+## 离线核对 SQL
 
-SQL 执行检查使用通用的 `integration` 标记，默认 pytest 运行会排除带此标记的测试。手动运行：
+查看迁移链及从当前基线升级的 SQL，不连接数据库：
 
 ```bash
-uv run --locked pytest tests/integration/test_migration_sql.py -m integration
+uv run --locked alembic history
+uv run --locked alembic heads
+uv run --locked alembic upgrade queue_deleted_20261110:head --sql
 ```
-
-测试按路径顺序在临时 SQLite 数据库中执行 `sqlite/sql/` 下的全部 `.up.sql`，并检查数据库完整性和外键，不操作开发库。
 
 ## 基线与旧库
 

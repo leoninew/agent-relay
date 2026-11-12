@@ -61,7 +61,7 @@ agent-relay --help
 | --- | --- |
 | `src/agent_relay/` | 后端业务、适配器、CLI 与 MCP |
 | `web/` | Vue 前端 |
-| `tests/unit/`、`tests/integration/` | 后端单元测试与集成测试 |
+| `tests/unit/` | 后端单元测试 |
 | `migrations/` | SQLite SQL 与 Alembic revision |
 
 - [后端架构](docs/design/backend-architecture.md)
