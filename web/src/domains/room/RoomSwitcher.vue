@@ -7,67 +7,85 @@
         :disable-hover-trigger="true"
         aria-label="项目"
       >
-        <NavigationMenuList class="room-tab-list">
-          <NavigationMenuItem
-            v-for="room in roomsStore.rooms"
-            :key="room.id"
-            class="room-tab-row"
-            :class="{ 'is-current': route.params.roomId === room.id }"
+        <NavigationMenuList as-child>
+          <VueDraggable
+            v-model="rooms"
+            tag="ul"
+            class="room-tab-list"
+            draggable=".room-tab-row"
+            handle=".room-tab"
+            direction="horizontal"
+            ghost-class="room-tab-drag-ghost"
+            chosen-class="room-tab-drag-chosen"
+            :animation="150"
+            :delay="150"
+            :delay-on-touch-only="true"
+            :disabled="rooms.length < 2"
           >
-            <NavigationMenuLink as-child :active="route.params.roomId === room.id">
-              <RouterLink
-                :to="{ name: 'room-detail', params: { roomId: room.id } }"
-                class="room-tab"
-                :aria-label="`切换项目：${room.name}`"
-                :title="room.name"
-              >
-                <span class="room-tab-name">{{ room.name }}</span>
-              </RouterLink>
-            </NavigationMenuLink>
-            <DropdownMenuRoot :modal="false">
-              <DropdownMenuTrigger as-child>
-                <button
-                  type="button"
-                  class="room-tab-menu-button"
-                  :aria-label="`管理项目：${room.name}`"
-                  :title="`管理项目：${room.name}`"
-                >
-                  <span aria-hidden="true">...</span>
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuPortal>
-                <DropdownMenuContent
-                  class="room-switcher-menu"
-                  :aria-label="`管理项目：${room.name}`"
-                  side="bottom"
-                  align="start"
-                  :side-offset="8"
-                  :collision-padding="12"
-                >
-                  <DropdownMenuItem class="room-menu-action" @select="startEdit(room)">
-                    <AppIcon name="edit" />编辑名称
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    class="room-menu-action room-menu-danger"
-                    @select="startDelete(room)"
-                  >
-                    <AppIcon name="trash" />删除
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenuPortal>
-            </DropdownMenuRoot>
-          </NavigationMenuItem>
-          <NavigationMenuItem class="room-tab-add">
-            <button
-              type="button"
-              class="room-navigation-action"
-              aria-label="新建聊天室"
-              title="新建聊天室"
-              @click="startCreate"
+            <NavigationMenuItem
+              v-for="room in rooms"
+              :key="room.id"
+              class="room-tab-row"
+              :class="{ 'is-current': route.params.roomId === room.id }"
             >
-              <AppIcon name="plus" />
-            </button>
-          </NavigationMenuItem>
+              <NavigationMenuLink as-child :active="route.params.roomId === room.id">
+                <RouterLink
+                  :to="{ name: 'room-detail', params: { roomId: room.id } }"
+                  class="room-tab"
+                  :aria-label="`切换项目：${room.name}`"
+                  :title="`${room.name}（拖动排序，或按 Alt+左右方向键）`"
+                  aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight"
+                  @keydown.alt.left.prevent.stop="moveRoom(room.id, -1)"
+                  @keydown.alt.right.prevent.stop="moveRoom(room.id, 1)"
+                >
+                  <span class="room-tab-name">{{ room.name }}</span>
+                </RouterLink>
+              </NavigationMenuLink>
+              <DropdownMenuRoot :modal="false">
+                <DropdownMenuTrigger as-child>
+                  <button
+                    type="button"
+                    class="room-tab-menu-button"
+                    :aria-label="`管理项目：${room.name}`"
+                    :title="`管理项目：${room.name}`"
+                  >
+                    <span aria-hidden="true">...</span>
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuPortal>
+                  <DropdownMenuContent
+                    class="room-switcher-menu"
+                    :aria-label="`管理项目：${room.name}`"
+                    side="bottom"
+                    align="start"
+                    :side-offset="8"
+                    :collision-padding="12"
+                  >
+                    <DropdownMenuItem class="room-menu-action" @select="startEdit(room)">
+                      <AppIcon name="edit" />编辑名称
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      class="room-menu-action room-menu-danger"
+                      @select="startDelete(room)"
+                    >
+                      <AppIcon name="trash" />删除
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenuPortal>
+              </DropdownMenuRoot>
+            </NavigationMenuItem>
+            <NavigationMenuItem class="room-tab-add">
+              <button
+                type="button"
+                class="room-navigation-action"
+                aria-label="新建聊天室"
+                title="新建聊天室"
+                @click="startCreate"
+              >
+                <AppIcon name="plus" />
+              </button>
+            </NavigationMenuItem>
+          </VueDraggable>
         </NavigationMenuList>
       </NavigationMenuRoot>
       <p v-else-if="loading" class="room-navigation-state" role="status">加载中…</p>
@@ -122,8 +140,10 @@
   } from "reka-ui";
   import { computed, nextTick, onMounted, ref, watch } from "vue";
   import { RouterLink, useRoute, useRouter } from "vue-router";
+  import { VueDraggable } from "vue-draggable-plus";
 
   import AppIcon from "@/components/AppIcon.vue";
+  import { useStoredOrder } from "@/composables/useStoredOrder";
   import RoomDeleteDialog from "@/domains/room/RoomDeleteDialog.vue";
   import RoomSetupDialog from "@/domains/room/RoomSetupDialog.vue";
   import { describeApiError } from "@/services/api";
@@ -134,6 +154,10 @@
   const route = useRoute();
   const router = useRouter();
   const roomsStore = useRoomsStore();
+  const { orderedItems: rooms, moveItem: moveRoom } = useStoredOrder(
+    () => "relay-room-order",
+    () => roomsStore.rooms,
+  );
   const toasts = useToastsStore();
   const loading = ref(false);
   const saving = ref(false);
@@ -239,7 +263,7 @@
     roomToDelete.value = undefined;
     toasts.success("聊天室已删除");
     if (route.params.roomId === room.id) {
-      const nextRoom = roomsStore.rooms[0];
+      const nextRoom = rooms.value[0];
       await router.replace(
         nextRoom ? { name: "room-detail", params: { roomId: nextRoom.id } } : { name: "room" },
       );

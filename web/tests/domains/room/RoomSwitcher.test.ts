@@ -89,6 +89,7 @@ vi.mock("reka-ui", async (importOriginal) => {
 describe("RoomSwitcher", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    localStorage.clear();
     navigation.params.roomId = "agent-relay";
     vi.mocked(deleteRoom).mockResolvedValue();
   });
@@ -164,6 +165,67 @@ describe("RoomSwitcher", () => {
     expect(screen.getByRole("button", { name: "新建聊天室" })).toBeTruthy();
   });
 
+  it("reorders projects without switching rooms and restores the order after reopening", async () => {
+    renderSwitcher();
+    const current = screen.getByRole("link", { name: "切换项目：Agent Relay 开发室" });
+    const other = screen.getByRole("link", { name: "切换项目：其他聊天室" });
+
+    await fireEvent.keyDown(other, { key: "ArrowLeft" });
+    expect(screen.getAllByRole("link")).toEqual([current, other]);
+    await fireEvent.keyDown(other, { key: "ArrowLeft", altKey: true });
+    expect(screen.getAllByRole("link")).toEqual([other, current]);
+    expect(current.getAttribute("aria-current")).toBe("page");
+    expect(navigation.push).not.toHaveBeenCalled();
+    expect(navigation.replace).not.toHaveBeenCalled();
+    const create = screen.getByRole("button", { name: "新建聊天室" });
+    expect(current.closest("li")!.nextElementSibling?.contains(create)).toBe(true);
+
+    cleanup();
+    renderSwitcher();
+    expect(screen.getAllByRole("link").map((link) => link.getAttribute("aria-label"))).toEqual([
+      "切换项目：其他聊天室",
+      "切换项目：Agent Relay 开发室",
+    ]);
+    await fireEvent.keyDown(screen.getByRole("link", { name: "切换项目：其他聊天室" }), {
+      key: "ArrowRight",
+      altKey: true,
+    });
+    expect(screen.getAllByRole("link").map((link) => link.getAttribute("aria-label"))).toEqual([
+      "切换项目：Agent Relay 开发室",
+      "切换项目：其他聊天室",
+    ]);
+  });
+
+  it("keeps the chosen order when projects are refreshed, added or removed", async () => {
+    const rooms = renderSwitcher();
+    await fireEvent.keyDown(screen.getByRole("link", { name: "切换项目：其他聊天室" }), {
+      key: "ArrowLeft",
+      altKey: true,
+    });
+
+    const room = roomFixture().room;
+    rooms.rooms = [
+      { ...room, name: "名称已更新" },
+      { ...room, id: "other", name: "其他聊天室" },
+      { ...room, id: "new", name: "新聊天室" },
+    ];
+    await waitFor(() =>
+      expect(screen.getAllByRole("link").map((link) => link.textContent)).toEqual([
+        "其他聊天室",
+        "名称已更新",
+        "新聊天室",
+      ]),
+    );
+
+    rooms.rooms = rooms.rooms.filter((room) => room.id !== "other");
+    await waitFor(() =>
+      expect(screen.getAllByRole("link").map((link) => link.textContent)).toEqual([
+        "名称已更新",
+        "新聊天室",
+      ]),
+    );
+  });
+
   it("opens a per-project menu with edit and delete actions", async () => {
     renderSwitcher();
 
@@ -221,6 +283,25 @@ describe("RoomSwitcher", () => {
     await requestDeletion();
     await fireEvent.click(screen.getByRole("button", { name: "确认删除" }));
     await waitFor(() => expect(navigation.replace).toHaveBeenCalledWith({ name: "room" }));
+  });
+
+  it("uses the visible project order when switching away from a deleted room", async () => {
+    const rooms = renderSwitcher();
+    rooms.rooms.push({ ...roomFixture().room, id: "third", name: "第三聊天室" });
+    await screen.findByRole("link", { name: "切换项目：第三聊天室" });
+    await fireEvent.keyDown(screen.getByRole("link", { name: "切换项目：第三聊天室" }), {
+      key: "ArrowLeft",
+      altKey: true,
+    });
+
+    await requestDeletion();
+    await fireEvent.click(screen.getByRole("button", { name: "确认删除" }));
+    await waitFor(() =>
+      expect(navigation.replace).toHaveBeenCalledWith({
+        name: "room-detail",
+        params: { roomId: "third" },
+      }),
+    );
   });
 
   it("keeps the dialog and room when deletion fails and allows retrying", async () => {
