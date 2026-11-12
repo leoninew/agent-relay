@@ -8,6 +8,7 @@ from agent_relay.application.delivery.ports import (
     ClaimedDelivery,
     DeliveryDriver,
     DeliveryRepository,
+    InputHistoryUnavailable,
     QueueReceipt,
     QueueRequest,
     SteerReceipt,
@@ -36,6 +37,7 @@ class DeliveryService:
         self.driver = driver
         self.logger = logger
         self.history_cursors: dict[str, str | None] = {}
+        self.unavailable_history_sessions: set[str] = set()
 
     def recover(self) -> None:
         self.store.interrupt_submissions()
@@ -139,9 +141,16 @@ class DeliveryService:
                 self.history_cursors[session_id] = older.next_cursor
             else:
                 self.history_cursors[session_id] = latest.next_cursor
+            self.unavailable_history_sessions.discard(session_id)
             for received in inputs:
                 if received.client_message_id in client_message_ids:
                     self.store.confirm_input(session_id, received)
+        except InputHistoryUnavailable as exc:
+            if session_id not in self.unavailable_history_sessions:
+                self.logger.info(
+                    "Input receipt observation unavailable session=%s reason=%s", session_id, exc
+                )
+                self.unavailable_history_sessions.add(session_id)
         except Exception:
             # A missing or unreadable history page never proves rejection or
             # receipt and never causes a new queue/add or queue/start.

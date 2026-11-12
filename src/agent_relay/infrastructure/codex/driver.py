@@ -17,6 +17,7 @@ from websockets.sync.client import ClientConnection, connect
 from agent_relay.application.capabilities.contracts import McpCatalog, SkillCatalog
 from agent_relay.application.delivery.ports import (
     ActivationRejected,
+    InputHistoryUnavailable,
     InputPage,
     QueueHead,
     QueueReceipt,
@@ -637,25 +638,59 @@ class CodexDriver:
 
     def read_input_page(self, thread_id: str, cursor: str | None = None) -> InputPage:
         with ProxyRpc(self.command, self.timeout) as rpc:
-            page = rpc.call(
-                "thread/items/list",
-                {"threadId": thread_id, "cursor": cursor, "limit": 100, "sortDirection": "desc"},
-            )
-            data = page.get("data")
-            if not isinstance(data, list):
-                raise RpcDisconnected("Missing Codex input history page")
-            inputs = []
-            for row in data:
-                if not isinstance(row, dict) or not isinstance(row.get("item"), dict):
-                    raise RpcDisconnected("Invalid Codex history item")
-                item = row["item"]
-                if item.get("type") != "userMessage" or not item.get("clientId"):
-                    continue
-                values = (item["clientId"], item.get("id"), row.get("turnId"))
-                if any(not isinstance(value, str) or not value for value in values):
-                    raise RpcDisconnected("Incomplete Codex input identity")
-                inputs.append(ReceivedInput(*(cast(str, value) for value in values)))
-            next_cursor = page.get("nextCursor")
-            if next_cursor is not None and (not isinstance(next_cursor, str) or not next_cursor):
+            try:
+                return self._read_input_page(rpc, thread_id, cursor)
+            except RpcRejected as exc:
+                if exc.code == -32601:
+                    raise InputHistoryUnavailable(
+                        "Codex input history methods are unsupported"
+                    ) from exc
+                if exc.code == -32600 and str(exc) == f"thread not loaded: {thread_id}":
+                    raise InputHistoryUnavailable("Codex session is not loaded") from exc
+                raise
+
+    @staticmethod
+    def _read_input_page(rpc: ProxyRpc, thread_id: str, cursor: str | None) -> InputPage:
+        source = "items"
+        if cursor is not None:
+            source, separator, cursor = cursor.partition(":")
+            if not separator or source not in {"items", "turns"} or not cursor:
                 raise RpcDisconnected("Invalid Codex input history cursor")
-            return InputPage(tuple(inputs), next_cursor)
+        params = {"threadId": thread_id, "cursor": cursor, "limit": 100, "sortDirection": "desc"}
+        if source == "items":
+            try:
+                page = rpc.call("thread/items/list", params)
+            except RpcRejected as exc:
+                if exc.code != -32601:
+                    raise
+                source = "turns"
+                params = {**params, "cursor": None}
+        if source == "turns":
+            page = rpc.call("thread/turns/list", {**params, "itemsView": "full"})
+        data = page.get("data")
+        if not isinstance(data, list):
+            raise RpcDisconnected("Missing Codex input history page")
+        if source == "turns":
+            rows: list[dict[str, Any]] = []
+            for turn in data:
+                if not isinstance(turn, dict) or not isinstance(turn.get("items"), list):
+                    raise RpcDisconnected("Invalid Codex history turn")
+                rows.extend({"turnId": turn.get("id"), "item": item} for item in turn["items"])
+            data = rows
+        inputs = []
+        for row in data:
+            if not isinstance(row, dict) or not isinstance(row.get("item"), dict):
+                raise RpcDisconnected("Invalid Codex history item")
+            item = row["item"]
+            if item.get("type") != "userMessage" or not item.get("clientId"):
+                continue
+            values = (item["clientId"], item.get("id"), row.get("turnId"))
+            if any(not isinstance(value, str) or not value for value in values):
+                raise RpcDisconnected("Incomplete Codex input identity")
+            inputs.append(ReceivedInput(*(cast(str, value) for value in values)))
+        next_cursor = page.get("nextCursor")
+        if next_cursor is not None:
+            if not isinstance(next_cursor, str) or not next_cursor:
+                raise RpcDisconnected("Invalid Codex input history cursor")
+            next_cursor = f"{source}:{next_cursor}"
+        return InputPage(tuple(inputs), next_cursor)

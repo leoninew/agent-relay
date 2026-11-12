@@ -10,6 +10,7 @@ from agent_relay.application.delivery.ports import (
     ClaimedDelivery,
     DeliveryDriver,
     DeliveryRepository,
+    InputHistoryUnavailable,
     InputPage,
     QueueHead,
     QueueReceipt,
@@ -215,5 +216,30 @@ def test_observation_failure_or_unrelated_input_never_confirms_or_resends(
     service.observe("original-session", {"client"})
     service.observe("original-session", {"client"})
     delivery_store.confirm_input.assert_not_called()
+    queue_driver.submit.assert_not_called()
+    queue_driver.activate.assert_not_called()
+
+
+def test_unavailable_history_logs_once_and_observation_recovers_without_resubmission(
+    delivery_store: Mock, queue_driver: Mock
+) -> None:
+    received = ReceivedInput("client", "item", "turn")
+    queue_driver.read_input_page.side_effect = [
+        InputHistoryUnavailable("Session is not loaded"),
+        InputHistoryUnavailable("Session is not loaded"),
+        InputPage((received,), None),
+        InputHistoryUnavailable("Session is not loaded"),
+    ]
+    logger = Mock(spec=logging.Logger)
+    service = DeliveryService(delivery_store, queue_driver, logger)
+    for _ in range(2):
+        service.observe("original-session", {"client"})
+    logger.info.assert_called_once()
+    delivery_store.confirm_input.assert_not_called()
+    service.observe("original-session", {"client"})
+    delivery_store.confirm_input.assert_called_once_with("original-session", received)
+    service.observe("original-session", {"client"})
+    assert logger.info.call_count == 2
+    logger.exception.assert_not_called()
     queue_driver.submit.assert_not_called()
     queue_driver.activate.assert_not_called()

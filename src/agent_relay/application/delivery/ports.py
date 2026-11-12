@@ -18,6 +18,10 @@ class ActivationRejected(RuntimeError):
     pass
 
 
+class InputHistoryUnavailable(RuntimeError):
+    pass
+
+
 class SubmissionRejected(RuntimeError):
     def __init__(self, message: str, method: SubmissionMethod | None = None) -> None:
         super().__init__(message)

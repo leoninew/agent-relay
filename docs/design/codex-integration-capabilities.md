@@ -1,11 +1,13 @@
 # Codex 接入能力核验与方案建议
-最后修改时间: 2026-11-12 09:39:00
+最后修改时间: 2026-11-12 10:26:01
 
 ## 状态与结论
 
 2026-11-12 的[时效改进方案](../plan/20261112-timely-message-delivery.md)已接入自动输入选择：通过原有 CLI proxy 连接共享 daemon，active 时查询最新 `inProgress` 轮次并调用 `turn/steer(threadId, expectedTurnId, clientUserMessageId, input)`，idle 时沿用 queue/add 与保存成功后的单次精确 FIFO 激活。无需模式开关，不新建执行宿主。
 
-本机 `codex-cli 0.167.1` schema 支持 steer 客户端消息 ID 和 text/skill/mention 输入；steer 返回的 turnId 仅表示接纳，不是历史输入或队列凭证。只有 `thread/items/list` 精确匹配客户端 ID 才记 received。steer 保存独立方法/轮次列，queue 专有凭证保持为空；`queued` 兼容字段表示已接纳待核验，`queuedAt` 仍只记录真实 queue 时间，`queuedCount` 为已接纳待确认计数。
+本机 `codex-cli 0.167.1` schema 支持 steer 客户端消息 ID 和 text/skill/mention 输入；steer 返回的 turnId 仅表示接纳，不是历史输入或队列凭证。只有历史 `userMessage.clientId` 精确匹配客户端 ID 才记 received。steer 保存独立方法/轮次列，queue 专有凭证保持为空；`queued` 兼容字段表示已接纳待核验，`queuedAt` 仍只记录真实 queue 时间，`queuedCount` 为已接纳待确认计数。
+
+历史核验优先使用 `thread/items/list`；明确返回 `-32601` 时改用 `thread/turns/list(itemsView=full)`，继续有界分页并按原客户端 ID、输入项 ID 与轮次 ID 核验。两类游标分别标记，不能混用。不支持历史方法或会话已卸载时保留待确认状态、继续只读核验，同一不可用阶段只记录一次提示；其他错误仍记录异常。2026-11-12 现场旧会话虽已卸载，items/list 仍返回 `-32601 not supported yet`，turns/list 与 thread/read 才返回 `thread not loaded`；因此不能仅凭该报错判断 CLI 版本过旧。参见 [OpenAI 官方接口文档](https://developers.openai.com/codex/app-server/)。
 
 轮次无法定位或方法明确不支持可退回 queue；steer 参数类拒绝仅在一次复核确认原目标已空闲/换轮次后允许回退，其他内部错误、超时、断连或坏回执均 unknown、不补投。能力校验在任何输入写入前完成。观察与提交有界公平调度，已有积压不升级重投，清空不能撤回已送入当前轮次的内容。
 

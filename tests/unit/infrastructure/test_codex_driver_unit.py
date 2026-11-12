@@ -1,10 +1,11 @@
 import json
 from pathlib import Path
-from unittest.mock import Mock
+from unittest.mock import MagicMock, Mock, call
 
 import pytest
 from pytest import MonkeyPatch
 
+from agent_relay.application.delivery.ports import InputHistoryUnavailable, InputPage, ReceivedInput
 from agent_relay.infrastructure.codex.driver import (
     CodexDriver,
     ProxyRpc,
@@ -128,3 +129,154 @@ def test_malformed_rpc_error_is_uncertain_instead_of_an_explicit_rejection(error
     rpc.ws = socket
     with pytest.raises(RpcDisconnected):
         rpc.call("turn/steer", {})
+
+
+@pytest.fixture
+def history_rpc(monkeypatch: MonkeyPatch) -> Mock:
+    rpc = MagicMock(spec=ProxyRpc)
+    rpc.__enter__.return_value = rpc
+    monkeypatch.setattr("agent_relay.infrastructure.codex.driver.ProxyRpc", lambda *_: rpc)
+    return rpc
+
+
+def test_input_history_only_returns_correlatable_user_messages(history_rpc: Mock) -> None:
+    history_rpc.call.return_value = {
+        "data": [
+            {"turnId": "turn", "item": {"type": "userMessage", "clientId": "client", "id": "item"}},
+            {"turnId": "turn", "item": {"type": "userMessage", "id": "unrelated"}},
+            {"turnId": "turn", "item": {"type": "agentMessage", "id": "reply"}},
+        ],
+        "nextCursor": "older",
+    }
+    page = CodexDriver(["unused"], 1).read_input_page("original")
+    assert page == InputPage((ReceivedInput("client", "item", "turn"),), "items:older")
+    history_rpc.call.assert_called_once_with(
+        "thread/items/list",
+        {"threadId": "original", "cursor": None, "limit": 100, "sortDirection": "desc"},
+    )
+
+
+def test_unsupported_items_history_falls_back_to_full_turn_pages(history_rpc: Mock) -> None:
+    history_rpc.call.side_effect = [
+        RpcRejected("thread/items/list is not supported yet", -32601),
+        {
+            "data": [
+                {
+                    "id": "turn",
+                    "items": [
+                        {"type": "userMessage", "clientId": "client", "id": "item"},
+                        {"type": "userMessage", "id": "unrelated"},
+                        {"type": "agentMessage", "id": "reply"},
+                    ],
+                }
+            ],
+            "nextCursor": "older",
+        },
+    ]
+    page = CodexDriver(["unused"], 1).read_input_page("original", "items:previous")
+    assert page == InputPage((ReceivedInput("client", "item", "turn"),), "turns:older")
+    history_rpc.call.assert_has_calls(
+        [
+            call(
+                "thread/items/list",
+                {
+                    "threadId": "original",
+                    "cursor": "previous",
+                    "limit": 100,
+                    "sortDirection": "desc",
+                },
+            ),
+            call(
+                "thread/turns/list",
+                {
+                    "threadId": "original",
+                    "cursor": None,
+                    "limit": 100,
+                    "sortDirection": "desc",
+                    "itemsView": "full",
+                },
+            ),
+        ]
+    )
+
+
+@pytest.mark.parametrize("source", ["items", "turns"])
+def test_input_history_cursor_continues_with_its_original_method(
+    history_rpc: Mock, source: str
+) -> None:
+    history_rpc.call.return_value = {"data": [], "nextCursor": None}
+    assert CodexDriver(["unused"], 1).read_input_page("original", f"{source}:older") == InputPage(
+        (), None
+    )
+    params = {"threadId": "original", "cursor": "older", "limit": 100, "sortDirection": "desc"}
+    history_rpc.call.assert_called_once_with(
+        f"thread/{source}/list", {**params, "itemsView": "full"} if source == "turns" else params
+    )
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        TimeoutError("Lost response"),
+        RpcDisconnected("Disconnected"),
+        RpcRejected("Invalid request", -32600),
+        RpcRejected("Invalid parameters", -32602),
+        RpcRejected("Internal error", -32603),
+        RpcRejected("thread not loaded: another", -32600),
+    ],
+)
+def test_other_history_failures_are_not_hidden_or_read_using_another_method(
+    history_rpc: Mock, error: Exception
+) -> None:
+    history_rpc.call.side_effect = error
+    with pytest.raises(type(error)) as raised:
+        CodexDriver(["unused"], 1).read_input_page("original")
+    assert raised.value is error
+    history_rpc.call.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        RpcRejected("thread/turns/list is not supported yet", -32601),
+        RpcRejected("thread not loaded: original", -32600),
+    ],
+)
+def test_unavailable_input_history_has_a_typed_outcome(
+    history_rpc: Mock, error: RpcRejected
+) -> None:
+    history_rpc.call.side_effect = [RpcRejected("Not supported yet", -32601), error]
+    with pytest.raises(InputHistoryUnavailable):
+        CodexDriver(["unused"], 1).read_input_page("original")
+    assert [entry.args[0] for entry in history_rpc.call.call_args_list] == [
+        "thread/items/list",
+        "thread/turns/list",
+    ]
+
+
+@pytest.mark.parametrize("source", ["items", "turns"])
+@pytest.mark.parametrize("failure", ["page", "row", "identity", "cursor"])
+def test_invalid_history_is_not_accepted_as_receipt_evidence(
+    history_rpc: Mock, source: str, failure: str
+) -> None:
+    item = {"type": "userMessage", "clientId": "client", "id": "item"}
+    row: object = (
+        {"turnId": "turn", "item": item} if source == "items" else {"id": "turn", "items": [item]}
+    )
+    if failure == "identity":
+        item.pop("id")
+    if failure == "row":
+        row = {"turnId": "turn", "item": None} if source == "items" else {"id": "turn"}
+    history_rpc.call.return_value = {
+        "data": None if failure == "page" else [row],
+        "nextCursor": "" if failure == "cursor" else None,
+    }
+    with pytest.raises(RpcDisconnected):
+        CodexDriver(["unused"], 1).read_input_page("original", f"{source}:older")
+
+
+@pytest.mark.parametrize("cursor", ["untagged", "unknown:older", "turns:"])
+def test_invalid_history_cursor_is_never_forwarded(history_rpc: Mock, cursor: str) -> None:
+    with pytest.raises(RpcDisconnected, match="cursor"):
+        CodexDriver(["unused"], 1).read_input_page("original", cursor)
+    history_rpc.call.assert_not_called()
