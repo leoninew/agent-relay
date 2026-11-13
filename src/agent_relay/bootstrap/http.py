@@ -9,8 +9,10 @@ from starlette.concurrency import run_in_threadpool
 from agent_relay.application.capabilities.ports import CapabilityDriver
 from agent_relay.application.delivery.ports import DeliveryDriver
 from agent_relay.application.members.sessions import SessionDriver
+from agent_relay.application.preferences.service import PreferencesService
 from agent_relay.bootstrap.config import load_settings
 from agent_relay.bootstrap.dependencies import create_http_dependencies
+from agent_relay.bootstrap.preferences import create_preferences_service
 from agent_relay.bootstrap.settings import Settings
 from agent_relay.infrastructure.codex.dependencies import (
     create_capability_driver,
@@ -44,6 +46,7 @@ def create_app(
     session_driver: SessionDriver | None = None,
     queue_driver: DeliveryDriver | None = None,
     capability_driver: CapabilityDriver | None = None,
+    preferences_service: PreferencesService | None = None,
 ) -> FastAPI:
     configured = settings if settings is not None else load_settings()
     owned = database is None
@@ -64,6 +67,7 @@ def create_app(
             session_driver=session_driver,
             queue_driver=queue_driver,
             capability_driver=capability_driver,
+            preferences_service=preferences_service,
         )
     except BaseException:
         if owned:
@@ -81,6 +85,7 @@ def _configure_app(
     session_driver: SessionDriver | None,
     queue_driver: DeliveryDriver | None,
     capability_driver: CapabilityDriver | None,
+    preferences_service: PreferencesService | None,
 ) -> FastAPI:
     codex = configured.codex
     sessions = (
@@ -115,6 +120,11 @@ def _configure_app(
     app = FastAPI(title="Agent Relay", lifespan=lifespan)
     app.state.logger = logger
     app.state.database = database
+    app.state.preferences = (
+        preferences_service
+        if preferences_service is not None
+        else create_preferences_service(configured)
+    )
     capabilities = (
         capability_driver
         if capability_driver is not None
@@ -143,6 +153,7 @@ def build_app(
     session_driver: SessionDriver | None = None,
     queue_driver: DeliveryDriver | None = None,
     capability_driver: CapabilityDriver | None = None,
+    preferences_service: PreferencesService | None = None,
 ) -> FastAPI:
     return create_app(
         logging.getLogger("agent_relay.http"),
@@ -152,4 +163,5 @@ def build_app(
         session_driver=session_driver,
         queue_driver=queue_driver,
         capability_driver=capability_driver,
+        preferences_service=preferences_service,
     )

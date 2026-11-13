@@ -41,7 +41,9 @@ class MemberService:
         try:
             return read()
         except Exception as exc:
-            raise SessionUnavailableError("无法读取 Codex 会话，请刷新后重试") from exc
+            raise SessionUnavailableError(
+                "无法读取 Codex 会话，请刷新后重试", code="session_metadata_unavailable"
+            ) from exc
 
     def candidates(self, room_id: str) -> list[SessionCandidate]:
         with self.store.read() as rooms:
@@ -67,6 +69,7 @@ class MemberService:
                     member_id=joined.get(info.id),
                     usable=info.usable,
                     unavailable_reason=info.unavailable_reason,
+                    unavailable_reason_code=info.unavailable_reason_code,
                 )
             )
         return result
@@ -136,11 +139,18 @@ class MemberService:
         # External metadata reads never hold a SQLite transaction or resume a thread.
         info = self._metadata(lambda: self.driver.inspect(request.session_id))
         if info.id != request.session_id:
-            raise SessionUnavailableError("Codex 返回的会话身份不匹配")
+            raise SessionUnavailableError(
+                "Codex 返回的会话身份不匹配", code="session_identity_mismatch"
+            )
         if normalize_project_path(info.cwd) != cwd:
-            raise RoomInputError("所选 Codex 会话不属于当前聊天室项目目录")
+            raise RoomInputError(
+                "所选 Codex 会话不属于当前聊天室项目目录", code="session_project_mismatch"
+            )
         if not info.usable:
-            raise RoomConflictError(info.unavailable_reason or "所选 Codex 会话当前不可用")
+            raise RoomConflictError(
+                info.unavailable_reason or "所选 Codex 会话当前不可用",
+                code=info.unavailable_reason_code or "session_unavailable",
+            )
         with self.store.write() as rooms:
             state = rooms.resources(room_id)
             self._validate_add(state, request)
@@ -186,7 +196,9 @@ class MemberService:
             try:
                 info = self.driver.inspect(session_id)
                 if info.id != session_id:
-                    raise SessionUnavailableError("Codex 返回的会话身份不匹配")
+                    raise SessionUnavailableError(
+                        "Codex 返回的会话身份不匹配", code="session_identity_mismatch"
+                    )
                 sessions.append(info)
             except Exception:
                 logger.exception("Member presence unavailable session=%s", session_id)

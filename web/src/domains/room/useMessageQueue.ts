@@ -1,4 +1,5 @@
 import { ref } from "vue";
+import type { MessageDescriptor } from "@/i18n";
 
 import { describeApiError } from "@/services/api";
 import { deleteQueueMessage, fetchMessageQueue } from "@/services/roomApi";
@@ -13,8 +14,8 @@ export function useMessageQueue(
   const loading = ref(false);
   const loadingMore = ref(false);
   const removingId = ref<string | null>(null);
-  const error = ref<string | null>(null);
-  const removeError = ref<string | null>(null);
+  const error = ref<MessageDescriptor | null>(null);
+  const removeError = ref<MessageDescriptor | null>(null);
   let nextBeforeSeq: number | null = null;
   let version = 0;
   let controller: AbortController | undefined;
@@ -72,8 +73,7 @@ export function useMessageQueue(
       } while (page.hasMore && loaded.length < desiredCount);
       apply(page, loaded);
     } catch (caught) {
-      if (requestVersion === version)
-        error.value = describeApiError(caught, "消息队列加载失败，请重试。");
+      if (requestVersion === version) error.value = describeApiError(caught, "errors.queueLoad");
     } finally {
       if (requestVersion === version) loading.value = false;
     }
@@ -104,8 +104,7 @@ export function useMessageQueue(
       for (const message of page.messages) combined.set(message.id, message);
       apply(page, [...combined.values()]);
     } catch (caught) {
-      if (requestVersion === version)
-        error.value = describeApiError(caught, "更多队列消息加载失败，请重试。");
+      if (requestVersion === version) error.value = describeApiError(caught, "errors.queueMore");
     } finally {
       if (requestVersion === version) loadingMore.value = false;
     }
@@ -127,7 +126,7 @@ export function useMessageQueue(
         currentScope.topicId === selectedScope.topicId &&
         currentScope.memberId === selectedScope.memberId
       )
-        removeError.value = describeApiError(caught, "队列记录删除失败，请重试。");
+        removeError.value = describeApiError(caught, "errors.queueRemove");
     } finally {
       removingId.value = null;
     }

@@ -208,6 +208,7 @@ export type SessionCandidate = Session & {
   memberId: string | null;
   usable: boolean;
   unavailableReason: string | null;
+  unavailableReasonCode?: string | null;
 };
 export type CreateTopic = { name: string; description: string };
 export type ChangedMember = Member & { metadata: RoomMetadata };
@@ -368,9 +369,13 @@ export async function addRoomMember(roomId: string, request: CreateMember): Prom
   return data;
 }
 
-export async function fetchRoomSessions(roomId: string): Promise<SessionCandidate[]> {
+export async function fetchRoomSessions(
+  roomId: string,
+  signal?: AbortSignal,
+): Promise<SessionCandidate[]> {
   const { data } = await apiClient.get<SessionCandidate[]>(
     `/api/room/${encodeURIComponent(roomId)}/session`,
+    { signal },
   );
   return data;
 }

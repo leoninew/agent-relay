@@ -9,20 +9,26 @@
       <div class="setup-form-content">
         <div v-if="mode === 'member'" class="setup-field">
           <div class="setup-field-heading">
-            <label id="setup-session-label">选择会话 <span class="required-mark">*</span></label>
+            <label id="setup-session-label"
+              >{{ t("setup.selectSession") }} <span class="required-mark">*</span></label
+            >
             <AppButton
               variant="plain"
               class="session-reload"
               :loading="sessionsLoading"
-              loading-label="刷新中…"
+              :loading-label="t('setup.refreshing')"
               :disabled="saving || topicSaving"
               @click="$emit('reloadSessions')"
             >
-              刷新会话
+              {{ t("setup.refreshSessions") }}
             </AppButton>
           </div>
-          <AppLoading v-if="sessionsLoading" class="session-state">正在加载会话…</AppLoading>
-          <p v-else-if="sessionsError" class="field-error" role="alert">{{ sessionsError }}</p>
+          <AppLoading v-if="sessionsLoading" class="session-state">{{
+            t("setup.loadingSessions")
+          }}</AppLoading>
+          <p v-else-if="sessionsError" class="field-error" role="alert">
+            {{ translateMessage(sessionsError) }}
+          </p>
           <template v-else>
             <RadioGroupRoot
               ref="sessionChoices"
@@ -35,7 +41,8 @@
             >
               <template v-if="availableSessions.length">
                 <p class="text-xs text-muted-foreground">
-                  可加入会话 <span class="ml-1 tabular-nums">{{ availableSessions.length }}</span>
+                  {{ t("setup.availableSessions") }}
+                  <span class="ml-1 tabular-nums">{{ availableSessions.length }}</span>
                 </p>
                 <div class="grid max-h-64 gap-2 overflow-y-auto rounded-lg p-0.5">
                   <div v-for="session in availableSessions" :key="session.id" class="relative">
@@ -71,7 +78,7 @@
                     <AppClearButton
                       v-if="sessionId === session.id"
                       class="absolute right-2 bottom-2"
-                      label="清空所选会话"
+                      :label="t('setup.clearSession')"
                       :disabled="saving"
                       @clear="clearSession"
                     />
@@ -83,14 +90,10 @@
                 class="rounded-lg border border-dashed border-border bg-muted/30 px-4 py-5 text-center"
               >
                 <p class="text-muted-foreground">
-                  {{ sessions?.length ? "暂无可加入的会话" : "当前项目目录下暂无 Codex 会话" }}
+                  {{ t(sessions?.length ? "setup.noAvailable" : "setup.noSessions") }}
                 </p>
                 <p class="mt-1 text-xs text-muted-foreground">
-                  {{
-                    sessions?.length
-                      ? "可刷新会话，或展开下方列表查看原因。"
-                      : "打开此项目的 Codex 会话后刷新列表。"
-                  }}
+                  {{ t(sessions?.length ? "setup.checkUnavailable" : "setup.openSession") }}
                 </p>
               </div>
               <CollapsibleRoot
@@ -106,14 +109,14 @@
                     name="chevron"
                     class="size-3.5 shrink-0 transition-transform group-data-[state=open]:rotate-90 motion-reduce:transition-none"
                   />
-                  <span>不可用会话</span>
+                  <span>{{ t("setup.unavailableSessions") }}</span>
                   <span class="ml-auto rounded bg-muted px-1.5 py-0.5 tabular-nums">
                     {{ unavailableSessions.length }}
                   </span>
                 </CollapsibleTrigger>
                 <CollapsibleContent>
                   <ul
-                    aria-label="不可用会话"
+                    :aria-label="t('setup.unavailableSessions')"
                     class="mt-2 grid max-h-48 gap-2 overflow-y-auto rounded-lg"
                   >
                     <li
@@ -126,7 +129,7 @@
                           {{ session.name }}
                         </span>
                         <AppTooltip
-                          v-if="sessionStatus(session) === '不可用'"
+                          v-if="!session.memberId && !session.archived && !session.usable"
                           :text="unavailableReason(session)"
                         >
                           <button
@@ -139,7 +142,10 @@
                         <span v-else class="shrink-0 text-xs">{{ sessionStatus(session) }}</span>
                       </div>
                       <span class="truncate text-xs" :title="session.id">{{ session.id }}</span>
-                      <p v-if="sessionStatus(session) !== '不可用'" class="text-xs break-words">
+                      <p
+                        v-if="session.memberId || session.archived || session.usable"
+                        class="text-xs break-words"
+                      >
                         {{ unavailableReason(session) }}
                       </p>
                     </li>
@@ -149,7 +155,7 @@
             </RadioGroupRoot>
           </template>
           <p v-if="errors.session" id="setup-session-error" class="field-error">
-            {{ errors.session }}
+            {{ translateMessage(errors.session) }}
           </p>
         </div>
         <div class="setup-field">
@@ -163,27 +169,31 @@
             :maxlength="mode === 'topic' ? 40 : 80"
             :disabled="saving"
             :invalid="!!errors.name"
-            clear-label="清空名称"
+            :clear-label="t('forms.clearName')"
             aria-describedby="setup-name-error"
             autocomplete="off"
           />
-          <p v-if="errors.name" id="setup-name-error" class="field-error">{{ errors.name }}</p>
+          <p v-if="errors.name" id="setup-name-error" class="field-error">
+            {{ translateMessage(errors.name) }}
+          </p>
         </div>
         <div v-if="mode === 'room' && !room" class="setup-field">
-          <label for="setup-path">项目路径 <span class="required-mark">*</span></label>
+          <label for="setup-path"
+            >{{ t("setup.projectPath") }} <span class="required-mark">*</span></label
+          >
           <AppInput
             id="setup-path"
             v-model="projectPath"
             maxlength="500"
             :disabled="saving"
             :invalid="!!errors.projectPath"
-            clear-label="清空项目路径"
+            :clear-label="t('setup.clearPath')"
             aria-describedby="setup-path-error"
             placeholder=""
             autocomplete="off"
           />
           <p v-if="errors.projectPath" id="setup-path-error" class="field-error">
-            {{ errors.projectPath }}
+            {{ translateMessage(errors.projectPath) }}
           </p>
         </div>
         <MemberTopicsField
@@ -196,28 +206,28 @@
           :disabled="saving"
         />
         <div v-if="mode === 'topic'" class="setup-field">
-          <label for="setup-description">话题说明</label>
+          <label for="setup-description">{{ t("setup.topicDescription") }}</label>
           <AppInput
             id="setup-description"
             v-model="description"
             maxlength="300"
             :disabled="saving"
-            clear-label="清空话题说明"
+            :clear-label="t('setup.clearDescription')"
           />
         </div>
-        <p v-if="error" class="field-error" role="alert">{{ error }}</p>
+        <p v-if="error" class="field-error" role="alert">{{ translateMessage(error) }}</p>
       </div>
       <footer class="dialog-actions">
         <AppButton variant="secondary" :disabled="saving || topicSaving" @click="$emit('close')">
-          取消
+          {{ t("common.cancel") }}
         </AppButton>
         <AppButton
           type="submit"
           :loading="saving"
-          loading-label="保存中…"
+          :loading-label="t('settings.saving')"
           :disabled="topicSaving || (mode === 'member' && (sessionsLoading || !!sessionsError))"
         >
-          {{ topic ? "保存话题" : mode === "room" && room ? "保存名称" : title }}
+          {{ topic ? t("setup.saveTopic") : mode === "room" && room ? t("setup.saveName") : title }}
         </AppButton>
       </footer>
     </form>
@@ -225,6 +235,9 @@
 </template>
 
 <script setup lang="ts">
+  import { useI18n } from "vue-i18n";
+  import { translateMessage } from "@/i18n";
+  import type { MessageDescriptor } from "@/i18n";
   import {
     CollapsibleContent,
     CollapsibleRoot,
@@ -260,10 +273,10 @@
     room?: Room;
     topics: Topic[];
     saving: boolean;
-    error: string | null;
+    error: MessageDescriptor | null;
     sessions?: SessionCandidate[];
     sessionsLoading?: boolean;
-    sessionsError?: string | null;
+    sessionsError?: MessageDescriptor | null;
     roomId?: string;
     topic?: Topic;
   }>();
@@ -285,38 +298,46 @@
   const description = ref("");
   const topicIds = ref<string[]>([]);
   const topicSaving = ref(false);
-  const errors = ref<Record<string, string>>({});
+  const errors = ref<Record<string, MessageDescriptor>>({});
   const availableSessions = computed(() =>
     (props.sessions ?? []).filter((session) => session.usable && !session.memberId),
   );
   const unavailableSessions = computed(() =>
     (props.sessions ?? []).filter((session) => !session.usable || session.memberId),
   );
+  const { t, te } = useI18n();
   const title = computed(() =>
     props.mode === "room"
       ? props.room
-        ? "编辑聊天室"
-        : "新建聊天室"
+        ? t("setup.editRoom")
+        : t("setup.createRoom")
       : props.mode === "member"
-        ? "添加成员"
+        ? t("sidebar.addMember")
         : props.topic
-          ? "编辑话题"
-          : "新建话题",
+          ? t("setup.editTopic")
+          : t("sidebar.newTopic"),
   );
   const nameLabel = computed(() =>
-    props.mode === "room" ? "项目名称" : props.mode === "member" ? "成员名称" : "话题名称",
+    t(
+      props.mode === "room"
+        ? "setup.projectName"
+        : props.mode === "member"
+          ? "forms.memberName"
+          : "setup.topicName",
+    ),
   );
 
   function sessionStatus(session: SessionCandidate): string {
-    if (session.memberId) return "已加入";
-    if (session.archived) return "已归档";
-    if (!session.usable) return "不可用";
-    return session.presence === "busy" ? "忙碌" : "空闲";
+    if (session.memberId) return t("session.joined");
+    if (session.archived) return t("session.archived");
+    if (!session.usable) return t("session.unavailable");
+    return t(session.presence === "busy" ? "session.busy" : "session.idle");
   }
 
   function unavailableReason(session: SessionCandidate): string {
-    if (session.unavailableReason) return session.unavailableReason;
-    return session.memberId ? "此会话已加入当前聊天室。" : "此会话暂不可加入，请刷新后重试。";
+    const key = `session.${session.unavailableReasonCode}`;
+    if (session.unavailableReasonCode && te(key)) return t(key);
+    return t(session.memberId ? "session.joinedReason" : "session.unavailableReason");
   }
 
   watch([() => props.mode, () => props.topic?.id, () => props.roomId, () => props.room?.id], () => {
@@ -370,11 +391,11 @@
     if (props.saving || topicSaving.value) return;
     if (props.mode === "member" && (props.sessionsLoading || props.sessionsError)) return;
     errors.value = {};
-    if (!name.value.trim()) errors.value.name = "请输入名称";
+    if (!name.value.trim()) errors.value.name = { key: "validation.name" };
     if (props.mode === "room" && !props.room) {
-      if (!projectPath.value.trim()) errors.value.projectPath = "请输入项目路径";
+      if (!projectPath.value.trim()) errors.value.projectPath = { key: "validation.path" };
       else if (!/^([a-zA-Z]:[\\/]|\/|\\\\)/.test(projectPath.value.trim()))
-        errors.value.projectPath = "请输入项目的绝对路径";
+        errors.value.projectPath = { key: "validation.absolutePath" };
     }
     if (props.mode === "member") {
       if (
@@ -382,7 +403,7 @@
           (session) => session.id === sessionId.value && !session.memberId && session.usable,
         )
       )
-        errors.value.session = "请选择要加入的会话";
+        errors.value.session = { key: "validation.session" };
     }
     if (Object.keys(errors.value).length) return;
     if (props.mode === "room" && props.room) emit("updateRoom", { name: name.value.trim() });

@@ -1,5 +1,7 @@
 import axios from "axios";
 import type { RawAxiosHeaders } from "axios";
+import type { MessageDescriptor } from "@/i18n";
+import en from "@/i18n/en";
 
 export type ApiClientErrorKind =
   "contract_mismatch" | "http_error" | "network_error" | "timeout" | "canceled";
@@ -35,15 +37,13 @@ export class ApiClientError extends Error {
   }
 }
 
-export function describeApiError(caught: unknown, fallback: string): string {
+export function describeApiError(caught: unknown, fallback: string): MessageDescriptor {
   if (caught instanceof ApiClientError) {
-    const message =
-      caught.kind === "http_error" && caught.status && caught.status < 500
-        ? caught.message
-        : fallback;
-    return caught.requestId ? `${message}（请求 ID：${caught.requestId}）` : message;
+    const code = caught.code;
+    const key = code && Object.hasOwn(en.errors, code) ? `errors.${code}` : fallback;
+    return { key, requestId: caught.requestId };
   }
-  return fallback;
+  return { key: fallback };
 }
 
 export const apiClient = axios.create({

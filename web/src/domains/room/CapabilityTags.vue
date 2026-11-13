@@ -1,5 +1,9 @@
 <template>
-  <ul v-if="capabilities?.length" class="capability-tags" aria-label="消息能力引用">
+  <ul
+    v-if="capabilities?.length"
+    class="capability-tags"
+    :aria-label="t('dialog.capabilityReferences')"
+  >
     <li v-for="reference in capabilities" :key="`${reference.type}:${reference.id}`">
       <AppIcon :name="reference.type === 'skill' ? 'skill' : 'plug'" />
       <span :title="reference.name">{{ reference.name }}</span>
@@ -7,7 +11,7 @@
         v-if="removable"
         type="button"
         class="icon-button"
-        :aria-label="`移除能力 ${reference.name}`"
+        :aria-label="t('dialog.removeCapability', { name: reference.name })"
         :disabled="disabled"
         @click.stop="$emit('remove', reference)"
       >
@@ -18,9 +22,11 @@
 </template>
 
 <script setup lang="ts">
+  import { useI18n } from "vue-i18n";
   import AppIcon from "@/components/AppIcon.vue";
   import type { CapabilityReference } from "@/services/roomApi";
 
+  const { t } = useI18n();
   defineProps<{
     capabilities?: CapabilityReference[];
     removable?: boolean;

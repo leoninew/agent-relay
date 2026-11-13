@@ -36,6 +36,16 @@ class SessionInfo:
         return None
 
     @property
+    def unavailable_reason_code(self) -> str | None:
+        if self.archived:
+            return "session_archived"
+        if self.status == "error":
+            return "session_error"
+        if not self.usable:
+            return "session_not_connected"
+        return None
+
+    @property
     def presence(self) -> Literal["available", "busy", "offline", "unknown"]:
         if not self.usable:
             return "unknown"
@@ -47,6 +57,7 @@ class SessionCandidate(Session):
     member_id: str | None = None
     usable: bool
     unavailable_reason: str | None
+    unavailable_reason_code: str | None = None
 
 
 class ChangedMember(Member):

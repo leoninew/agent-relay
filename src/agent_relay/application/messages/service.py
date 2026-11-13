@@ -33,7 +33,9 @@ class MessageService:
             existing = rooms.publication(room_id, sender.id, request.publication_id)
             if existing is not None:
                 if not rooms.message_exists(room_id, existing.id):
-                    raise RoomConflictError("该发布记录已清空，请使用新的发布标识")
+                    raise RoomConflictError(
+                        "该发布记录已清空，请使用新的发布标识", code="publication_cleared"
+                    )
                 validate_publication_replay(
                     existing,
                     content=request.content,
@@ -46,7 +48,7 @@ class MessageService:
             if request.reply_to_message_id is not None and not rooms.message_exists(
                 room_id, request.reply_to_message_id
             ):
-                raise RoomInputError("引用的消息不存在")
+                raise RoomInputError("引用的消息不存在", code="reply_message_not_found")
             message = build_message(
                 rooms.resources(room_id),
                 content=request.content,
@@ -71,7 +73,7 @@ class MessageService:
             sender = rooms.publisher(room_id, member_id)
             message = rooms.publication(room_id, sender.id, publication_id)
             if message is None or not rooms.message_exists(room_id, message.id):
-                raise RoomNotFoundError("发布记录不存在")
+                raise RoomNotFoundError("发布记录不存在", code="publication_not_found")
             return message.model_copy(deep=True)
 
     def clear_queue(
@@ -88,7 +90,7 @@ class MessageService:
         with self.store.write() as rooms:
             rooms.room(room_id)
             if not rooms.message_exists(room_id, message_id):
-                raise RoomNotFoundError("消息不存在")
+                raise RoomNotFoundError("消息不存在", code="message_not_found")
             removed = rooms.clear_queue(
                 room_id,
                 topic_id=None,

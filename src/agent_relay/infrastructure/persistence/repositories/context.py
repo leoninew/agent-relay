@@ -46,7 +46,7 @@ class SQLAlchemyContextRepository:
             )
         )
         if member is None:
-            raise RoomNotFoundError("聊天室成员不存在")
+            raise RoomNotFoundError("聊天室成员不存在", code="member_not_found")
         return set(
             self.session.scalars(
                 select(MemberTopicRecord.topic_id)
@@ -171,7 +171,7 @@ class SQLAlchemyContextRepository:
         ).limit(request.limit + 1)
         rows = self.session.execute(statement).tuples().all()
         if request.message_id is not None and not rows:
-            raise RoomNotFoundError("消息不存在或不在查阅范围内")
+            raise RoomNotFoundError("消息不存在或不在查阅范围内", code="message_not_visible")
         messages = [
             ContextMessage.model_validate(message.model_dump())
             for message in self.messages.load(

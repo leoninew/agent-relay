@@ -4,6 +4,11 @@ import RoomPage from "@/domains/room/RoomPage.vue";
 
 const routes: RouteRecordRaw[] = [
   {
+    path: "/settings",
+    name: "settings",
+    redirect: { name: "room" },
+  },
+  {
     path: "/",
     name: "room",
     component: RoomPage,

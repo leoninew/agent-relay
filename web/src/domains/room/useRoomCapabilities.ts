@@ -1,4 +1,6 @@
 import { computed, onScopeDispose, ref, watch } from "vue";
+import type { MessageDescriptor } from "@/i18n";
+import en from "@/i18n/en";
 
 import { describeApiError } from "@/services/api";
 import { fetchRoomSkills } from "@/services/roomApi";
@@ -7,7 +9,7 @@ import type { Room, SkillCatalog } from "@/services/roomApi";
 export type ComposerCatalog = {
   skills: SkillCatalog["skills"];
   skillsLoading: boolean;
-  issues: string[];
+  issues: MessageDescriptor[];
 };
 
 type Cached<Result> = { expires: number; promise: Promise<Result> };
@@ -33,8 +35,9 @@ export function useRoomCapabilities(room: () => Room | undefined) {
   const controllers = new Set<AbortController>();
   const skills = ref<SkillCatalog>({ skills: [], errors: [] });
   const skillsLoading = ref(false);
-  const skillError = ref<string>();
+  const skillError = ref<MessageDescriptor>();
   let skillVersion = 0;
+  let active = true;
 
   function request<Result>(load: (signal: AbortSignal) => Promise<Result>): Promise<Result> {
     const controller = new AbortController();
@@ -43,6 +46,7 @@ export function useRoomCapabilities(room: () => Room | undefined) {
   }
 
   async function loadSkills(force = false): Promise<void> {
+    if (!active) return;
     const version = ++skillVersion;
     const current = room();
     skills.value = { skills: [], errors: [] };
@@ -58,8 +62,7 @@ export function useRoomCapabilities(room: () => Room | undefined) {
       );
       if (version === skillVersion) skills.value = result;
     } catch (caught) {
-      if (version === skillVersion)
-        skillError.value = describeApiError(caught, "Skill 目录加载失败，请刷新重试");
+      if (version === skillVersion) skillError.value = describeApiError(caught, "errors.skills");
     } finally {
       if (version === skillVersion) skillsLoading.value = false;
     }
@@ -70,17 +73,27 @@ export function useRoomCapabilities(room: () => Room | undefined) {
     () => void loadSkills(),
     { immediate: true },
   );
-  onScopeDispose(() => {
+  function pause(): void {
+    active = false;
     skillVersion++;
     controllers.forEach((controller) => controller.abort());
-  });
+    skillCache.clear();
+    skillsLoading.value = false;
+  }
+  function resume(): void {
+    active = true;
+    void loadSkills();
+  }
+  onScopeDispose(pause);
 
   const catalog = computed<ComposerCatalog>(() => ({
     skills: skills.value.skills,
     skillsLoading: skillsLoading.value,
     issues: [
       ...(skillError.value ? [skillError.value] : []),
-      ...skills.value.errors.map((issue) => issue.error),
+      ...skills.value.errors.map((issue) => ({
+        key: Object.hasOwn(en.errors, issue.code) ? `errors.${issue.code}` : "errors.skills",
+      })),
     ],
   }));
 
@@ -88,5 +101,5 @@ export function useRoomCapabilities(room: () => Room | undefined) {
     void loadSkills(true);
   }
 
-  return { catalog, refresh };
+  return { catalog, refresh, pause, resume };
 }

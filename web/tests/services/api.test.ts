@@ -2,7 +2,7 @@ import axios from "axios";
 import type { AxiosAdapter, AxiosResponse, InternalAxiosRequestConfig } from "axios";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ApiClientError, apiClient } from "@/services/api";
+import { ApiClientError, apiClient, describeApiError } from "@/services/api";
 
 const adapterMock = vi.fn();
 let originalAdapter: AxiosAdapter | AxiosAdapter[] | undefined;
@@ -22,6 +22,28 @@ function mockResponse<T>(
 }
 
 describe("apiClient", () => {
+  it("maps known codes and hides untrusted unknown messages", () => {
+    expect(
+      describeApiError(
+        new ApiClientError("private", "http_error", {
+          code: "room_not_found",
+          requestId: "req1",
+          status: 404,
+        }),
+        "errors.roomLoad",
+      ),
+    ).toEqual({ key: "errors.room_not_found", requestId: "req1" });
+    expect(
+      describeApiError(
+        new ApiClientError("private", "http_error", {
+          code: "unexpected",
+          requestId: "req2",
+          status: 400,
+        }),
+        "errors.roomLoad",
+      ),
+    ).toEqual({ key: "errors.roomLoad", requestId: "req2" });
+  });
   beforeEach(() => {
     adapterMock.mockReset();
     originalAdapter = apiClient.defaults.adapter;

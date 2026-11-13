@@ -31,7 +31,7 @@ class RoomService:
         project_path = normalize_project_path(request.project_path)
         with self.store.write() as rooms:
             if rooms.project_exists(project_path):
-                raise RoomConflictError("该项目已有聊天室，请直接打开")
+                raise RoomConflictError("该项目已有聊天室，请直接打开", code="project_room_exists")
             room = Room(
                 id=f"room-{uuid4().hex[:12]}",
                 name=request.name,
@@ -62,7 +62,9 @@ class RoomService:
             try:
                 sessions = driver.list_sessions()
             except Exception as exc:
-                raise SessionUnavailableError("无法核验成员连接状态，请刷新后重试") from exc
+                raise SessionUnavailableError(
+                    "无法核验成员连接状态，请刷新后重试", code="session_metadata_unavailable"
+                ) from exc
             reachable = {
                 info.id
                 for info in sessions

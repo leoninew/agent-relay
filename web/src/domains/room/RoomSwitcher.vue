@@ -5,7 +5,7 @@
         v-if="!loading && !loadError && roomsStore.rooms.length"
         class="room-navigation-menu"
         :disable-hover-trigger="true"
-        aria-label="项目"
+        :aria-label="t('navigation.projects')"
       >
         <NavigationMenuList as-child>
           <VueDraggable
@@ -32,8 +32,8 @@
                 <RouterLink
                   :to="{ name: 'room-detail', params: { roomId: room.id } }"
                   class="room-tab"
-                  :aria-label="`切换项目：${room.name}`"
-                  :title="`${room.name}（拖动排序，或按 Alt+左右方向键）`"
+                  :aria-label="t('navigation.switchProject', { name: room.name })"
+                  :title="t('navigation.reorderProject', { name: room.name })"
                   aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight"
                   @keydown.alt.left.prevent.stop="moveRoom(room.id, -1)"
                   @keydown.alt.right.prevent.stop="moveRoom(room.id, 1)"
@@ -46,8 +46,8 @@
                   <button
                     type="button"
                     class="room-tab-menu-button"
-                    :aria-label="`管理项目：${room.name}`"
-                    :title="`管理项目：${room.name}`"
+                    :aria-label="t('navigation.manageProject', { name: room.name })"
+                    :title="t('navigation.manageProject', { name: room.name })"
                   >
                     <span aria-hidden="true">...</span>
                   </button>
@@ -55,20 +55,20 @@
                 <DropdownMenuPortal>
                   <DropdownMenuContent
                     class="room-switcher-menu"
-                    :aria-label="`管理项目：${room.name}`"
+                    :aria-label="t('navigation.manageProject', { name: room.name })"
                     side="bottom"
                     align="start"
                     :side-offset="8"
                     :collision-padding="12"
                   >
                     <DropdownMenuItem class="room-menu-action" @select="startEdit(room)">
-                      <AppIcon name="edit" />编辑名称
+                      <AppIcon name="edit" />{{ t("navigation.editName") }}
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       class="room-menu-action room-menu-danger"
                       @select="startDelete(room)"
                     >
-                      <AppIcon name="trash" />删除
+                      <AppIcon name="trash" />{{ t("common.delete") }}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenuPortal>
@@ -78,8 +78,8 @@
               <button
                 type="button"
                 class="room-navigation-action"
-                aria-label="新建聊天室"
-                title="新建聊天室"
+                :aria-label="t('room.create')"
+                :title="t('room.create')"
                 @click="startCreate"
               >
                 <AppIcon name="plus" />
@@ -88,18 +88,22 @@
           </VueDraggable>
         </NavigationMenuList>
       </NavigationMenuRoot>
-      <p v-else-if="loading" class="room-navigation-state" role="status">加载中…</p>
+      <p v-else-if="loading" class="room-navigation-state" role="status">
+        {{ t("common.loading") }}
+      </p>
       <div v-else-if="loadError" class="room-navigation-state">
-        <span role="alert">{{ loadError }}</span>
-        <button type="button" class="room-navigation-retry" @click="load">重试</button>
+        <span role="alert">{{ translateMessage(loadError) }}</span>
+        <button type="button" class="room-navigation-retry" @click="load">
+          {{ t("common.retry") }}
+        </button>
       </div>
       <div v-else class="room-navigation-state">
-        <span>暂无聊天室</span>
+        <span>{{ t("navigation.noRooms") }}</span>
         <button
           type="button"
           class="room-navigation-action"
-          aria-label="新建聊天室"
-          title="新建聊天室"
+          :aria-label="t('room.create')"
+          :title="t('room.create')"
           @click="startCreate"
         >
           <AppIcon name="plus" />
@@ -141,6 +145,9 @@
   import { computed, nextTick, onMounted, ref, watch } from "vue";
   import { RouterLink, useRoute, useRouter } from "vue-router";
   import { VueDraggable } from "vue-draggable-plus";
+  import { useI18n } from "vue-i18n";
+  import { translateMessage } from "@/i18n";
+  import type { MessageDescriptor } from "@/i18n";
 
   import AppIcon from "@/components/AppIcon.vue";
   import { useStoredOrder } from "@/composables/useStoredOrder";
@@ -151,6 +158,7 @@
   import { useRoomsStore } from "@/stores/rooms";
   import { useToastsStore } from "@/stores/toasts";
 
+  const { t } = useI18n();
   const route = useRoute();
   const router = useRouter();
   const roomsStore = useRoomsStore();
@@ -161,13 +169,13 @@
   const toasts = useToastsStore();
   const loading = ref(false);
   const saving = ref(false);
-  const loadError = ref<string | null>(null);
-  const createError = ref<string | null>(null);
+  const loadError = ref<MessageDescriptor | null>(null);
+  const createError = ref<MessageDescriptor | null>(null);
   const editingRoom = ref<Room>();
-  const renameError = ref<string | null>(null);
+  const renameError = ref<MessageDescriptor | null>(null);
   const roomToDelete = ref<Room>();
   const deleting = ref(false);
-  const deleteError = ref<string | null>(null);
+  const deleteError = ref<MessageDescriptor | null>(null);
   const roomDialogMode = computed(() =>
     roomsStore.createOpen || editingRoom.value ? "room" : undefined,
   );
@@ -181,7 +189,7 @@
     try {
       await roomsStore.load();
     } catch (caught) {
-      loadError.value = describeApiError(caught, "聊天室加载失败，请重试。");
+      loadError.value = describeApiError(caught, "errors.roomLoad");
     } finally {
       loading.value = false;
     }
@@ -201,10 +209,10 @@
     try {
       const room = await roomsStore.create(request);
       roomsStore.createOpen = false;
-      toasts.success("聊天室已创建");
+      toasts.success({ key: "notice.roomCreated" });
       await router.push({ name: "room-detail", params: { roomId: room.id } });
     } catch (caught) {
-      createError.value = describeApiError(caught, "创建失败，请重试。");
+      createError.value = describeApiError(caught, "errors.create");
       toasts.error(createError.value);
     } finally {
       saving.value = false;
@@ -226,9 +234,9 @@
     try {
       await roomsStore.rename(room.id, request.name);
       editingRoom.value = undefined;
-      toasts.success("聊天室名称已更新");
+      toasts.success({ key: "notice.roomRenamed" });
     } catch (caught) {
-      renameError.value = describeApiError(caught, "保存失败，请重试。");
+      renameError.value = describeApiError(caught, "errors.save");
       toasts.error(renameError.value);
     } finally {
       saving.value = false;
@@ -255,13 +263,13 @@
     try {
       await roomsStore.remove(room.id);
     } catch (caught) {
-      deleteError.value = describeApiError(caught, "删除失败，请重试。");
+      deleteError.value = describeApiError(caught, "errors.remove");
       return;
     } finally {
       deleting.value = false;
     }
     roomToDelete.value = undefined;
-    toasts.success("聊天室已删除");
+    toasts.success({ key: "notice.roomDeleted" });
     if (route.params.roomId === room.id) {
       const nextRoom = rooms.value[0];
       await router.replace(

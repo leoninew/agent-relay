@@ -1,23 +1,23 @@
 <template>
   <RoomSidebarSection
-    title="话题"
-    action-label="新建话题"
+    :title="t('sidebar.topics')"
+    :action-label="t('sidebar.newTopic')"
     :busy="busy"
     @create="$emit('createTopic')"
   >
-    <nav class="sidebar-list" aria-label="筛选话题">
+    <nav class="sidebar-list" :aria-label="t('sidebar.filterTopics')">
       <div class="sidebar-node sidebar-node-fixed">
         <button
           type="button"
           class="sidebar-list-item"
           :class="{ 'is-active': selectedTopicId === undefined }"
           :aria-pressed="selectedTopicId === undefined"
-          aria-label="筛选话题：全部话题"
+          :aria-label="t('sidebar.filterTopic', { name: t('sidebar.allTopics') })"
           @click="$emit('select', undefined)"
         >
           <span class="topic-identity">
             <AppIcon name="hash" class="sidebar-item-icon" />
-            <span class="sidebar-node-name">全部话题</span>
+            <span class="sidebar-node-name">{{ t("sidebar.allTopics") }}</span>
           </span>
         </button>
       </div>
@@ -35,8 +35,8 @@
           <button
             type="button"
             class="sidebar-drag-handle"
-            :aria-label="`调整话题顺序：${topic.name}`"
-            title="拖动排序，也可使用上下方向键"
+            :aria-label="t('sidebar.reorderTopic', { name: topic.name })"
+            :title="t('sidebar.reorder')"
             :disabled="busy || topics.length < 2"
             @keydown.up.prevent="moveTopic(topic.id, -1)"
             @keydown.down.prevent="moveTopic(topic.id, 1)"
@@ -48,7 +48,7 @@
             class="sidebar-list-item"
             :class="{ 'is-active': selectedTopicId === topic.id }"
             :aria-pressed="selectedTopicId === topic.id"
-            :aria-label="`筛选话题：${topic.name}`"
+            :aria-label="t('sidebar.filterTopic', { name: topic.name })"
             :title="topic.description"
             @click="$emit('select', topic.id)"
           >
@@ -62,6 +62,7 @@
 
 <script setup lang="ts">
   import { VueDraggable } from "vue-draggable-plus";
+  import { useI18n } from "vue-i18n";
 
   import AppIcon from "@/components/AppIcon.vue";
   import RoomSidebarSection from "@/domains/room/RoomSidebarSection.vue";
@@ -69,6 +70,7 @@
   import { useSidebarOrder } from "@/domains/room/useSidebarOrder";
   import type { RoomSnapshot } from "@/services/roomApi";
 
+  const { t } = useI18n();
   const props = defineProps<{
     snapshot: RoomSnapshot;
     busy: boolean;

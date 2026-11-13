@@ -8,26 +8,26 @@ describe("toast state", () => {
 
   it("retains the latest three notifications with their tones and distinct identities", () => {
     const toasts = useToastsStore();
-    toasts.info("旧提示");
-    const first = toasts.success("保存完成");
-    const second = toasts.error("保存失败");
-    const third = toasts.success("保存完成");
+    toasts.info({ key: "notice.roomCreated" });
+    const first = toasts.success({ key: "notice.memberSaved" });
+    const second = toasts.error({ key: "errors.save" });
+    const third = toasts.success({ key: "notice.memberSaved" });
 
     expect(toasts.items).toEqual([
-      { id: first, message: "保存完成", tone: "success" },
-      { id: second, message: "保存失败", tone: "error" },
-      { id: third, message: "保存完成", tone: "success" },
+      { id: first, message: { key: "notice.memberSaved" }, tone: "success" },
+      { id: second, message: { key: "errors.save" }, tone: "error" },
+      { id: third, message: { key: "notice.memberSaved" }, tone: "success" },
     ]);
     expect(new Set(toasts.items.map((toast) => toast.id)).size).toBe(3);
   });
 
   it("dismisses only the requested notification and permits showing it again", () => {
     const toasts = useToastsStore();
-    const first = toasts.success("成员已保存");
-    const retained = toasts.error("请求失败");
+    const first = toasts.success({ key: "notice.memberSaved" });
+    const retained = toasts.error({ key: "errors.save" });
 
     toasts.dismiss(first);
-    const repeated = toasts.success("成员已保存");
+    const repeated = toasts.success({ key: "notice.memberSaved" });
 
     expect(toasts.items.map((toast) => toast.id)).toEqual([retained, repeated]);
     expect(repeated).not.toBe(first);

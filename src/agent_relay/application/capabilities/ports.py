@@ -4,7 +4,9 @@ from agent_relay.application.dto.capabilities import McpCatalog, SkillCatalog
 
 
 class CapabilityUnavailableError(RuntimeError):
-    pass
+    def __init__(self, message: str, *, code: str = "service_unavailable") -> None:
+        super().__init__(message)
+        self.code = code
 
 
 class CapabilityDriver(Protocol):

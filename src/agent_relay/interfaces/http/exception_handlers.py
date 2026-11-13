@@ -5,6 +5,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from agent_relay.application.capabilities.ports import CapabilityUnavailableError
 from agent_relay.application.members.sessions import SessionUnavailableError
+from agent_relay.application.preferences.ports import PreferenceReadError, PreferenceWriteError
 from agent_relay.domain.rooms.errors import (
     RoomConflictError,
     RoomInputError,
@@ -16,12 +17,29 @@ from agent_relay.interfaces.http.middleware import log_request_failure
 
 
 def register_exception_handlers(app: FastAPI) -> None:
+    app.exception_handler(PreferenceReadError)(preferences_exception_handler)
+    app.exception_handler(PreferenceWriteError)(preferences_exception_handler)
     app.exception_handler(SessionUnavailableError)(session_unavailable_handler)
     app.exception_handler(CapabilityUnavailableError)(session_unavailable_handler)
     app.exception_handler(StarletteHTTPException)(http_exception_handler)
     app.exception_handler(RequestValidationError)(request_validation_exception_handler)
     for error_type in (RoomNotFoundError, RoomConflictError, RoomInputError):
         app.exception_handler(error_type)(room_exception_handler)
+
+
+async def preferences_exception_handler(
+    request: Request, exc: PreferenceReadError | PreferenceWriteError
+) -> JSONResponse:
+    code = (
+        "preferences_read_failed"
+        if isinstance(exc, PreferenceReadError)
+        else "preferences_save_failed"
+    )
+    response = error_json_response(request, 503, code=code)
+    get_logger(request).error(
+        "Preferences operation failed request_id=%s", response.headers["X-Request-Id"], exc_info=exc
+    )
+    return response
 
 
 async def room_exception_handler(
@@ -34,7 +52,7 @@ async def room_exception_handler(
         status_code = 409
     else:
         status_code = 422
-    return error_json_response(request, status_code, str(exc))
+    return error_json_response(request, status_code, str(exc), code=exc.code)
 
 
 async def http_exception_handler(
@@ -67,7 +85,7 @@ async def unexpected_exception_handler(request: Request, exc: Exception) -> JSON
 async def session_unavailable_handler(
     request: Request, exc: SessionUnavailableError | CapabilityUnavailableError
 ) -> JSONResponse:
-    response = error_json_response(request, 503)
+    response = error_json_response(request, 503, code=exc.code)
     get_logger(request).error(
         "Codex metadata unavailable request_id=%s", response.headers["X-Request-Id"], exc_info=exc
     )

@@ -1,26 +1,26 @@
 <template>
-  <aside class="message-details" :aria-label="`${detailLabel}详情`">
+  <aside class="message-details" :aria-label="detailLabel">
     <header class="room-panel-heading message-details-heading">
       <div class="detail-heading-title">
-        <h2 class="room-panel-title">{{ detailLabel }}详情</h2>
+        <h2 class="room-panel-title">{{ detailLabel }}</h2>
         <div v-if="topic && !topic.deletedAt" class="detail-heading-actions">
           <button
             type="button"
             class="detail-action-link"
             :disabled="busy"
-            :aria-label="`编辑话题：${topic.name}`"
+            :aria-label="t('details.editTopic', { name: topic.name })"
             @click="$emit('editTopic', topic)"
           >
-            编辑
+            {{ t("common.edit") }}
           </button>
           <button
             type="button"
             class="detail-action-link detail-delete-link"
             :disabled="busy"
-            :aria-label="`删除话题：${topic.name}`"
+            :aria-label="t('details.deleteTopic', { name: topic.name })"
             @click="$emit('deleteTopic', topic)"
           >
-            删除
+            {{ t("common.delete") }}
           </button>
         </div>
         <div
@@ -31,19 +31,19 @@
             type="button"
             class="detail-action-link"
             :disabled="busy"
-            :aria-label="`编辑成员：${member.name}`"
+            :aria-label="t('details.editMember', { name: member.name })"
             @click="$emit('editMember', member)"
           >
-            编辑
+            {{ t("common.edit") }}
           </button>
           <button
             type="button"
             class="detail-action-link detail-delete-link"
             :disabled="busy"
-            :aria-label="`删除成员：${member.name}`"
+            :aria-label="t('details.deleteMember', { name: member.name })"
             @click="$emit('deleteMember', member)"
           >
-            删除
+            {{ t("common.delete") }}
           </button>
         </div>
       </div>
@@ -51,7 +51,7 @@
         <button
           type="button"
           class="icon-button"
-          :aria-label="`关闭${detailLabel}详情`"
+          :aria-label="t('details.close', { details: detailLabel })"
           @click="$emit('close')"
         >
           <AppIcon name="close" />
@@ -59,7 +59,7 @@
         <button
           type="button"
           class="icon-button detail-drawer-close"
-          aria-label="收起右侧面板"
+          :aria-label="t('details.collapse')"
           @click="$emit('collapse')"
         >
           <AppIcon name="chevron" />
@@ -75,7 +75,7 @@
           <p v-if="topic.description" class="detail-description">{{ topic.description }}</p>
         </div>
         <section class="message-detail-section">
-          <h3>成员</h3>
+          <h3>{{ t("sidebar.members") }}</h3>
           <ul v-if="topicMembers.length" class="detail-members">
             <li v-for="subscriber in topicMembers" :key="subscriber.id">
               <div class="member-row">
@@ -85,13 +85,13 @@
                   class="member-row-status detail-presence"
                   :data-presence="subscriber.presence"
                 >
-                  {{ presenceLabel[subscriber.presence] }}
+                  {{ t(`sidebar.${subscriber.presence}`) }}
                 </span>
-                <span v-else class="member-row-status">用户</span>
+                <span v-else class="member-row-status">{{ t("details.user") }}</span>
               </div>
             </li>
           </ul>
-          <p v-else class="detail-empty">暂无成员订阅</p>
+          <p v-else class="detail-empty">{{ t("details.noSubscribers") }}</p>
         </section>
       </template>
       <template v-else-if="member">
@@ -103,52 +103,52 @@
               class="sidebar-item-meta sidebar-member-status"
               :data-presence="member.presence"
             >
-              {{ presenceLabel[member.presence] }}
+              {{ t(`sidebar.${member.presence}`) }}
             </span>
           </div>
         </div>
         <section class="message-detail-section">
-          <h3>订阅话题</h3>
+          <h3>{{ t("forms.subscribe") }}</h3>
           <ul v-if="memberTopics.length" class="detail-topics">
             <li v-for="topicItem in memberTopics" :key="topicItem.id">
               <span class="detail-topic"># {{ topicItem.name }}</span>
             </li>
           </ul>
-          <p v-else class="detail-empty">未订阅话题</p>
+          <p v-else class="detail-empty">{{ t("details.noSubscriptions") }}</p>
         </section>
       </template>
       <template v-else-if="message">
         <section v-if="sender" class="message-detail-section">
-          <h3>消息</h3>
+          <h3>{{ t("queue.message") }}</h3>
           <dl class="detail-message-meta">
-            <dt>序号</dt>
+            <dt>{{ t("details.sequence") }}</dt>
             <dd>#{{ message.seq }}</dd>
-            <dt>发送人</dt>
+            <dt>{{ t("details.sender") }}</dt>
             <dd>
               <MemberIdentity :member="sender" :session-name="sessionName(sender)" />
             </dd>
-            <dt>发送时间</dt>
+            <dt>{{ t("details.sentAt") }}</dt>
             <dd>
               <time :datetime="message.createdAt">{{ formatDateTime(message.createdAt) }}</time>
             </dd>
           </dl>
         </section>
         <section class="message-detail-section">
-          <h3>话题</h3>
+          <h3>{{ t("sidebar.topics") }}</h3>
           <div v-if="message.topicIds.length" class="detail-topics">
             <span v-for="topicId in message.topicIds" :key="topicId" class="detail-topic">
               # {{ topics.find((topic) => topic.id === topicId)?.name ?? topicId }}
             </span>
           </div>
-          <p v-else class="detail-empty">未选择话题</p>
+          <p v-else class="detail-empty">{{ t("details.noTopics") }}</p>
         </section>
         <section v-if="dispatchRows.length" class="message-detail-section">
-          <h3>成员</h3>
-          <table class="dispatch-table" aria-label="成员">
+          <h3>{{ t("sidebar.members") }}</h3>
+          <table class="dispatch-table" :aria-label="t('sidebar.members')">
             <thead>
               <tr>
-                <th scope="col">名称</th>
-                <th scope="col">状态</th>
+                <th scope="col">{{ t("details.name") }}</th>
+                <th scope="col">{{ t("queue.status") }}</th>
               </tr>
             </thead>
             <tbody>
@@ -157,15 +157,17 @@
                   <MemberIdentity :member="recipient" :session-name="sessionName(recipient)" />
                 </td>
                 <td>
-                  <span class="delivery-stage">{{ stage ?? "-" }}</span>
-                  <small v-if="error" class="dispatch-error">{{ error }}</small>
+                  <span class="delivery-stage">{{ stage ? t(`delivery.${stage}`) : "-" }}</span>
+                  <small v-if="error" class="dispatch-error"
+                    >{{ t("delivery.diagnostic") }}: {{ error }}</small
+                  >
                 </td>
               </tr>
             </tbody>
           </table>
         </section>
       </template>
-      <p v-else class="detail-empty">暂无详情</p>
+      <p v-else class="detail-empty">{{ t("details.empty") }}</p>
       <slot name="queue" />
     </div>
   </aside>
@@ -178,6 +180,7 @@
   import MemberIdentity from "@/domains/room/MemberIdentity.vue";
   import TopicIdentity from "@/domains/room/TopicIdentity.vue";
   import { deliveryStage } from "@/domains/room/deliveryStage";
+  import { useI18n } from "vue-i18n";
   import { memberSessionName } from "@/domains/room/memberSessionName";
   import type { Member, RoomMessage, Session, Topic } from "@/services/roomApi";
   import { formatDateTime } from "@/utils/time";
@@ -194,6 +197,7 @@
     }>(),
     { message: undefined, topic: undefined, member: undefined, busy: false },
   );
+  const { t } = useI18n();
   defineEmits<{
     close: [];
     collapse: [];
@@ -207,7 +211,9 @@
     return memberSessionName(member, props.members, props.sessions);
   }
 
-  const detailLabel = computed(() => (props.topic ? "话题" : props.member ? "成员" : "消息"));
+  const detailLabel = computed(() =>
+    t(props.topic ? "details.topic" : props.member ? "details.member" : "details.message"),
+  );
 
   const sender = computed(() => {
     const message = props.message;
@@ -236,13 +242,6 @@
           .filter((topic): topic is Topic => Boolean(topic))
       : [];
   });
-
-  const presenceLabel = {
-    available: "空闲",
-    busy: "忙碌",
-    offline: "离线",
-    unknown: "接入未确认",
-  };
 
   function resolveMember(memberId: string): Pick<Member, "id" | "name"> {
     return (

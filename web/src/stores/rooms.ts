@@ -31,6 +31,7 @@ function orderedMessages(messages: RoomMessage[]): RoomMessage[] {
 export const useRoomsStore = defineStore("rooms", () => {
   const rooms = ref<Room[]>([]);
   const loaded = ref(false);
+  const recentRoomId = ref<string>();
   const createOpen = ref(false);
   const snapshots = ref<Record<string, RoomSnapshot>>({});
   const metadataVersions: Record<string, number> = {};
@@ -56,6 +57,7 @@ export const useRoomsStore = defineStore("rooms", () => {
   async function remove(roomId: string): Promise<void> {
     await deleteRoom(roomId);
     rooms.value = rooms.value.filter((room) => room.id !== roomId);
+    if (recentRoomId.value === roomId) recentRoomId.value = undefined;
     delete snapshots.value[roomId];
     delete metadataVersions[roomId];
   }
@@ -138,6 +140,7 @@ export const useRoomsStore = defineStore("rooms", () => {
   return {
     rooms,
     loaded,
+    recentRoomId,
     createOpen,
     snapshots,
     load,

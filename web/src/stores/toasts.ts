@@ -1,14 +1,15 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
+import type { MessageDescriptor } from "@/i18n";
 
 export type ToastTone = "success" | "error" | "info";
-export type ToastMessage = { id: number; message: string; tone: ToastTone };
+export type ToastMessage = { id: number; message: MessageDescriptor; tone: ToastTone };
 
 export const useToastsStore = defineStore("toasts", () => {
   const items = ref<ToastMessage[]>([]);
   let nextId = 0;
 
-  function show(message: string, tone: ToastTone = "info"): number {
+  function show(message: MessageDescriptor, tone: ToastTone = "info"): number {
     const id = ++nextId;
     items.value = [...items.value, { id, message, tone }].slice(-3);
     return id;
@@ -22,8 +23,8 @@ export const useToastsStore = defineStore("toasts", () => {
     items,
     show,
     dismiss,
-    success: (message: string) => show(message, "success"),
-    error: (message: string) => show(message, "error"),
-    info: (message: string) => show(message, "info"),
+    success: (message: MessageDescriptor) => show(message, "success"),
+    error: (message: MessageDescriptor) => show(message, "error"),
+    info: (message: MessageDescriptor) => show(message, "info"),
   };
 });

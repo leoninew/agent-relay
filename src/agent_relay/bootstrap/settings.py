@@ -2,6 +2,13 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from agent_relay.application.dto.preferences import LanguagePreference
+
+
+class PreferencesSettings(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    language: LanguagePreference = "system"
+
 
 class RequestLogMessages(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -77,3 +84,4 @@ class Settings(BaseModel):
     database: DatabaseSettings
     codex: CodexSettings
     logging: LoggingSettings
+    preferences: PreferencesSettings = Field(default_factory=PreferencesSettings)

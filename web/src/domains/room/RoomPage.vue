@@ -2,24 +2,24 @@
   <div v-if="!snapshot" class="room-initial-state">
     <template v-if="loading">
       <AppIcon name="relay" />
-      <h1>正在连接协作空间</h1>
-      <AppLoading>正在加载房间、话题和消息…</AppLoading>
+      <h1>{{ t("room.connecting") }}</h1>
+      <AppLoading>{{ t("room.loading") }}</AppLoading>
     </template>
     <template v-else-if="loadError">
       <AppIcon name="chat" />
-      <h1>暂时无法打开聊天室</h1>
-      <p role="alert">{{ loadError }}</p>
-      <AppButton @click="retry">重新加载</AppButton>
+      <h1>{{ t("room.unavailable") }}</h1>
+      <p role="alert">{{ translateMessage(loadError) }}</p>
+      <AppButton @click="retry">{{ t("room.reload") }}</AppButton>
     </template>
     <template v-else>
       <AppIcon name="chat" />
-      <h1>暂无项目聊天室</h1>
-      <AppButton @click="roomsStore.createOpen = true"> 新建聊天室 </AppButton>
+      <h1>{{ t("room.empty") }}</h1>
+      <AppButton @click="roomsStore.createOpen = true">{{ t("room.create") }}</AppButton>
     </template>
   </div>
   <RoomWorkbench v-else :details-open="drawerOpen" @collapse-details="drawerOpen = false">
     <template #sidebar>
-      <aside class="room-sidebar" aria-label="话题与成员导航">
+      <aside class="room-sidebar" :aria-label="t('room.navigation')">
         <TopicSidebar
           :snapshot="snapshot"
           :busy="sending || saving"
@@ -37,25 +37,25 @@
       </aside>
     </template>
 
-    <section class="conversation-panel" aria-label="聊天室">
+    <section class="conversation-panel" :aria-label="t('room.title')">
       <div class="conversation-messages">
         <header class="room-panel-heading conversation-heading">
           <div class="conversation-title">
-            <h2 class="room-panel-title">聊天室</h2>
+            <h2 class="room-panel-title">{{ t("room.title") }}</h2>
             <AppButton
               variant="plain"
               class="details-toggle"
               :aria-expanded="drawerOpen"
               @click="roomPanel.openDrawer"
             >
-              详情
+              {{ t("room.details") }}
             </AppButton>
           </div>
           <div class="conversation-actions">
             <form
               class="conversation-search"
               role="search"
-              aria-label="搜索聊天室消息"
+              :aria-label="t('room.searchRoom')"
               @submit.prevent="submitSearch"
             >
               <div class="conversation-search-field">
@@ -65,9 +65,9 @@
                   type="search"
                   name="keyword"
                   maxlength="200"
-                  placeholder="搜索消息…"
-                  aria-label="搜索消息"
-                  clear-label="清空搜索"
+                  :placeholder="t('room.searchPlaceholder')"
+                  :aria-label="t('room.search')"
+                  :clear-label="t('room.clearSearch')"
                   autocomplete="off"
                 />
               </div>
@@ -75,31 +75,31 @@
                 type="submit"
                 variant="primary"
                 class="conversation-search-button"
-                :title="searchText.trim() ? '搜索消息' : '刷新聊天室'"
+                :title="searchText.trim() ? t('room.search') : t('room.refresh')"
                 :loading="loading || refreshingSessions"
-                loading-label="加载中…"
+                :loading-label="t('room.loadingShort')"
                 :disabled="sending || clearing"
               >
-                搜索
+                {{ t("room.search") }}
               </AppButton>
             </form>
             <AppButton
               variant="warning"
               class="conversation-clear-button"
               :loading="clearing"
-              loading-label="清空中…"
+              :loading-label="t('room.clearing')"
               :disabled="
                 loading || refreshingSessions || sending || saving || Boolean(pendingPublication)
               "
               @click="openClear"
             >
-              清空
+              {{ t("room.clear") }}
             </AppButton>
           </div>
         </header>
         <div v-if="loadError" class="room-alert" role="alert">
-          <span>{{ loadError }}</span>
-          <button type="button" @click="loadRoom()">重试</button>
+          <span>{{ translateMessage(loadError) }}</span>
+          <button type="button" @click="loadRoom()">{{ t("common.retry") }}</button>
         </div>
         <MessageTimeline
           ref="timeline"
@@ -142,8 +142,8 @@
         @cancel-reply="replyTo = undefined"
       />
       <div v-if="pendingPublication && !sending" class="room-alert" role="status">
-        <span>发布结果待确认，请核对后继续。</span>
-        <AppButton @click="resumePublication">核对发布结果</AppButton>
+        <span>{{ t("room.pending") }}</span>
+        <AppButton @click="resumePublication">{{ t("room.checkPublication") }}</AppButton>
       </div>
     </section>
 
@@ -224,8 +224,20 @@
 </template>
 
 <script setup lang="ts">
-  import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+  import {
+    computed,
+    nextTick,
+    onActivated,
+    onBeforeUnmount,
+    onDeactivated,
+    onMounted,
+    ref,
+    watch,
+  } from "vue";
   import { useRouter } from "vue-router";
+  import { useI18n } from "vue-i18n";
+  import { translateMessage } from "@/i18n";
+  import type { MessageDescriptor } from "@/i18n";
 
   import AppButton from "@/components/AppButton.vue";
   import AppIcon from "@/components/AppIcon.vue";
@@ -285,8 +297,11 @@
   type ResourceDeleteTarget = Exclude<DeleteTarget, { kind: "room" }>;
 
   const props = defineProps<{ roomId?: string }>();
+  const { t } = useI18n();
   const router = useRouter();
   const roomsStore = useRoomsStore();
+  const active = ref(true);
+  let activatedBefore = false;
   const toasts = useToastsStore();
   const currentRoomId = ref<string>();
   const snapshot = computed(() =>
@@ -311,7 +326,7 @@
     queueScope,
   } = roomPanel;
   const messageQueue = useMessageQueue(
-    () => currentRoomId.value,
+    () => (active.value ? currentRoomId.value : undefined),
     () => queueScope.value,
   );
   const {
@@ -339,8 +354,8 @@
   const refreshingSessions = ref(false);
   const loadingOlder = ref(false);
   const sending = ref(false);
-  const loadError = ref<string | null>(null);
-  const sendError = ref<string | null>(null);
+  const loadError = ref<MessageDescriptor | null>(null);
+  const sendError = ref<MessageDescriptor | null>(null);
   const replyTo = ref<RoomMessage>();
   const composer = ref<InstanceType<typeof RoomComposer>>();
   const timeline = ref<InstanceType<typeof MessageTimeline>>();
@@ -356,16 +371,19 @@
   const saving = ref(false);
   const clearOpen = ref(false);
   const clearing = ref(false);
-  const clearError = ref<string | null>(null);
-  const setupError = ref<string | null>(null);
+  const clearError = ref<MessageDescriptor | null>(null);
+  const setupError = ref<MessageDescriptor | null>(null);
   const sessions = ref<SessionCandidate[]>([]);
   const sessionsLoading = ref(false);
-  const sessionsError = ref<string | null>(null);
+  const sessionsError = ref<MessageDescriptor | null>(null);
   let sessionsVersion = 0;
   let loadVersion = 0;
+  let initializationVersion = 0;
 
   let stopEvents: (() => void) | undefined;
   let queryController: AbortController | undefined;
+  let sessionsController: AbortController | undefined;
+  let refreshController: AbortController | undefined;
   let searchTimer: ReturnType<typeof setTimeout> | undefined;
 
   function filters(): MessageQuery {
@@ -384,6 +402,7 @@
 
   async function applySearch(): Promise<void> {
     clearTimeout(searchTimer);
+    if (!active.value) return;
     const nextKeyword = searchText.value.trim();
     if (nextKeyword === keyword.value) return;
     keyword.value = nextKeyword;
@@ -480,7 +499,7 @@
 
   async function loadRoom(beforeSeq?: number): Promise<boolean> {
     const roomId = currentRoomId.value;
-    if (!roomId) return false;
+    if (!roomId || !active.value) return false;
     const version = cancelQueries();
     loading.value = true;
     loadError.value = null;
@@ -496,7 +515,7 @@
       return true;
     } catch (caught) {
       if (version === loadVersion) {
-        loadError.value = describeApiError(caught, "消息加载失败，请稍后重试。");
+        loadError.value = describeApiError(caught, "errors.messageLoad");
         toasts.error(loadError.value);
       }
       return false;
@@ -513,8 +532,7 @@
       const message = await fetchRoomMessage(roomId, selected.id, queryController?.signal);
       if (version === loadVersion) roomPanel.syncMessages([message]);
     } catch (caught) {
-      if (version === loadVersion)
-        toasts.error(describeApiError(caught, "消息详情更新失败，请重新打开。"));
+      if (version === loadVersion) toasts.error(describeApiError(caught, "errors.detailLoad"));
     }
   }
 
@@ -542,8 +560,7 @@
       await nextTick();
       timeline.value?.restoreScroll();
     } catch (caught) {
-      if (version === loadVersion)
-        toasts.error(describeApiError(caught, "历史消息加载失败，请重试。"));
+      if (version === loadVersion) toasts.error(describeApiError(caught, "errors.historyLoad"));
     } finally {
       if (version === loadVersion) {
         loadingOlder.value = false;
@@ -553,16 +570,19 @@
   }
 
   async function initialize(): Promise<void> {
+    const version = ++initializationVersion;
     loading.value = true;
     loadError.value = null;
     try {
       await roomsStore.load();
+      if (!active.value || version !== initializationVersion) return;
       if (props.roomId) await openRoom(props.roomId);
       else if (roomsStore.rooms.length)
         await router.replace({ name: "room-detail", params: { roomId: roomsStore.rooms[0].id } });
       else loading.value = false;
     } catch (caught) {
-      loadError.value = describeApiError(caught, "聊天室加载失败，请稍后重试。");
+      if (!active.value || version !== initializationVersion) return;
+      loadError.value = describeApiError(caught, "errors.roomLoad");
       toasts.error(loadError.value);
       loading.value = false;
     }
@@ -571,6 +591,7 @@
   async function openRoom(roomId: string): Promise<void> {
     resetSearch();
     currentRoomId.value = roomId;
+    roomsStore.recentRoomId = roomId;
     cancelQueries();
     delete roomsStore.snapshots[roomId];
     setupMode.value = undefined;
@@ -580,6 +601,7 @@
     clearOpen.value = false;
     clearError.value = null;
     sessionsVersion++;
+    sessionsController?.abort();
     sessions.value = [];
     sessionsLoading.value = false;
     sessionsError.value = null;
@@ -665,7 +687,7 @@
         sessionStorage.removeItem(`relay-publication:${roomId}`);
         if (roomId === currentRoomId.value) pendingPublication.value = undefined;
       }
-      const message = describeApiError(caught, "发布结果待确认，草稿已保留，请核对发布结果。");
+      const message = describeApiError(caught, "errors.publish");
       if (roomId === currentRoomId.value) sendError.value = message;
       toasts.error(message);
       sending.value = false;
@@ -681,7 +703,7 @@
     pendingPublication.value = undefined;
     composer.value?.reset();
     replyTo.value = undefined;
-    toasts.success("消息已发布");
+    toasts.success({ key: "notice.published" });
     selectedMemberId.value = undefined;
     if (selectedTopicId.value && !request.topicIds.includes(selectedTopicId.value)) {
       selectedTopicId.value = request.topicIds[0];
@@ -702,18 +724,20 @@
   }
 
   async function loadSessions(): Promise<void> {
-    if (!currentRoomId.value) return;
+    if (!currentRoomId.value || !active.value) return;
     const roomId = currentRoomId.value;
     const version = ++sessionsVersion;
+    sessionsController?.abort();
+    sessionsController = new AbortController();
     sessionsLoading.value = true;
     sessionsError.value = null;
     try {
-      const result = await fetchRoomSessions(roomId);
+      const result = await fetchRoomSessions(roomId, sessionsController.signal);
       if (version === sessionsVersion) sessions.value = result;
     } catch (caught) {
       if (version === sessionsVersion) {
         sessions.value = [];
-        sessionsError.value = describeApiError(caught, "会话加载失败，请刷新重试。");
+        sessionsError.value = describeApiError(caught, "errors.sessionLoad");
       }
     } finally {
       if (version === sessionsVersion) sessionsLoading.value = false;
@@ -723,15 +747,24 @@
   async function refreshRoom(): Promise<void> {
     if (!currentRoomId.value || refreshingSessions.value || sending.value || clearing.value) return;
     const roomId = currentRoomId.value;
+    const version = initializationVersion;
+    refreshController = new AbortController();
     refreshingSessions.value = true;
     try {
-      await fetchRoomSessions(roomId);
+      await fetchRoomSessions(roomId, refreshController.signal);
     } catch (caught) {
-      toasts.error(describeApiError(caught, "会话状态刷新失败"));
+      if (active.value && version === initializationVersion)
+        toasts.error(describeApiError(caught, "errors.sessionRefresh"));
     } finally {
-      refreshingSessions.value = false;
+      if (version === initializationVersion) refreshingSessions.value = false;
     }
-    if (roomId !== currentRoomId.value || !(await loadRoom())) return;
+    if (
+      !active.value ||
+      version !== initializationVersion ||
+      roomId !== currentRoomId.value ||
+      !(await loadRoom())
+    )
+      return;
     await nextTick();
     if (roomId === currentRoomId.value) timeline.value?.scrollToEnd();
   }
@@ -775,9 +808,10 @@
     messageQueue.cancel();
     try {
       const result = await roomsStore.clear(roomId);
-      toasts.success(
-        `已清空 ${result.removedMessages} 条消息，移除 ${result.removedMembers} 位成员`,
-      );
+      toasts.success({
+        key: "notice.cleared",
+        params: { messages: result.removedMessages, members: result.removedMembers },
+      });
       if (currentRoomId.value !== roomId) return;
       clearOpen.value = false;
       roomPanel.reset();
@@ -786,7 +820,7 @@
       resetSearch();
       await loadLatest();
     } catch (caught) {
-      const message = describeApiError(caught, "清空失败，请稍后重试。");
+      const message = describeApiError(caught, "errors.clear");
       if (currentRoomId.value === roomId) {
         clearError.value = message;
         startEvents(roomId, version);
@@ -806,13 +840,13 @@
     const roomId = currentRoomId.value;
     try {
       await action();
-      toasts.success(successMessage);
+      toasts.success({ key: successMessage });
       if (roomId === currentRoomId.value) {
         setupMode.value = undefined;
         editingMember.value = undefined;
       }
     } catch (caught) {
-      const message = describeApiError(caught, "保存失败，请稍后重试。");
+      const message = describeApiError(caught, "errors.save");
       if (roomId === currentRoomId.value) setupError.value = message;
       toasts.error(message);
     } finally {
@@ -831,7 +865,7 @@
     await saveSetup(async () => {
       const result = await addRoomMember(roomId, request);
       applyResourceChange(result.metadata);
-    }, "成员已加入");
+    }, "notice.memberAdded");
   }
 
   async function saveMember(memberId: string, request: UpdateMember): Promise<void> {
@@ -840,7 +874,7 @@
     await saveSetup(async () => {
       const result = await updateRoomMember(roomId, memberId, request);
       applyResourceChange(result.metadata);
-    }, "成员已保存");
+    }, "notice.memberSaved");
   }
 
   async function saveNewTopic(request: CreateTopic): Promise<void> {
@@ -849,7 +883,7 @@
     await saveSetup(async () => {
       const result = await addRoomTopic(roomId, request);
       applyResourceChange(result.metadata);
-    }, "话题已创建");
+    }, "notice.topicCreated");
   }
 
   async function saveTopic(topicId: string, request: CreateTopic): Promise<void> {
@@ -858,7 +892,7 @@
     await saveSetup(async () => {
       const result = await updateRoomTopic(roomId, topicId, request);
       applyResourceChange(result.metadata);
-    }, "话题已保存");
+    }, "notice.topicSaved");
   }
 
   async function deleteNode(): Promise<void> {
@@ -873,10 +907,12 @@
           ? await deleteRoomTopic(roomId, target.node.id)
           : await deleteRoomMember(roomId, target.node.id);
       applyResourceChange(result.metadata);
-      toasts.success(target.kind === "topic" ? "话题已删除" : "成员已删除");
+      toasts.success({
+        key: target.kind === "topic" ? "notice.topicDeleted" : "notice.memberDeleted",
+      });
       if (currentRoomId.value === roomId) deleteTarget.value = undefined;
     } catch (caught) {
-      const message = describeApiError(caught, "删除失败，请稍后重试。");
+      const message = describeApiError(caught, "errors.remove");
       if (currentRoomId.value === roomId) setupError.value = message;
       toasts.error(message);
     } finally {
@@ -897,8 +933,7 @@
         resetSearch();
         if (!(await loadRoom(message.seq + 1))) return;
       } catch (caught) {
-        if (version === loadVersion)
-          toasts.error(describeApiError(caught, "引用消息加载失败，请重试。"));
+        if (version === loadVersion) toasts.error(describeApiError(caught, "errors.reference"));
         return;
       }
     }
@@ -907,12 +942,38 @@
     timeline.value?.scrollToMessage(messageId);
   }
 
-  onBeforeUnmount(() => {
+  function pauseReads(): void {
+    initializationVersion++;
     clearTimeout(searchTimer);
     cancelQueries();
     messageQueue.cancel();
     sessionsVersion++;
+    sessionsController?.abort();
+    refreshController?.abort();
+    sessionsLoading.value = false;
+    refreshingSessions.value = false;
+    capabilities.pause();
+  }
+
+  onDeactivated(() => {
+    active.value = false;
+    pauseReads();
   });
+  onActivated(() => {
+    if (!activatedBefore) {
+      activatedBefore = true;
+      return;
+    }
+    active.value = true;
+    capabilities.resume();
+    if (currentRoomId.value) {
+      keyword.value = searchText.value.trim();
+      void loadRoom();
+      void messageQueue.refresh();
+      if (setupMode.value === "member") void loadSessions();
+    } else void initialize();
+  });
+  onBeforeUnmount(pauseReads);
 
   watch(searchText, (value) => {
     clearTimeout(searchTimer);
@@ -930,7 +991,7 @@
     ([roomId, topicId, memberId], [previousRoomId, previousTopicId, previousMemberId]) => {
       if (roomId !== previousRoomId || topicId !== previousTopicId || memberId !== previousMemberId)
         messageQueue.reset();
-      if (roomId && snapshot.value) void messageQueue.refresh();
+      if (active.value && roomId && snapshot.value) void messageQueue.refresh();
     },
   );
 

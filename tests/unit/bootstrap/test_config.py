@@ -80,3 +80,15 @@ def test_unknown_configuration_fields_fail_at_startup(
 
     with pytest.raises(ValueError, match="Extra inputs are not permitted"):
         load_settings(tmp_path)
+
+
+@pytest.mark.parametrize("language", ["system", "zh-CN", "en"])
+def test_language_configuration(monkeypatch: MonkeyPatch, language: str) -> None:
+    monkeypatch.setenv("AGENT_RELAY_PREFERENCES__LANGUAGE", language)
+    assert load_settings().preferences.language == language
+
+
+def test_invalid_language_configuration(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setenv("AGENT_RELAY_PREFERENCES__LANGUAGE", "fr")
+    with pytest.raises(ValueError, match="preferences.language"):
+        load_settings()

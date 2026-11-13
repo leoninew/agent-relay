@@ -1,12 +1,12 @@
 <template>
-  <section class="message-detail-section message-queue" aria-label="队列">
+  <section class="message-detail-section message-queue" :aria-label="t('queue.title')">
     <header class="queue-heading">
-      <h3>队列</h3>
+      <h3>{{ t("queue.title") }}</h3>
       <div class="queue-heading-actions">
         <button
           type="button"
           class="icon-button"
-          aria-label="刷新队列"
+          :aria-label="t('queue.refresh')"
           :disabled="loading || loadingMore || removingId !== null"
           @click="$emit('refresh')"
         >
@@ -16,24 +16,24 @@
     </header>
     <div class="queue-content" :aria-busy="loading || loadingMore || removingId !== null">
       <div v-if="error" class="queue-error" role="alert">
-        <span>{{ error }}</span>
+        <span>{{ translateMessage(error) }}</span>
         <AppButton
           variant="plain"
           :disabled="loading || removingId !== null"
           @click="$emit('refresh')"
         >
-          重试
+          {{ t("common.retry") }}
         </AppButton>
       </div>
-      <p v-if="removeError" class="queue-error" role="alert">{{ removeError }}</p>
-      <AppLoading v-if="loading && !messages.length">正在加载队列…</AppLoading>
-      <p v-else-if="!messages.length && !error" class="detail-empty">暂无发送中或接收中的消息</p>
-      <table v-if="rows.length" class="queue-table" aria-label="队列记录">
+      <p v-if="removeError" class="queue-error" role="alert">{{ translateMessage(removeError) }}</p>
+      <AppLoading v-if="loading && !messages.length">{{ t("queue.loading") }}</AppLoading>
+      <p v-else-if="!messages.length && !error" class="detail-empty">{{ t("queue.empty") }}</p>
+      <table v-if="rows.length" class="queue-table" :aria-label="t('queue.records')">
         <thead>
           <tr>
-            <th scope="col">消息</th>
-            <th scope="col">状态</th>
-            <th scope="col" class="queue-actions">操作</th>
+            <th scope="col">{{ t("queue.message") }}</th>
+            <th scope="col">{{ t("queue.status") }}</th>
+            <th scope="col" class="queue-actions">{{ t("queue.actions") }}</th>
           </tr>
         </thead>
         <tbody>
@@ -42,7 +42,7 @@
               <button
                 type="button"
                 class="queue-message"
-                :aria-label="`查看消息 #${row.message.seq} 详情`"
+                :aria-label="t('queue.viewMessage', { seq: row.message.seq })"
                 :title="row.message.content"
                 @click="$emit('select', row.message.id)"
               >
@@ -50,14 +50,14 @@
               </button>
             </td>
             <td>
-              <span class="delivery-stage">{{ row.stage ?? "—" }}</span>
+              <span class="delivery-stage">{{ row.stage ? t(`delivery.${row.stage}`) : "—" }}</span>
             </td>
             <td class="queue-actions">
               <button
                 type="button"
                 class="icon-button"
-                :aria-label="`删除消息 #${row.message.seq} 的队列记录`"
-                title="移除这条待办记录，不会撤回已送入会话的内容"
+                :aria-label="t('queue.removeMessage', { seq: row.message.seq })"
+                :title="t('queue.removeHint')"
                 :aria-busy="removingId === row.message.id"
                 :disabled="loading || loadingMore || removingId !== null"
                 @click="$emit('remove', row.message.id)"
@@ -74,11 +74,11 @@
         class="queue-load-more"
         variant="plain"
         :loading="loadingMore"
-        loading-label="加载中…"
+        :loading-label="t('common.loading')"
         :disabled="loading || removingId !== null"
         @click="$emit('loadMore')"
       >
-        加载更多消息
+        {{ t("queue.more") }}
       </AppButton>
     </div>
   </section>
@@ -86,6 +86,9 @@
 
 <script setup lang="ts">
   import { computed } from "vue";
+  import { useI18n } from "vue-i18n";
+  import { translateMessage } from "@/i18n";
+  import type { MessageDescriptor } from "@/i18n";
 
   import AppButton from "@/components/AppButton.vue";
   import AppIcon from "@/components/AppIcon.vue";
@@ -100,9 +103,10 @@
     loading: boolean;
     loadingMore: boolean;
     removingId: string | null;
-    error: string | null;
-    removeError: string | null;
+    error: MessageDescriptor | null;
+    removeError: MessageDescriptor | null;
   }>();
+  const { t } = useI18n();
   defineEmits<{
     select: [messageId: string];
     refresh: [];

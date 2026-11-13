@@ -43,7 +43,7 @@ class SQLAlchemyMessageReads:
         ]
         if topic_id is not None:
             if self.session.get(TopicRecord, (room_id, topic_id)) is None:
-                raise RoomNotFoundError("话题不存在")
+                raise RoomNotFoundError("话题不存在", code="topic_not_found")
             criteria.append(
                 select(MessageTopicRecord.message_id)
                 .where(
@@ -56,7 +56,7 @@ class SQLAlchemyMessageReads:
             )
         if member_id is not None:
             if self.session.get(MemberRecord, (room_id, member_id)) is None:
-                raise RoomNotFoundError("成员不存在")
+                raise RoomNotFoundError("成员不存在", code="member_not_found")
             criteria.append(
                 or_(
                     MessageRecord.publisher_id == member_id,
@@ -156,7 +156,7 @@ class SQLAlchemyMessageReads:
             ),
         )
         if not messages:
-            raise RoomNotFoundError("消息不存在")
+            raise RoomNotFoundError("消息不存在", code="message_not_found")
         return messages[0]
 
     def publication(self, room_id: str, publisher_id: str, publication_id: str) -> Message | None:

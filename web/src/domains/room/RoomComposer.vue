@@ -1,24 +1,38 @@
 <template>
-  <form class="room-composer" aria-label="发送消息" novalidate @submit.prevent="submit">
+  <form
+    class="room-composer"
+    :aria-label="t('composer.sendMessage')"
+    novalidate
+    @submit.prevent="submit"
+  >
     <div v-if="replyTo" class="composer-reply">
       <AppIcon name="reply" />
       <span>
-        回复 <strong>{{ replyToMember?.name ?? replyTo.senderId }}</strong> · {{ replyTo.content }}
+        {{ t("composer.replyTo") }}
+        <strong>{{
+          replyTo.senderId === "user" ? t("member.you") : (replyToMember?.name ?? replyTo.senderId)
+        }}</strong>
+        · {{ replyTo.content }}
       </span>
-      <button type="button" class="icon-button" aria-label="取消引用" @click="$emit('cancelReply')">
+      <button
+        type="button"
+        class="icon-button"
+        :aria-label="t('composer.cancelReply')"
+        @click="$emit('cancelReply')"
+      >
         <AppIcon name="close" />
       </button>
     </div>
     <div class="composer-fields">
       <fieldset class="composer-routing" :disabled="sending || locked">
-        <legend class="sr-only">消息路由</legend>
+        <legend class="sr-only">{{ t("composer.routing") }}</legend>
         <div class="routing-row">
-          <span class="routing-label"> <AppIcon name="hash" />话题 </span>
+          <span class="routing-label"> <AppIcon name="hash" />{{ t("sidebar.topics") }} </span>
           <AppCheckboxGroup
             v-model="topicIds"
             class="routing-options"
-            aria-label="消息话题"
-            clear-label="清空消息话题"
+            :aria-label="t('composer.topics')"
+            :clear-label="t('composer.clearTopics')"
             :disabled="sending || locked"
             :invalid="showRecipientError"
             :described-by="showRecipientError ? 'routing-error' : undefined"
@@ -29,7 +43,7 @@
               class="routing-choice"
               :data-topic="topic.id"
               :value="topic.id"
-              :aria-label="`消息话题：${topic.name}`"
+              :aria-label="t('composer.topic', { name: topic.name })"
               :aria-invalid="showRecipientError"
               :aria-describedby="showRecipientError ? 'routing-error' : undefined"
             >
@@ -38,12 +52,12 @@
           </AppCheckboxGroup>
         </div>
         <div class="routing-row">
-          <span class="routing-label"><AppIcon name="at" />成员</span>
+          <span class="routing-label"><AppIcon name="at" />{{ t("sidebar.members") }}</span>
           <AppCheckboxGroup
             v-model="mentionedMemberIds"
             class="routing-options"
-            aria-label="@ 成员"
-            clear-label="清空 @ 成员"
+            :aria-label="t('composer.mentions')"
+            :clear-label="t('composer.clearMentions')"
             :disabled="sending || locked"
             :invalid="showRecipientError"
             :described-by="showRecipientError ? 'routing-error' : undefined"
@@ -82,7 +96,7 @@
         :disabled="sending || locked"
         @remove="removeCapability"
       />
-      <label for="message-content" class="sr-only">消息内容</label>
+      <label for="message-content" class="sr-only">{{ t("composer.content") }}</label>
       <div class="composer-editor">
         <div class="capability-input">
           <AppInput
@@ -92,8 +106,8 @@
             name="content"
             maxlength="6000"
             rows="2"
-            placeholder="发送消息，输入 $ 选择 Skill…"
-            clear-label="清空消息内容"
+            :placeholder="t('composer.placeholder')"
+            :clear-label="t('composer.clearContent')"
             multiline
             autoresize
             :disabled="sending || locked"
@@ -121,11 +135,11 @@
           />
           <div v-if="pickerOpen" class="capability-picker">
             <div class="capability-picker-heading">
-              <span>选择 Skill</span>
+              <span>{{ t("composer.selectSkill") }}</span>
               <button
                 type="button"
                 class="icon-button"
-                aria-label="刷新 Skill 目录"
+                :aria-label="t('composer.refreshSkills')"
                 :disabled="catalog?.skillsLoading"
                 @mousedown.prevent
                 @click="$emit('refreshCapabilities')"
@@ -133,7 +147,7 @@
                 <AppIcon name="refresh" />
               </button>
             </div>
-            <div id="capability-options" role="listbox" aria-label="可用 Skill">
+            <div id="capability-options" role="listbox" :aria-label="t('composer.availableSkills')">
               <button
                 v-for="option in options"
                 :id="`capability-${option.index}`"
@@ -155,36 +169,41 @@
               </button>
             </div>
             <div class="capability-picker-status" role="status">
-              <p v-if="catalog?.skillsLoading">正在加载 Skill…</p>
-              <p v-if="!options.length && !catalog?.skillsLoading">未找到可选 Skill</p>
-              <p v-for="issue in catalog?.issues" :key="issue">{{ issue }}</p>
+              <p v-if="catalog?.skillsLoading">{{ t("composer.loadingSkills") }}</p>
+              <p v-if="!options.length && !catalog?.skillsLoading">{{ t("composer.noSkills") }}</p>
+              <p v-for="(issue, index) in catalog?.issues" :key="index">
+                {{ translateMessage(issue) }}
+              </p>
             </div>
           </div>
         </div>
         <AppButton
           type="submit"
           class="composer-send-button"
-          title="Enter 发送，Shift+Enter 换行"
+          :title="t('composer.sendHint')"
           aria-keyshortcuts="Enter"
-          :aria-label="sending ? '正在发送' : '发送消息'"
+          :aria-label="t(sending ? 'composer.sending' : 'composer.sendMessage')"
           :loading="sending"
           :disabled="locked"
-          loading-label="发送中…"
+          :loading-label="t('composer.sending')"
         >
           <template #icon><AppIcon name="enter" /></template>
-          发送
+          {{ t("composer.send") }}
         </AppButton>
       </div>
       <p v-if="showContentError" id="content-error" class="field-error" role="alert">
-        请输入消息内容
+        {{ t("validation.content") }}
       </p>
-      <p v-if="error" class="field-error send-error" role="alert">{{ error }}</p>
+      <p v-if="error" class="field-error send-error" role="alert">{{ translateMessage(error) }}</p>
     </div>
   </form>
 </template>
 
 <script setup lang="ts">
   import { computed, nextTick, ref, watch } from "vue";
+  import { useI18n } from "vue-i18n";
+  import { translateMessage } from "@/i18n";
+  import type { MessageDescriptor } from "@/i18n";
 
   import AppButton from "@/components/AppButton.vue";
   import AppCheckbox from "@/components/AppCheckbox.vue";
@@ -214,11 +233,12 @@
       replyTo?: RoomMessage;
       sending: boolean;
       locked?: boolean;
-      error: string | null;
+      error: MessageDescriptor | null;
       catalog?: ComposerCatalog;
     }>(),
     { replyTo: undefined, catalog: undefined },
   );
+  const { t } = useI18n();
   const emit = defineEmits<{
     send: [message: MessageDraft];
     cancelReply: [];
@@ -364,8 +384,8 @@
   const showRecipientError = computed(() => attempted.value && recipients.value.length === 0);
   const routingError = computed(() =>
     topicIds.value.length || mentionedMemberIds.value.length
-      ? "所选话题暂无成员，请选择其他话题或 @ 成员"
-      : "请选择至少一个话题或 @ 一位成员",
+      ? t("validation.noRecipients")
+      : t("validation.recipients"),
   );
 
   watch(

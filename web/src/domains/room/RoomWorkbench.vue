@@ -15,11 +15,11 @@
         collapsible
       >
         <div v-if="isCollapsed" class="room-panel-rail">
-          <AppTooltip text="展开话题与成员面板">
+          <AppTooltip :text="t('sidebar.openNavigation')">
             <button
               type="button"
               class="icon-button room-panel-restore"
-              aria-label="展开左侧面板"
+              :aria-label="t('sidebar.openLeft')"
               aria-controls="room-navigation-panel"
               :aria-expanded="false"
               @click="restoreNavigation"
@@ -32,7 +32,7 @@
       </SplitterPanel>
       <SplitterResizeHandle
         class="room-resize-handle"
-        aria-label="调整左侧面板宽度"
+        :aria-label="t('sidebar.resizeLeft')"
         @dblclick="toggleNavigation"
         @keydown.enter.capture.prevent="toggleNavigation"
       >
@@ -44,7 +44,7 @@
       <SplitterResizeHandle
         v-if="!compact"
         class="room-resize-handle"
-        aria-label="调整右侧面板宽度"
+        :aria-label="t('sidebar.resizeRight')"
         @dblclick="toggleDetails"
         @keydown.enter.capture.prevent="toggleDetails"
       >
@@ -65,11 +65,11 @@
         collapsible
       >
         <div v-if="isCollapsed" class="room-panel-rail">
-          <AppTooltip text="展开详情与队列面板">
+          <AppTooltip :text="t('sidebar.openDetails')">
             <button
               type="button"
               class="icon-button room-panel-restore"
-              aria-label="展开右侧面板"
+              :aria-label="t('sidebar.openRight')"
               aria-controls="room-details-panel"
               :aria-expanded="false"
               @click="restoreDetails"
@@ -87,7 +87,7 @@
       <CollapsibleRoot v-model:open="mobileNavigationOpen" class="room-mobile-navigation">
         <CollapsibleTrigger class="room-mobile-navigation-toggle">
           <AppIcon name="panel-left-open" />
-          <span>话题与成员</span>
+          <span>{{ t("room.navigation") }}</span>
           <AppIcon name="chevron-down" class="room-mobile-navigation-chevron" />
         </CollapsibleTrigger>
         <CollapsibleContent class="room-mobile-navigation-content">
@@ -112,10 +112,12 @@
     SplitterResizeHandle,
   } from "reka-ui";
   import { onBeforeUnmount, ref, watch } from "vue";
+  import { useI18n } from "vue-i18n";
 
   import AppIcon from "@/components/AppIcon.vue";
   import AppTooltip from "@/components/AppTooltip.vue";
 
+  const { t } = useI18n();
   const props = defineProps<{ detailsOpen: boolean }>();
   const emit = defineEmits<{ collapseDetails: [] }>();
   const initialNavigationWidth = 240;

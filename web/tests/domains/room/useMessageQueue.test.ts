@@ -182,10 +182,51 @@ describe("message queue", () => {
     const messageId = queue.messages.value[0].id;
     await queue.remove(messageId);
     expect(queue.messages.value).toEqual(page().messages);
-    expect(queue.removeError.value).toBe("队列记录删除失败，请重试。");
+    expect(queue.removeError.value).toEqual({ key: "errors.queueRemove" });
     expect(queue.removingId.value).toBeNull();
     expect(deleteMessage).toHaveBeenCalledOnce();
     expect(deleteMessage).toHaveBeenLastCalledWith("room", messageId);
     expect(fetchQueue).toHaveBeenCalledOnce();
+  });
+
+  it("does not refresh when a deletion finishes while the room is inactive", async () => {
+    let active = true;
+    let finishDelete!: (value: { removedMessages: number }) => void;
+    deleteMessage.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishDelete = resolve;
+      }),
+    );
+    const queue = useMessageQueue(() => (active ? "room" : undefined));
+    const deleting = queue.remove("message");
+    active = false;
+    queue.cancel();
+    finishDelete({ removedMessages: 1 });
+    await deleting;
+    expect(deleteMessage).toHaveBeenCalledOnce();
+    expect(fetchQueue).not.toHaveBeenCalled();
+    expect(queue.removingId.value).toBeNull();
+    active = true;
+    fetchQueue.mockResolvedValueOnce(page());
+    await queue.refresh();
+    expect(fetchQueue).toHaveBeenCalledOnce();
+  });
+
+  it("ignores a cancelled read even when its response arrives later", async () => {
+    let finishRead!: (value: MessageQueuePage) => void;
+    fetchQueue.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishRead = resolve;
+      }),
+    );
+    const queue = useMessageQueue(() => "room");
+    const reading = queue.refresh();
+    const signal = fetchQueue.mock.calls[0][2] as AbortSignal;
+    queue.cancel();
+    expect(signal.aborted).toBe(true);
+    finishRead(page());
+    await reading;
+    expect(queue.messages.value).toEqual([]);
+    expect(queue.loading.value).toBe(false);
   });
 });

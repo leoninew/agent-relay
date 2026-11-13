@@ -17,7 +17,9 @@ class CapabilityService:
         try:
             return query()
         except Exception as exc:
-            raise CapabilityUnavailableError("无法读取能力目录，请刷新后重试") from exc
+            raise CapabilityUnavailableError(
+                "无法读取能力目录，请刷新后重试", code="capability_metadata_unavailable"
+            ) from exc
 
     def skills(self, room_id: str, *, force_reload: bool = False) -> SkillCatalog:
         with self.store.read() as rooms:
@@ -34,14 +36,20 @@ class CapabilityService:
                 None,
             )
             if member is None:
-                raise RoomNotFoundError("聊天室成员不存在")
+                raise RoomNotFoundError("聊天室成员不存在", code="member_not_found")
             if member.kind != "agent" or member.session_id is None:
-                raise RoomInputError("仅绑定 Codex 会话的成员支持 MCP 目录")
+                raise RoomInputError(
+                    "仅绑定 Codex 会话的成员支持 MCP 目录", code="member_mcp_unsupported"
+                )
             session = next((item for item in state.sessions if item.id == member.session_id), None)
             if session is None:
-                raise RoomConflictError("成员绑定的 Codex 会话不存在")
+                raise RoomConflictError(
+                    "成员绑定的 Codex 会话不存在", code="session_binding_not_found"
+                )
             project_path = state.room.project_path
             if normalize_project_path(session.project_path) != normalize_project_path(project_path):
-                raise RoomConflictError("成员会话不属于当前聊天室项目目录")
+                raise RoomConflictError(
+                    "成员会话不属于当前聊天室项目目录", code="session_project_mismatch"
+                )
             thread_id = session.id
         return self._catalog(lambda: self.driver.list_mcp_servers(thread_id, project_path))

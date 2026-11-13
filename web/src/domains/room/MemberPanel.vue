@@ -1,8 +1,8 @@
 <template>
   <RoomSidebarSection
-    title="成员"
-    action-label="添加成员"
-    aria-label="聊天室成员"
+    :title="t('sidebar.members')"
+    :action-label="t('sidebar.addMember')"
+    :aria-label="t('sidebar.roomMembers')"
     :busy="busy"
     @create="$emit('addMember')"
   >
@@ -13,12 +13,12 @@
           class="sidebar-list-item"
           :class="{ 'is-active': selectedMemberId === undefined }"
           :aria-pressed="selectedMemberId === undefined"
-          aria-label="筛选成员：全部成员"
+          :aria-label="t('sidebar.filterMember', { name: t('sidebar.allMembers') })"
           @click="$emit('select', undefined)"
         >
           <span class="member-identity">
             <AppIcon name="at" class="member-marker" />
-            <span class="member-name">全部成员</span>
+            <span class="member-name">{{ t("sidebar.allMembers") }}</span>
           </span>
         </button>
       </div>
@@ -27,7 +27,11 @@
           type="button"
           class="sidebar-list-item"
           :class="{ 'is-active': selectedMemberId === humanMember.id }"
-          :aria-label="`筛选成员：${humanMember.name}`"
+          :aria-label="
+            t('sidebar.filterMember', {
+              name: humanMember.id === 'user' ? t('member.you') : humanMember.name,
+            })
+          "
           :aria-pressed="selectedMemberId === humanMember.id"
           @click="$emit('select', humanMember.id)"
         >
@@ -48,8 +52,8 @@
           <button
             type="button"
             class="sidebar-drag-handle"
-            :aria-label="`调整成员顺序：${member.name}`"
-            title="拖动排序，也可使用上下方向键"
+            :aria-label="t('sidebar.reorderMember', { name: member.name })"
+            :title="t('sidebar.reorder')"
             :disabled="busy || members.length < 2"
             @keydown.up.prevent="moveMember(member.id, -1)"
             @keydown.down.prevent="moveMember(member.id, 1)"
@@ -60,7 +64,7 @@
             type="button"
             class="sidebar-list-item"
             :class="{ 'is-active': selectedMemberId === member.id }"
-            :aria-label="`筛选成员：${member.name}`"
+            :aria-label="t('sidebar.filterMember', { name: member.name })"
             :aria-pressed="selectedMemberId === member.id"
             @click="$emit('select', member.id)"
           >
@@ -73,17 +77,20 @@
               class="sidebar-item-meta sidebar-member-status"
               :data-presence="member.presence"
             >
-              {{ presenceLabel[member.presence] }}
+              {{ t(`sidebar.${member.presence}`) }}
             </span>
           </button>
         </div>
       </VueDraggable>
-      <p v-if="!humanMember && !members.length" class="sidebar-members-empty">暂无成员</p>
+      <p v-if="!humanMember && !members.length" class="sidebar-members-empty">
+        {{ t("sidebar.noMembers") }}
+      </p>
     </div>
   </RoomSidebarSection>
 </template>
 
 <script setup lang="ts">
+  import { useI18n } from "vue-i18n";
   import { computed } from "vue";
   import { VueDraggable } from "vue-draggable-plus";
 
@@ -94,6 +101,7 @@
   import { useSidebarOrder } from "@/domains/room/useSidebarOrder";
   import type { RoomSnapshot } from "@/services/roomApi";
 
+  const { t } = useI18n();
   const props = defineProps<{
     snapshot: RoomSnapshot;
     busy: boolean;
@@ -112,10 +120,4 @@
     "members",
     () => props.snapshot.members.filter((member) => member.kind === "agent" && !member.deletedAt),
   );
-  const presenceLabel = {
-    available: "空闲",
-    busy: "忙碌",
-    offline: "离线",
-    unknown: "接入未确认",
-  };
 </script>

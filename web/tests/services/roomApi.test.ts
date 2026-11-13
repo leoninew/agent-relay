@@ -190,11 +190,13 @@ describe("room API", () => {
   });
 
   it("loads project sessions and joins the selected session without creation fields", async () => {
-    await fetchRoomSessions("room/one");
+    const signal = new AbortController().signal;
+    await fetchRoomSessions("room/one", signal);
     expect(adapterMock).toHaveBeenLastCalledWith(
       expect.objectContaining({
         method: "get",
         url: "/api/room/room%2Fone/session",
+        signal,
       }),
     );
     const request = {

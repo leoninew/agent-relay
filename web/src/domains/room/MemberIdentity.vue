@@ -11,7 +11,7 @@
     >
       <AppIcon name="at" class="member-marker" />
       <span :class="appearance === 'author' ? 'message-author' : 'member-name'">
-        {{ member.name }}
+        {{ member.id === "user" ? t("member.you") : member.name }}
       </span>
     </span>
   </AppTooltip>
@@ -19,12 +19,14 @@
 
 <script setup lang="ts">
   import { computed } from "vue";
+  import { useI18n } from "vue-i18n";
 
   import AppIcon from "@/components/AppIcon.vue";
   import AppTooltip from "@/components/AppTooltip.vue";
   import type { Member } from "@/services/roomApi";
 
   defineOptions({ inheritAttrs: false });
+  const { t } = useI18n();
   const props = withDefaults(
     defineProps<{
       member: Pick<Member, "id" | "name">;
@@ -37,7 +39,7 @@
     props.member.id === "user"
       ? undefined
       : props.sessionName?.trim()
-        ? `Codex 会话：${props.sessionName}`
-        : "Codex 会话名称暂不可用",
+        ? t("member.session", { name: props.sessionName })
+        : t("member.sessionUnavailable"),
   );
 </script>

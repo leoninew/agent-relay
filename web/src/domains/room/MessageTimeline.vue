@@ -1,20 +1,25 @@
 <template>
-  <div ref="timeline" class="message-timeline" :aria-busy="loading" aria-label="消息时间线">
-    <AppLoading v-if="loading" class="timeline-placeholder">正在加载讨论…</AppLoading>
-    <div v-else-if="unavailable" class="timeline-placeholder">暂时无法加载消息，请重试。</div>
+  <div
+    ref="timeline"
+    class="message-timeline"
+    :aria-busy="loading"
+    :aria-label="t('timeline.label')"
+  >
+    <AppLoading v-if="loading" class="timeline-placeholder">{{ t("timeline.loading") }}</AppLoading>
+    <div v-else-if="unavailable" class="timeline-placeholder">{{ t("timeline.unavailable") }}</div>
     <div v-else-if="messages.length === 0" class="timeline-placeholder">
       <span class="empty-icon"><AppIcon name="chat" /></span>
-      <h3>{{ searching ? "未找到匹配的消息" : "暂无消息" }}</h3>
+      <h3>{{ t(searching ? "timeline.noMatches" : "timeline.empty") }}</h3>
     </div>
     <template v-else>
       <div v-if="hasMore" class="timeline-page-actions">
         <AppButton
           variant="plain"
           :loading="loadingOlder"
-          loading-label="加载中…"
+          :loading-label="t('common.loading')"
           @click="$emit('loadOlder')"
         >
-          加载更早消息
+          {{ t("timeline.older") }}
         </AppButton>
       </div>
       <template v-for="({ message, status, renderedContent }, index) in rows" :key="message.id">
@@ -31,7 +36,7 @@
             'is-user': findMember(message.senderId)?.kind === 'human',
           }"
           tabindex="0"
-          :aria-label="`${memberName(message.senderId)}的消息`"
+          :aria-label="t('timeline.authorMessage', { name: memberName(message.senderId) })"
           @click="$emit('select', message.id)"
           @keydown.enter.self.prevent="$emit('select', message.id)"
           @keydown.space.self.prevent="$emit('select', message.id)"
@@ -43,7 +48,7 @@
                   <button
                     type="button"
                     class="message-heading-action"
-                    :aria-label="`勾选成员：${memberName(message.senderId)}`"
+                    :aria-label="t('timeline.selectMember', { name: memberName(message.senderId) })"
                     :disabled="!isRoutableMember(message.senderId)"
                     @click.stop="$emit('addMember', message.senderId)"
                   >
@@ -53,14 +58,20 @@
                       appearance="author"
                     />
                   </button>
-                  <div v-if="message.topicIds.length" class="message-topics" aria-label="所属话题">
+                  <div
+                    v-if="message.topicIds.length"
+                    class="message-topics"
+                    :aria-label="t('timeline.topics')"
+                  >
                     <button
                       v-for="topicId in message.topicIds"
                       :key="topicId"
                       type="button"
                       class="message-heading-action topic-chip"
                       :data-topic="topicId"
-                      :aria-label="`勾选话题：${findTopic(topicId)?.name ?? topicId}`"
+                      :aria-label="
+                        t('timeline.selectTopic', { name: findTopic(topicId)?.name ?? topicId })
+                      "
                       :disabled="findTopic(topicId)?.deletedAt !== null"
                       @click.stop="$emit('addTopic', topicId)"
                     >
@@ -70,14 +81,14 @@
                   <div
                     v-if="message.mentionedMemberIds.length"
                     class="message-mentions"
-                    aria-label="@ 成员"
+                    :aria-label="t('timeline.mentions')"
                   >
                     <button
                       v-for="memberId in message.mentionedMemberIds"
                       :key="memberId"
                       type="button"
                       class="message-heading-action mention-chip"
-                      :aria-label="`勾选成员：${memberName(memberId)}`"
+                      :aria-label="t('timeline.selectMember', { name: memberName(memberId) })"
                       :disabled="!isRoutableMember(memberId)"
                       @click.stop="$emit('addMember', memberId)"
                     >
@@ -92,11 +103,11 @@
                 <div
                   v-if="status"
                   class="message-delivery-summary"
-                  :class="{ 'is-complete': status.label === '已接收' }"
-                  aria-label="分发状态"
+                  :class="{ 'is-complete': status.stage === 'received' }"
+                  :aria-label="t('timeline.delivery')"
                 >
                   <span class="message-delivery-status" :data-tone="status.tone">
-                    {{ status.label }}
+                    {{ t(`delivery.${status.stage}`) }}
                   </span>
                 </div>
               </div>
@@ -107,7 +118,9 @@
                 @click.stop="$emit('reference', message.replyToMessageId)"
               >
                 <AppIcon name="reply" />
-                <span>引用 {{ referenceLabel(message.replyToMessageId) }}</span>
+                <span>{{
+                  t("timeline.reference", { reference: referenceLabel(message.replyToMessageId) })
+                }}</span>
               </button>
               <div class="message-content" v-html="renderedContent"></div>
               <CapabilityTags :capabilities="message.capabilities" />
@@ -116,8 +129,8 @@
               <button
                 type="button"
                 class="message-copy icon-button"
-                :aria-label="`复制消息 #${message.seq} 正文`"
-                title="复制正文"
+                :aria-label="t('timeline.copyMessage', { seq: message.seq })"
+                :title="t('timeline.copy')"
                 @click.stop="copyMessage(message)"
               >
                 <AppIcon name="copy" />
@@ -125,8 +138,8 @@
               <button
                 type="button"
                 class="message-reply icon-button"
-                :aria-label="`引用消息 #${message.seq}`"
-                title="引用回复"
+                :aria-label="t('timeline.replyMessage', { seq: message.seq })"
+                :title="t('timeline.reply')"
                 @click.stop="$emit('reply', message)"
               >
                 <AppIcon name="reply" />
@@ -134,9 +147,9 @@
               <button
                 type="button"
                 class="message-details icon-button"
-                :aria-label="`查看消息 #${message.seq} 详情`"
+                :aria-label="t('queue.viewMessage', { seq: message.seq })"
                 :aria-expanded="message.id === selectedMessageId && detailsOpen"
-                title="查看详情"
+                :title="t('timeline.view')"
                 @click.stop="$emit('select', message.id)"
               >
                 <AppIcon name="info" />
@@ -146,7 +159,7 @@
         </article>
       </template>
       <div v-if="hasNewer" class="timeline-page-actions">
-        <AppButton variant="plain" @click="$emit('latest')">返回最新消息</AppButton>
+        <AppButton variant="plain" @click="$emit('latest')">{{ t("timeline.latest") }}</AppButton>
       </div>
     </template>
   </div>
@@ -156,6 +169,7 @@
   import CapabilityTags from "@/domains/room/CapabilityTags.vue";
   import { computed, ref } from "vue";
   import MarkdownIt from "markdown-it";
+  import { useI18n } from "vue-i18n";
 
   import AppIcon from "@/components/AppIcon.vue";
   import AppButton from "@/components/AppButton.vue";
@@ -165,7 +179,7 @@
   import { memberSessionName } from "@/domains/room/memberSessionName";
   import type { Member, RoomMessage, Session, Topic } from "@/services/roomApi";
   import { useToastsStore } from "@/stores/toasts";
-  import { formatDate, formatMinute } from "@/utils/time";
+  import { formatDate, formatMinute, sameLocalDay } from "@/utils/time";
 
   const props = withDefaults(
     defineProps<{
@@ -195,6 +209,7 @@
   }>();
 
   const timeline = ref<HTMLElement>();
+  const { t } = useI18n();
   const toasts = useToastsStore();
   const markdown = new MarkdownIt({ breaks: true });
   const rows = computed(() =>
@@ -231,7 +246,7 @@
   }
 
   function memberName(memberId: string): string {
-    return findMember(memberId)?.name ?? memberId;
+    return memberId === "user" ? t("member.you") : (findMember(memberId)?.name ?? memberId);
   }
 
   function identityMember(memberId: string): Pick<Member, "id" | "name"> {
@@ -242,34 +257,36 @@
     return memberSessionName({ id: memberId }, props.members, props.sessions);
   }
 
-  function deliverySummary(
-    message: RoomMessage,
-  ): { label: string; tone: "info" | "success" | "error" | "warning" } | undefined {
+  function deliverySummary(message: RoomMessage):
+    | {
+        stage: NonNullable<ReturnType<typeof deliveryStage>>;
+        tone: "info" | "success" | "error" | "warning";
+      }
+    | undefined {
     const deliveries = message.deliveries.filter((delivery) => !delivery.deletedAt);
     if (deliveries.some((delivery) => delivery.status === "rejected")) {
-      return { label: "发送失败", tone: "error" };
+      return { stage: "failed", tone: "error" };
     }
     if (deliveries.some((delivery) => delivery.status === "unknown")) {
-      return { label: "发送待确认", tone: "warning" };
+      return { stage: "unknown", tone: "warning" };
     }
     const stage = deliveryStage(deliveries);
-    return stage ? { label: stage, tone: stage === "已接收" ? "success" : "info" } : undefined;
+    return stage ? { stage, tone: stage === "received" ? "success" : "info" } : undefined;
   }
 
   async function copyMessage(message: RoomMessage): Promise<void> {
     try {
       await navigator.clipboard.writeText(message.content);
-      toasts.success("消息正文已复制");
+      toasts.success({ key: "notice.copied" });
     } catch {
-      toasts.error("复制失败，请重试或手动复制消息正文");
+      toasts.error({ key: "notice.copyFailed" });
     }
   }
 
   function startsNewDay(index: number): boolean {
     return (
       index === 0 ||
-      formatDate(props.messages[index - 1].createdAt) !==
-        formatDate(props.messages[index].createdAt)
+      !sameLocalDay(props.messages[index - 1].createdAt, props.messages[index].createdAt)
     );
   }
 

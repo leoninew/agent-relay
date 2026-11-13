@@ -5,6 +5,7 @@
       <DialogOverlay class="dialog-overlay" />
       <DialogContent
         class="app-dialog"
+        :class="contentClass"
         :aria-describedby="undefined"
         @escape-key-down="preventBusyClose"
         @interact-outside="preventBusyClose"
@@ -13,7 +14,12 @@
         <header class="dialog-heading">
           <DialogTitle>{{ title }}</DialogTitle>
           <DialogClose as-child>
-            <button type="button" class="icon-button" aria-label="关闭对话框" :disabled="busy">
+            <button
+              type="button"
+              class="icon-button"
+              :aria-label="t('dialog.close')"
+              :disabled="busy"
+            >
               <AppIcon name="close" />
             </button>
           </DialogClose>
@@ -35,10 +41,17 @@
     DialogTrigger,
   } from "reka-ui";
   import { watch } from "vue";
+  import { useI18n } from "vue-i18n";
 
   import AppIcon from "@/components/AppIcon.vue";
 
-  const props = defineProps<{ open: boolean; title: string; busy: boolean }>();
+  const { t } = useI18n();
+  const props = defineProps<{
+    open: boolean;
+    title: string;
+    busy: boolean;
+    contentClass?: string;
+  }>();
   const emit = defineEmits<{ close: []; "update:open": [open: boolean] }>();
   let previousFocus: HTMLElement | null = null;
 

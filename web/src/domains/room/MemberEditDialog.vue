@@ -1,44 +1,46 @@
 <template>
   <AppDialog
     :open="!!member"
-    title="编辑成员"
+    :title="t('forms.editMember')"
     :busy="saving || topicSaving"
     @close="$emit('close')"
   >
     <form class="setup-form" novalidate @submit.prevent="submit">
       <div class="setup-form-content">
         <div class="setup-field">
-          <label id="edit-member-session-label">关联会话</label>
+          <label id="edit-member-session-label">{{ t("forms.linkedSession") }}</label>
           <div class="session-options" role="group" aria-labelledby="edit-member-session-label">
             <div class="session-option-row">
               <div class="session-option linked-session-card">
                 <span class="session-option-label">
                   <strong :title="linkedSession?.name">
-                    {{ linkedSession?.name ?? "会话名称不可用" }}
+                    {{ linkedSession?.name ?? t("forms.noSessionName") }}
                   </strong>
                   <span :title="member?.sessionId">{{ member?.sessionId }}</span>
                 </span>
               </div>
               <span v-if="member" class="session-option-meta">
-                {{ presenceLabel[member.presence] }}
+                {{ t(`sidebar.${member.presence}`) }}
               </span>
             </div>
           </div>
         </div>
         <div class="setup-field">
-          <label for="edit-member-name">成员名称 <span class="required-mark">*</span></label>
+          <label for="edit-member-name"
+            >{{ t("forms.memberName") }} <span class="required-mark">*</span></label
+          >
           <AppInput
             id="edit-member-name"
             v-model="name"
             :maxlength="80"
             :disabled="saving"
             :invalid="!!errors.name"
-            clear-label="清空名称"
+            :clear-label="t('forms.clearName')"
             aria-describedby="edit-member-name-error"
             autocomplete="off"
           />
           <p v-if="errors.name" id="edit-member-name-error" class="field-error">
-            {{ errors.name }}
+            {{ translateMessage(errors.name) }}
           </p>
         </div>
         <MemberTopicsField
@@ -49,14 +51,19 @@
           :room-id="roomId"
           :disabled="saving"
         />
-        <p v-if="error" class="field-error" role="alert">{{ error }}</p>
+        <p v-if="error" class="field-error" role="alert">{{ translateMessage(error) }}</p>
       </div>
       <footer class="dialog-actions">
         <AppButton variant="secondary" :disabled="saving || topicSaving" @click="$emit('close')">
-          取消
+          {{ t("common.cancel") }}
         </AppButton>
-        <AppButton type="submit" :loading="saving" loading-label="保存中…" :disabled="topicSaving">
-          保存成员
+        <AppButton
+          type="submit"
+          :loading="saving"
+          :loading-label="t('settings.saving')"
+          :disabled="topicSaving"
+        >
+          {{ t("forms.saveMember") }}
         </AppButton>
       </footer>
     </form>
@@ -64,7 +71,10 @@
 </template>
 
 <script setup lang="ts">
+  import { translateMessage } from "@/i18n";
+  import type { MessageDescriptor } from "@/i18n";
   import { ref, watch } from "vue";
+  import { useI18n } from "vue-i18n";
 
   import AppButton from "@/components/AppButton.vue";
   import AppDialog from "@/components/AppDialog.vue";
@@ -74,13 +84,14 @@
 
   import "./member-session.css";
 
+  const { t } = useI18n();
   const props = defineProps<{
     member?: Member;
     linkedSession?: Pick<Session, "id" | "name">;
     topics: Topic[];
     roomId?: string;
     saving: boolean;
-    error: string | null;
+    error: MessageDescriptor | null;
   }>();
   const emit = defineEmits<{
     close: [];
@@ -89,13 +100,7 @@
   const name = ref("");
   const topicIds = ref<string[]>([]);
   const topicSaving = ref(false);
-  const errors = ref<Record<string, string>>({});
-  const presenceLabel = {
-    available: "空闲",
-    busy: "忙碌",
-    offline: "离线",
-    unknown: "接入未确认",
-  };
+  const errors = ref<Record<string, MessageDescriptor>>({});
 
   watch(
     [() => props.member?.id, () => props.roomId],
@@ -113,7 +118,7 @@
   function submit(): void {
     if (!props.member || props.saving || topicSaving.value) return;
     errors.value = {};
-    if (!name.value.trim()) errors.value.name = "请输入名称";
+    if (!name.value.trim()) errors.value.name = { key: "validation.name" };
     if (Object.keys(errors.value).length) return;
     emit("save", props.member.id, { name: name.value.trim(), topicIds: [...topicIds.value] });
   }

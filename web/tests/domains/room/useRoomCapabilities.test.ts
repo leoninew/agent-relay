@@ -61,6 +61,19 @@ describe("room skill loading", () => {
     expect(capabilities.catalog.value.skillsLoading).toBe(false);
   });
 
+  it("pauses read requests while inactive and reloads on resume", async () => {
+    const { room, capabilities } = setup();
+    await setImmediate();
+    capabilities.pause();
+    room.value = { ...room.value, id: "other", projectPath: "D:/other" };
+    await setImmediate();
+    expect(fetchRoomSkills).toHaveBeenCalledTimes(1);
+    capabilities.resume();
+    await setImmediate();
+    expect(fetchRoomSkills).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(fetchRoomSkills).mock.calls[1][0]).toBe("other");
+  });
+
   it("keeps partial skill results distinct from failure and allows an explicit retry", async () => {
     vi.mocked(fetchRoomSkills).mockResolvedValueOnce({
       ...skillsFixture(),
@@ -69,12 +82,12 @@ describe("room skill loading", () => {
     const { capabilities } = setup();
     await setImmediate();
     expect(capabilities.catalog.value.skills).toHaveLength(3);
-    expect(capabilities.catalog.value.issues).toEqual(["部分技能加载失败"]);
+    expect(capabilities.catalog.value.issues).toEqual([{ key: "errors.skill_load_failed" }]);
     vi.mocked(fetchRoomSkills).mockRejectedValueOnce(new Error("offline"));
     capabilities.refresh();
     await setImmediate();
     expect(capabilities.catalog.value.skills).toEqual([]);
-    expect(capabilities.catalog.value.issues.join()).toContain("Skill 目录加载失败");
+    expect(capabilities.catalog.value.issues).toContainEqual({ key: "errors.skills" });
     capabilities.refresh();
     await setImmediate();
     expect(capabilities.catalog.value.skills).toHaveLength(3);

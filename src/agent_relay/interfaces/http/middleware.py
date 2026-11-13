@@ -27,7 +27,7 @@ class RequestTransactionMiddleware:
         self.transaction_factory = transaction_factory
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http":
+        if scope["type"] != "http" or scope.get("path") in {"/api/preferences", "/api/app"}:
             await self.app(scope, receive, send)
             return
         transaction = self.transaction_factory()

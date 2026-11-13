@@ -37,7 +37,7 @@ class SQLAlchemyRoomReads:
     def room(self, room_id: str) -> Room:
         record = self.session.get(RoomRecord, room_id)
         if record is None:
-            raise RoomNotFoundError("聊天室不存在")
+            raise RoomNotFoundError("聊天室不存在", code="room_not_found")
         return room_from_model(record)
 
     def rooms(self) -> list[Room]:
@@ -78,7 +78,7 @@ class SQLAlchemyRoomReads:
             )
         )
         if record is None:
-            raise RoomNotFoundError("聊天室成员不存在")
+            raise RoomNotFoundError("聊天室成员不存在", code="member_not_found")
         return self._member(record)
 
     def member_for_session(self, room_id: str, session_id: str) -> Member:
@@ -91,7 +91,7 @@ class SQLAlchemyRoomReads:
             )
         )
         if record is None:
-            raise RoomNotFoundError("该 Codex 会话尚未加入此聊天室")
+            raise RoomNotFoundError("该 Codex 会话尚未加入此聊天室", code="session_not_joined")
         return self._member(record)
 
     def joined_members(self, room_id: str) -> dict[str, str]:

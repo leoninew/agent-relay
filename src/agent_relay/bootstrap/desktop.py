@@ -17,13 +17,18 @@ from fastapi import FastAPI
 
 from agent_relay.application.desktop.queries import DesktopExitNotificationReader
 from agent_relay.application.desktop.service import DesktopExitNotificationService
+from agent_relay.application.dto.preferences import ResolvedLanguage
 from agent_relay.application.messages.service import MessageService
+from agent_relay.application.preferences.service import PreferencesService
+from agent_relay.bootstrap.desktop_messages import native_message
 from agent_relay.bootstrap.http import build_app
 from agent_relay.bootstrap.logging import configure_logging
 from agent_relay.bootstrap.paths import load_app_settings, resource_root, user_data_root
+from agent_relay.bootstrap.preferences import create_preferences_service
 from agent_relay.bootstrap.settings import Settings
 from agent_relay.infrastructure.persistence.database import Database
 from agent_relay.infrastructure.persistence.dependencies import create_room_store
+from agent_relay.infrastructure.preferences.system_language import detect_system_language
 
 logger = logging.getLogger("agent_relay.desktop")
 AppFactory = Callable[..., FastAPI]
@@ -38,6 +43,7 @@ class LocalApiServer:
         static_directory: Path,
         *,
         app_factory: AppFactory = build_app,
+        preferences_service: PreferencesService | None = None,
     ) -> None:
         self.settings = settings
         self.static_directory = static_directory
@@ -48,6 +54,7 @@ class LocalApiServer:
         self._server: uvicorn.Server | None = None
         self._thread: threading.Thread | None = None
         self._error: BaseException | None = None
+        self.preferences_service = preferences_service
 
     @property
     def app(self) -> FastAPI | None:
@@ -71,6 +78,11 @@ class LocalApiServer:
             self._app = self.app_factory(
                 settings=self.settings,
                 static_directory=self.static_directory,
+                **(
+                    {"preferences_service": self.preferences_service}
+                    if self.preferences_service is not None
+                    else {}
+                ),
             )
             self._server = uvicorn.Server(
                 uvicorn.Config(
@@ -172,6 +184,7 @@ def run_desktop(
 
     storage_path = active_user_root / "webview"
     storage_path.mkdir(parents=True, exist_ok=True)
+    preferences = create_preferences_service(configured, user_root=active_user_root)
     logger.info("Starting the desktop application")
     started_at = datetime.now(UTC)
     run_id = uuid4().hex
@@ -179,6 +192,7 @@ def run_desktop(
         configured,
         static_directory,
         app_factory=app_factory,
+        preferences_service=preferences,
     ) as api_server:
         window = webview_api.create_window(
             title="Agent Relay",
@@ -197,14 +211,23 @@ def run_desktop(
             nonlocal close_confirmed
             if close_confirmed:
                 return True
-            if not window.create_confirmation_dialog("退出 Agent Relay", "确定要关闭管理端吗？"):
+            language = _desktop_language(preferences, configured)
+            if not window.create_confirmation_dialog(
+                native_message(language, "exitTitle"),
+                native_message(language, "exitBody"),
+            ):
                 return False
             close_confirmed = True
             if api_server.app is not None:
                 database = getattr(api_server.app.state, "database", None)
                 if database is not None:
                     try:
-                        _publish_exit_notifications(database, started_at, run_id)
+                        _publish_exit_notifications(
+                            database,
+                            started_at,
+                            run_id,
+                            native_message(language, "offline"),
+                        )
                     except Exception:
                         logger.exception("Unable to finish desktop exit notifications")
             if on_confirmed_close is not None:
@@ -225,13 +248,33 @@ def run_desktop(
     logger.info("Desktop window closed")
 
 
-def _publish_exit_notifications(database: Database, started_at: datetime, run_id: str) -> None:
+def _desktop_language(preferences: PreferencesService, settings: Settings) -> ResolvedLanguage:
+    try:
+        return preferences.get().resolved_language
+    except Exception:
+        logger.warning("Unable to read the current desktop language", exc_info=True)
+        return _configured_language(settings)
+
+
+def _configured_language(settings: Settings) -> ResolvedLanguage:
+    configured = settings.preferences.language
+    if configured == "system":
+        return detect_system_language()
+    return configured
+
+
+def _publish_exit_notifications(
+    database: Database,
+    started_at: datetime,
+    run_id: str,
+    content: str,
+) -> None:
     store = create_room_store(database)
     notifications = DesktopExitNotificationService(
         DesktopExitNotificationReader(store),
         MessageService(store),
         logger,
-    ).publish(started_at=started_at, run_id=run_id)
+    ).publish(started_at=started_at, run_id=run_id, content=content)
     remaining = list(notifications)
     queries = store.queries
     deadline = time.monotonic() + EXIT_NOTIFICATION_SUBMISSION_TIMEOUT_SECONDS
@@ -260,9 +303,28 @@ def _publish_exit_notifications(database: Database, started_at: datetime, run_id
         time.sleep(0.05)
 
 
-def _show_startup_error(message: str) -> None:
-    log_path = user_data_root() / "logs" / "agent-relay.log"
-    text = f"{message}\n\n日志文件：{log_path}"
+def _startup_language(active_user_root: Path) -> ResolvedLanguage:
+    try:
+        settings = load_app_settings(user_root=active_user_root)
+        return (
+            create_preferences_service(settings, user_root=active_user_root).get().resolved_language
+        )
+    except Exception:
+        logger.warning("Unable to read preferences for the startup error", exc_info=True)
+        return detect_system_language()
+
+
+def _show_startup_error(
+    message: str,
+    language: ResolvedLanguage,
+    *,
+    active_user_root: Path | None = None,
+) -> None:
+    log_path = (active_user_root or user_data_root()) / "logs" / "agent-relay.log"
+    text = (
+        f"{native_message(language, 'startupFailed')}\n\n{message}"
+        f"\n\n{native_message(language, 'logFile')}: {log_path}"
+    )
     if sys.stderr is not None:
         print(text, file=sys.stderr)
         return
@@ -275,9 +337,15 @@ def _show_startup_error(message: str) -> None:
 
 
 def main() -> None:
+    active_user_root = user_data_root()
     try:
         run_desktop()
     except Exception as exc:
         logger.exception("Desktop application startup failed")
-        _show_startup_error(str(exc))
+        language = _startup_language(active_user_root)
+        _show_startup_error(
+            str(exc),
+            language,
+            active_user_root=active_user_root,
+        )
         raise SystemExit(1) from None

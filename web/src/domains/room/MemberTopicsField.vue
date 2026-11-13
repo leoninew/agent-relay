@@ -5,12 +5,12 @@
     :aria-invalid="!!error"
     :aria-describedby="`${idPrefix}-topics-error`"
   >
-    <legend>订阅话题（可选）</legend>
+    <legend>{{ t("forms.subscribeOptional") }}</legend>
     <AppCheckboxGroup
       v-model="topicIds"
       class="setup-topics"
-      aria-label="订阅话题"
-      clear-label="清空订阅话题"
+      :aria-label="t('forms.subscribe')"
+      :clear-label="t('forms.clearSubscriptions')"
       :disabled="disabled"
       :invalid="!!error"
       :described-by="`${idPrefix}-topics-error`"
@@ -19,39 +19,46 @@
         <span># {{ topic.name }}</span>
       </AppCheckbox>
     </AppCheckboxGroup>
-    <p v-if="error" :id="`${idPrefix}-topics-error`" class="field-error">{{ error }}</p>
+    <p v-if="error" :id="`${idPrefix}-topics-error`" class="field-error">
+      {{ translateMessage(error) }}
+    </p>
     <div class="inline-topic-create">
-      <label :for="`${idPrefix}-new-topic`" class="sr-only">新话题名称</label>
+      <label :for="`${idPrefix}-new-topic`" class="sr-only">{{ t("forms.newTopicName") }}</label>
       <AppInput
         :id="`${idPrefix}-new-topic`"
         v-model="newTopicName"
         maxlength="40"
-        placeholder="新话题名称"
+        :placeholder="t('forms.newTopicName')"
         :disabled="disabled || busy"
         :invalid="!!topicNameError"
-        clear-label="清空新话题名称"
+        :clear-label="t('forms.clearNewTopic')"
         :aria-describedby="topicNameError ? `${idPrefix}-new-topic-error` : undefined"
         @keydown.enter.prevent="createInlineTopic"
       />
       <AppButton
         variant="secondary"
         :loading="busy"
-        loading-label="添加中…"
+        :loading-label="t('forms.adding')"
         :disabled="disabled"
         @click="createInlineTopic"
       >
-        添加话题
+        {{ t("forms.addTopic") }}
       </AppButton>
     </div>
     <p v-if="topicNameError" :id="`${idPrefix}-new-topic-error`" class="field-error">
-      {{ topicNameError }}
+      {{ translateMessage(topicNameError) }}
     </p>
-    <p v-if="topicRequestError" class="field-error" role="alert">{{ topicRequestError }}</p>
+    <p v-if="topicRequestError" class="field-error" role="alert">
+      {{ translateMessage(topicRequestError) }}
+    </p>
   </fieldset>
 </template>
 
 <script setup lang="ts">
+  import { translateMessage } from "@/i18n";
+  import type { MessageDescriptor } from "@/i18n";
   import { ref, watch } from "vue";
+  import { useI18n } from "vue-i18n";
 
   import AppButton from "@/components/AppButton.vue";
   import AppCheckbox from "@/components/AppCheckbox.vue";
@@ -62,33 +69,34 @@
   import { useRoomsStore } from "@/stores/rooms";
   import { useToastsStore } from "@/stores/toasts";
 
+  const { t } = useI18n();
   const props = defineProps<{
     idPrefix: string;
     topics: Topic[];
     roomId?: string;
     disabled: boolean;
-    error?: string;
+    error?: MessageDescriptor;
   }>();
   const topicIds = defineModel<string[]>({ required: true });
   const busy = defineModel<boolean>("busy", { default: false });
   const roomsStore = useRoomsStore();
   const toasts = useToastsStore();
   const newTopicName = ref("");
-  const topicNameError = ref("");
-  const topicRequestError = ref("");
+  const topicNameError = ref<MessageDescriptor | null>(null);
+  const topicRequestError = ref<MessageDescriptor | null>(null);
 
   watch(newTopicName, () => {
-    topicNameError.value = "";
-    topicRequestError.value = "";
+    topicNameError.value = null;
+    topicRequestError.value = null;
   });
 
   async function createInlineTopic(): Promise<void> {
     if (props.disabled || busy.value || !props.roomId) return;
     const topicName = newTopicName.value.trim();
-    topicNameError.value = "";
-    topicRequestError.value = "";
+    topicNameError.value = null;
+    topicRequestError.value = null;
     if (!topicName) {
-      topicNameError.value = "请输入话题名称";
+      topicNameError.value = { key: "validation.topic" };
       return;
     }
     const existing = props.topics.find((topic) => topic.name === topicName);
@@ -101,13 +109,13 @@
     busy.value = true;
     try {
       const topic = await roomsStore.createTopic(roomId, { name: topicName, description: "" });
-      toasts.success("话题已创建");
+      toasts.success({ key: "notice.topicCreated" });
       if (props.roomId === roomId) {
         topicIds.value = [...topicIds.value, topic.id];
         newTopicName.value = "";
       }
     } catch (caught) {
-      topicRequestError.value = describeApiError(caught, "话题添加失败，请重试。");
+      topicRequestError.value = describeApiError(caught, "errors.topicAdd");
       toasts.error(topicRequestError.value);
     } finally {
       busy.value = false;

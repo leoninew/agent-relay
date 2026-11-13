@@ -61,3 +61,20 @@ def test_exit_notification_failure_does_not_skip_other_rooms() -> None:
         "first-room",
         "second-room",
     ]
+
+
+def test_exit_notification_accepts_localized_content() -> None:
+    queries = Mock(spec=DesktopExitNotificationQueries)
+    queries.notification_targets.return_value = [
+        ShutdownNotificationTarget("agent-relay", ("coordinator",)),
+    ]
+    messages = Mock(spec=MessageService)
+    service = DesktopExitNotificationService(queries, messages, getLogger("tests.desktop-exit"))
+
+    service.publish(
+        started_at=datetime(2026, 11, 12, tzinfo=UTC),
+        run_id="run-1",
+        content="The management app is offline.",
+    )
+
+    assert messages.post_message.call_args.args[1].content == "The management app is offline."
