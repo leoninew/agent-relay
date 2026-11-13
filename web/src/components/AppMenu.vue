@@ -1,61 +1,105 @@
 <template>
-  <DropdownMenuRoot :modal="false" @update:open="onMenuOpen">
-    <DropdownMenuTrigger as-child>
-      <button
-        type="button"
-        class="icon-button app-menu-trigger"
-        :aria-label="t('appMenu.title')"
-        :title="t('appMenu.title')"
-      >
-        <AppIcon name="settings" />
-      </button>
-    </DropdownMenuTrigger>
-    <DropdownMenuPortal>
-      <DropdownMenuContent
-        class="room-switcher-menu app-menu-content"
-        :aria-label="t('appMenu.title')"
-        side="bottom"
-        align="end"
-        :side-offset="8"
-        :collision-padding="12"
-      >
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger class="room-menu-action">
-            <AppIcon name="language" />
-            <span>{{ t("settings.language") }}</span>
-            <AppIcon name="chevron" class="app-menu-chevron" />
-          </DropdownMenuSubTrigger>
-          <DropdownMenuPortal>
-            <DropdownMenuSubContent
-              class="room-switcher-menu app-menu-content"
-              :side-offset="4"
-              :collision-padding="12"
+  <div class="app-menu-actions">
+    <DropdownMenuRoot :modal="false" @update:open="onMenuOpen">
+      <DropdownMenuTrigger as-child>
+        <button
+          type="button"
+          class="icon-button app-menu-trigger"
+          :aria-label="themeLabel"
+          :title="themeLabel"
+        >
+          <AppIcon :name="themeIcons[preferences.theme]" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuPortal>
+        <DropdownMenuContent
+          class="room-switcher-menu app-menu-content"
+          :aria-label="t('settings.appearance')"
+          side="bottom"
+          align="end"
+          :side-offset="8"
+          :collision-padding="12"
+        >
+          <DropdownMenuRadioGroup
+            :model-value="preferences.theme"
+            :aria-label="t('settings.appearance')"
+          >
+            <DropdownMenuRadioItem
+              v-for="option in themeOptions"
+              :key="option.value"
+              :value="option.value"
+              :disabled="preferences.loading || preferences.saving"
+              class="room-menu-action app-menu-option"
+              @select.prevent="selectTheme(option.value)"
             >
-              <DropdownMenuRadioGroup
-                :model-value="preferences.language"
-                :aria-label="t('settings.language')"
+              <span class="app-menu-option-label">
+                <AppIcon :name="themeIcons[option.value]" />
+                <span>{{ option.label }}</span>
+              </span>
+              <DropdownMenuItemIndicator><AppIcon name="check" /></DropdownMenuItemIndicator>
+            </DropdownMenuRadioItem>
+          </DropdownMenuRadioGroup>
+        </DropdownMenuContent>
+      </DropdownMenuPortal>
+    </DropdownMenuRoot>
+    <DropdownMenuRoot :modal="false" @update:open="onMenuOpen">
+      <DropdownMenuTrigger as-child>
+        <button
+          type="button"
+          class="icon-button app-menu-trigger"
+          :aria-label="t('appMenu.title')"
+          :title="t('appMenu.title')"
+        >
+          <AppIcon name="settings" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuPortal>
+        <DropdownMenuContent
+          class="room-switcher-menu app-menu-content"
+          :aria-label="t('appMenu.title')"
+          side="bottom"
+          align="end"
+          :side-offset="8"
+          :collision-padding="12"
+        >
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger class="room-menu-action">
+              <AppIcon name="language" />
+              <span>{{ t("settings.language") }}</span>
+              <AppIcon name="chevron" class="app-menu-chevron" />
+            </DropdownMenuSubTrigger>
+            <DropdownMenuPortal>
+              <DropdownMenuSubContent
+                class="room-switcher-menu app-menu-content"
+                :side-offset="4"
+                :collision-padding="12"
               >
-                <DropdownMenuRadioItem
-                  v-for="option in options"
-                  :key="option.value"
-                  :value="option.value"
-                  :disabled="preferences.loading || preferences.saving"
-                  class="room-menu-action app-menu-option"
-                  @select.prevent="selectLanguage(option.value)"
+                <DropdownMenuRadioGroup
+                  :model-value="preferences.language"
+                  :aria-label="t('settings.language')"
                 >
-                  <span>{{ option.label }}</span>
-                  <DropdownMenuItemIndicator><AppIcon name="check" /></DropdownMenuItemIndicator>
-                </DropdownMenuRadioItem>
-              </DropdownMenuRadioGroup>
-            </DropdownMenuSubContent>
-          </DropdownMenuPortal>
-        </DropdownMenuSub>
-        <DropdownMenuItem class="room-menu-action" @select="openAbout">
-          <AppIcon name="info" />{{ t("appMenu.about") }}
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenuPortal>
-  </DropdownMenuRoot>
+                  <DropdownMenuRadioItem
+                    v-for="option in options"
+                    :key="option.value"
+                    :value="option.value"
+                    :disabled="preferences.loading || preferences.saving"
+                    class="room-menu-action app-menu-option"
+                    @select.prevent="selectLanguage(option.value)"
+                  >
+                    <span>{{ option.label }}</span>
+                    <DropdownMenuItemIndicator><AppIcon name="check" /></DropdownMenuItemIndicator>
+                  </DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+              </DropdownMenuSubContent>
+            </DropdownMenuPortal>
+          </DropdownMenuSub>
+          <DropdownMenuItem class="room-menu-action" @select="openAbout">
+            <AppIcon name="info" />{{ t("appMenu.about") }}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenuPortal>
+    </DropdownMenuRoot>
+  </div>
   <AppDialog
     :open="aboutOpen"
     :title="t('appMenu.about')"
@@ -96,7 +140,7 @@
   import AppDialog from "@/components/AppDialog.vue";
   import AppIcon from "@/components/AppIcon.vue";
   import { fetchAppInfo } from "@/services/appInfoApi";
-  import type { LanguagePreference } from "@/services/preferencesApi";
+  import type { LanguagePreference, ThemePreference } from "@/services/preferencesApi";
   import { usePreferencesStore } from "@/stores/preferences";
   import { useToastsStore } from "@/stores/toasts";
 
@@ -112,6 +156,15 @@
     { value: "zh-CN" as const, label: "简体中文" },
     { value: "en" as const, label: "English" },
   ]);
+  const themeOptions = computed(() => [
+    { value: "system" as const, label: t("settings.system") },
+    { value: "light" as const, label: t("settings.light") },
+    { value: "dark" as const, label: t("settings.dark") },
+  ]);
+  const themeIcons = { system: "monitor", light: "sun", dark: "moon" } as const;
+  const themeLabel = computed(
+    () => `${t("settings.appearance")}: ${t(`settings.${preferences.theme}`)}`,
+  );
 
   function onMenuOpen(open: boolean): void {
     if (open && !preferences.saving && !preferences.loading) void preferences.load();
@@ -120,6 +173,11 @@
   async function selectLanguage(language: LanguagePreference): Promise<void> {
     if (preferences.loading || preferences.saving || language === preferences.language) return;
     if (await preferences.save(language)) toasts.success({ key: "appMenu.languageSaved" });
+  }
+
+  async function selectTheme(theme: ThemePreference): Promise<void> {
+    if (preferences.loading || preferences.saving || theme === preferences.theme) return;
+    if (await preferences.saveTheme(theme)) toasts.success({ key: "appMenu.themeSaved" });
   }
 
   async function openAbout(): Promise<void> {
@@ -136,8 +194,20 @@
 </script>
 
 <style scoped>
+  .app-menu-actions {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 4px;
+  }
   .app-menu-trigger {
     flex: none;
+    width: 32px;
+    height: 32px;
+  }
+  .app-menu-trigger :deep(svg) {
+    width: 20px;
+    height: 20px;
   }
   .app-menu-content {
     min-width: 160px;
@@ -151,6 +221,11 @@
   }
   .app-menu-option[data-disabled] {
     opacity: 0.5;
+  }
+  .app-menu-option-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
   }
   .about-content {
     display: flex;

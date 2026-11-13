@@ -2,12 +2,13 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from agent_relay.application.dto.preferences import LanguagePreference
+from agent_relay.application.dto.preferences import LanguagePreference, ThemePreference
 
 
 class PreferencesSettings(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
     language: LanguagePreference = "system"
+    theme: ThemePreference = "system"
 
 
 class RequestLogMessages(BaseModel):

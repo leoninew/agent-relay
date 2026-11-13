@@ -22,7 +22,7 @@ from agent_relay.interfaces.http.preferences.routes import update_preferences
 
 
 def test_routes_use_injected_service() -> None:
-    expected = Preferences(language="system", resolvedLanguage="zh-CN")
+    expected = Preferences(language="system", resolvedLanguage="zh-CN", theme="system")
     service = Mock()
     service.get.return_value = expected
     service.update.return_value = expected
@@ -32,8 +32,12 @@ def test_routes_use_injected_service() -> None:
     assert get_preferences(request) is service
     assert get_route(service) == expected
     assert update_preferences(UpdatePreferences(language="system"), service) == expected
-    service.update.assert_called_once_with("system")
-    assert expected.model_dump(by_alias=True) == {"language": "system", "resolvedLanguage": "zh-CN"}
+    service.update.assert_called_once_with(language="system", theme=None)
+    assert expected.model_dump(by_alias=True) == {
+        "language": "system",
+        "resolvedLanguage": "zh-CN",
+        "theme": "system",
+    }
 
 
 def test_app_preserves_injected_service(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -54,10 +58,35 @@ def test_app_preserves_injected_service(tmp_path: Path, monkeypatch: pytest.Monk
     assert app.state.preferences is service
 
 
-@pytest.mark.parametrize("value", [{}, {"language": "fr"}, {"language": "en", "extra": True}])
+@pytest.mark.parametrize(
+    "value",
+    [
+        {},
+        {"language": None},
+        {"theme": None},
+        {"language": None, "theme": "dark"},
+        {"language": "en", "theme": None},
+        {"language": "fr"},
+        {"theme": "auto"},
+        {"language": "en", "extra": True},
+    ],
+)
 def test_update_rejects_invalid_request(value: dict[str, object]) -> None:
     with pytest.raises(ValidationError):
         UpdatePreferences.model_validate(value)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        {"language": "en"},
+        {"theme": "dark"},
+        {"language": "system", "theme": "light"},
+    ],
+)
+def test_update_accepts_partial_preferences(value: dict[str, object]) -> None:
+    request = UpdatePreferences.model_validate(value)
+    assert request.model_dump(exclude_none=True) == value
 
 
 @pytest.mark.parametrize(

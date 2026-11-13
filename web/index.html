@@ -5,6 +5,31 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/png" sizes="128x128" href="%BASE_URL%agent-relay.png" />
     <title>Agent Relay</title>
+    <script>
+      (() => {
+        let dark = false;
+        try {
+          dark =
+            typeof window.matchMedia === "function" &&
+            window.matchMedia("(prefers-color-scheme: dark)").matches === true;
+        } catch (error) {
+          dark = false;
+        }
+        const theme = dark ? "dark" : "light";
+        const root = document.documentElement;
+        root.classList.toggle("dark", dark);
+        root.dataset.theme = theme;
+        root.style.colorScheme = theme;
+      })();
+    </script>
+    <style>
+      html {
+        background: hsl(216 33% 97%);
+      }
+      html.dark {
+        background: hsl(220 18% 7%);
+      }
+    </style>
   </head>
   <body>
     <div id="app"></div>

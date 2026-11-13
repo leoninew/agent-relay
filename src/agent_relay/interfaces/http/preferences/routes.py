@@ -13,4 +13,4 @@ def get_preferences(service: PreferencesDependency) -> Preferences:
 
 @router.patch("")
 def update_preferences(request: UpdatePreferences, service: PreferencesDependency) -> Preferences:
-    return service.update(request.language)
+    return service.update(language=request.language, theme=request.theme)

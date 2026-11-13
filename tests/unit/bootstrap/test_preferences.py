@@ -6,6 +6,7 @@ from unittest.mock import Mock
 
 import pytest
 
+from agent_relay.application.dto.preferences import StoredPreferences
 from agent_relay.application.preferences.ports import PreferenceReadError, PreferenceWriteError
 from agent_relay.application.preferences.service import PreferencesService
 from agent_relay.infrastructure.preferences.store import FilePreferencesStore
@@ -47,12 +48,12 @@ def test_windows_uses_user_ui_language(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_persistence_and_system_override(tmp_path: Path) -> None:
     path = tmp_path / "preferences.json"
-    service = PreferencesService("en", FilePreferencesStore(path), "zh-CN")
+    service = PreferencesService("en", "system", FilePreferencesStore(path), "zh-CN")
     assert service.get().language == "en"
     assert not path.exists()
-    assert service.update("system").resolved_language == "zh-CN"
+    assert service.update(language="system").resolved_language == "zh-CN"
     assert json.loads(path.read_text(encoding="utf-8")) == {"language": "system"}
-    rebuilt = PreferencesService("en", FilePreferencesStore(path), "zh-CN")
+    rebuilt = PreferencesService("en", "system", FilePreferencesStore(path), "zh-CN")
     assert rebuilt.get().language == "system"
     assert rebuilt.get().resolved_language == "zh-CN"
 
@@ -61,7 +62,7 @@ def test_persistence_and_system_override(tmp_path: Path) -> None:
 def test_invalid_file_is_not_overwritten(tmp_path: Path, raw: str) -> None:
     path = tmp_path / "preferences.json"
     path.write_text(raw, encoding="utf-8")
-    assert FilePreferencesStore(path).load() is None
+    assert FilePreferencesStore(path).load() == StoredPreferences()
     assert path.read_text(encoding="utf-8") == raw
 
 
@@ -83,6 +84,49 @@ def test_replace_failure_preserves_original(
         "agent_relay.infrastructure.preferences.store.os.replace", Mock(side_effect=OSError)
     )
     with pytest.raises(PreferenceWriteError):
-        FilePreferencesStore(path).save("zh-CN")
+        FilePreferencesStore(path).update(language="zh-CN")
     assert json.loads(path.read_text(encoding="utf-8")) == {"language": "en"}
     assert list(tmp_path.iterdir()) == [path]
+
+
+def test_theme_defaults_and_independent_updates(tmp_path: Path) -> None:
+    path = tmp_path / "preferences.json"
+    service = PreferencesService("en", "dark", FilePreferencesStore(path), "zh-CN")
+    assert service.get().theme == "dark"
+    assert not path.exists()
+
+    assert service.update(theme="light").language == "en"
+    assert json.loads(path.read_text(encoding="utf-8")) == {"theme": "light"}
+
+    result = service.update(language="zh-CN")
+    assert result.language == "zh-CN"
+    assert result.theme == "light"
+    assert json.loads(path.read_text(encoding="utf-8")) == {
+        "language": "zh-CN",
+        "theme": "light",
+    }
+
+
+def test_legacy_language_file_keeps_theme_default(tmp_path: Path) -> None:
+    path = tmp_path / "preferences.json"
+    path.write_text('{"language":"en"}', encoding="utf-8")
+    service = PreferencesService("zh-CN", "system", FilePreferencesStore(path), "en")
+    assert service.get().model_dump(by_alias=True) == {
+        "language": "en",
+        "resolvedLanguage": "en",
+        "theme": "system",
+    }
+    assert json.loads(path.read_text(encoding="utf-8")) == {"language": "en"}
+
+    service.update(theme="dark")
+    assert json.loads(path.read_text(encoding="utf-8")) == {
+        "language": "en",
+        "theme": "dark",
+    }
+
+
+def test_theme_update_does_not_persist_config_defaults(tmp_path: Path) -> None:
+    path = tmp_path / "preferences.json"
+    service = PreferencesService("zh-CN", "dark", FilePreferencesStore(path), "en")
+    assert service.update(theme="dark").language == "zh-CN"
+    assert json.loads(path.read_text(encoding="utf-8")) == {"theme": "dark"}

@@ -59,8 +59,9 @@
     flex-shrink: 0;
     gap: 12px;
     padding: 8px 16px;
-    background: #fff4d6;
-    color: #563d00;
+    border-bottom: 1px solid hsl(var(--warning) / 0.25);
+    background: hsl(var(--warning) / 0.1);
+    color: hsl(var(--warning));
   }
   .preferences-alert button {
     text-decoration: underline;

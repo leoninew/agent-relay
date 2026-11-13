@@ -4,11 +4,17 @@ import { ref } from "vue";
 import type { MessageDescriptor, ResolvedLanguage } from "@/i18n";
 import { ApiClientError } from "@/services/api";
 import { fetchPreferences, updatePreferences } from "@/services/preferencesApi";
-import type { LanguagePreference, Preferences } from "@/services/preferencesApi";
+import type {
+  LanguagePreference,
+  Preferences,
+  PreferencesUpdate,
+  ThemePreference,
+} from "@/services/preferencesApi";
 
 export const usePreferencesStore = defineStore("preferences", () => {
   const language = ref<LanguagePreference>("system");
   const resolvedLanguage = ref<ResolvedLanguage>("en");
+  const theme = ref<ThemePreference>("system");
   const loading = ref(false);
   const saving = ref(false);
   const error = ref<MessageDescriptor | null>(null);
@@ -17,6 +23,7 @@ export const usePreferencesStore = defineStore("preferences", () => {
   function apply(preferences: Preferences): void {
     language.value = preferences.language;
     resolvedLanguage.value = preferences.resolvedLanguage;
+    theme.value = preferences.theme;
   }
 
   async function load(): Promise<boolean> {
@@ -41,14 +48,14 @@ export const usePreferencesStore = defineStore("preferences", () => {
     }
   }
 
-  async function save(next: LanguagePreference): Promise<boolean> {
+  async function saveUpdate(update: PreferencesUpdate): Promise<boolean> {
     if (saving.value) return false;
     const version = ++generation;
     loading.value = false;
     saving.value = true;
     error.value = null;
     try {
-      const preferences = await updatePreferences(next);
+      const preferences = await updatePreferences(update);
       if (version !== generation) return false;
       apply(preferences);
       return true;
@@ -59,7 +66,12 @@ export const usePreferencesStore = defineStore("preferences", () => {
           const confirmed = await fetchPreferences();
           if (version !== generation) return false;
           apply(confirmed);
-          if (confirmed.language === next) return true;
+          if (
+            (update.language === undefined || confirmed.language === update.language) &&
+            (update.theme === undefined || confirmed.theme === update.theme)
+          ) {
+            return true;
+          }
         } catch {
           if (version !== generation) return false;
           error.value = { key: "settings.saveUnknown", requestId: caught.requestId };
@@ -76,5 +88,23 @@ export const usePreferencesStore = defineStore("preferences", () => {
     }
   }
 
-  return { language, resolvedLanguage, loading, saving, error, load, save };
+  function save(language: LanguagePreference): Promise<boolean> {
+    return saveUpdate({ language });
+  }
+
+  function saveTheme(next: ThemePreference): Promise<boolean> {
+    return saveUpdate({ theme: next });
+  }
+
+  return {
+    language,
+    resolvedLanguage,
+    theme,
+    loading,
+    saving,
+    error,
+    load,
+    save,
+    saveTheme,
+  };
 });

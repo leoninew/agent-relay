@@ -92,3 +92,15 @@ def test_invalid_language_configuration(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setenv("AGENT_RELAY_PREFERENCES__LANGUAGE", "fr")
     with pytest.raises(ValueError, match="preferences.language"):
         load_settings()
+
+
+@pytest.mark.parametrize("theme", ["system", "light", "dark"])
+def test_theme_configuration(monkeypatch: MonkeyPatch, theme: str) -> None:
+    monkeypatch.setenv("AGENT_RELAY_PREFERENCES__THEME", theme)
+    assert load_settings().preferences.theme == theme
+
+
+def test_invalid_theme_configuration(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setenv("AGENT_RELAY_PREFERENCES__THEME", "auto")
+    with pytest.raises(ValueError, match="preferences.theme"):
+        load_settings()

@@ -319,7 +319,10 @@ export default {
   settings: {
     title: "设置",
     language: "语言",
+    appearance: "外观",
     system: "跟随系统",
+    light: "明亮",
+    dark: "暗色",
     current: "当前生效：{language}",
     save: "保存",
     saving: "保存中…",
@@ -337,5 +340,6 @@ export default {
     version: "版本",
     versionUnavailable: "版本不可用",
     languageSaved: "语言已更新",
+    themeSaved: "外观已更新",
   },
 };

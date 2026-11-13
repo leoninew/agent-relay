@@ -12,6 +12,7 @@ def create_preferences_service(
 ) -> PreferencesService:
     return PreferencesService(
         settings.preferences.language,
+        settings.preferences.theme,
         FilePreferencesStore((user_root or user_data_root()) / "preferences.json"),
         detect_system_language(),
     )

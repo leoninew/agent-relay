@@ -23,6 +23,8 @@
     Info,
     Languages,
     MessagesSquare,
+    Monitor,
+    Moon,
     PanelLeftClose,
     PanelLeftOpen,
     PanelRightClose,
@@ -35,6 +37,7 @@
     Search,
     Settings,
     Sparkles,
+    Sun,
     Trash2,
     Waypoints,
     X,
@@ -58,6 +61,8 @@
     hash: Hash,
     info: Info,
     language: Languages,
+    monitor: Monitor,
+    moon: Moon,
     "panel-left-close": PanelLeftClose,
     "panel-left-open": PanelLeftOpen,
     "panel-right-close": PanelRightClose,
@@ -70,6 +75,7 @@
     search: Search,
     settings: Settings,
     skill: Sparkles,
+    sun: Sun,
     trash: Trash2,
   };
 </script>

@@ -1,6 +1,10 @@
 from typing import Protocol
 
-from agent_relay.application.dto.preferences import LanguagePreference
+from agent_relay.application.dto.preferences import (
+    LanguagePreference,
+    StoredPreferences,
+    ThemePreference,
+)
 
 
 class PreferenceReadError(OSError):
@@ -12,5 +16,10 @@ class PreferenceWriteError(OSError):
 
 
 class PreferencesStore(Protocol):
-    def load(self) -> LanguagePreference | None: ...
-    def save(self, language: LanguagePreference) -> None: ...
+    def load(self) -> StoredPreferences: ...
+    def update(
+        self,
+        *,
+        language: LanguagePreference | None = None,
+        theme: ThemePreference | None = None,
+    ) -> StoredPreferences: ...

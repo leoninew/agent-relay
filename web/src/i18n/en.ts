@@ -324,7 +324,10 @@ export default {
   settings: {
     title: "Settings",
     language: "Language",
+    appearance: "Appearance",
     system: "System",
+    light: "Light",
+    dark: "Dark",
     current: "Currently active: {language}",
     save: "Save",
     saving: "Saving...",
@@ -342,5 +345,6 @@ export default {
     version: "Version",
     versionUnavailable: "Version unavailable",
     languageSaved: "Language updated",
+    themeSaved: "Appearance updated",
   },
 };
