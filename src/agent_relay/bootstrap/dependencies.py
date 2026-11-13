@@ -33,7 +33,7 @@ def create_http_dependencies(
         session_driver=sessions,
         queue_driver=queue,
         capability_driver=capabilities,
-        image_store=FileImageStore(database.path.parent / "images"),
+        image_store=FileImageStore(database.path.parent / "rooms"),
         logging=HttpLogging(
             body_limit=logging.body.limit,
             request_begin=logging.request.begin,

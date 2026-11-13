@@ -12,10 +12,19 @@ export default defineConfigWithVueTs(
     rules: {
       "@typescript-eslint/consistent-type-imports": "error",
       "vue/block-order": ["error", { order: ["template", "script", "style"] }],
+      "vue/html-closing-bracket-newline": "off",
+      "vue/html-indent": "off",
       "vue/html-self-closing": "off",
       "vue/max-attributes-per-line": "off",
       "vue/multi-word-component-names": "off",
+      "vue/multiline-html-element-content-newline": "off",
       "vue/singleline-html-element-content-newline": "off",
+    },
+  },
+  {
+    files: ["src/domains/room/MessageTimeline.vue"],
+    rules: {
+      "vue/no-v-html": "off",
     },
   },
 );

@@ -17,6 +17,8 @@ from agent_relay.application.dto.delivery import (
     QueueRequest,
     SteerReceipt,
 )
+from agent_relay.application.images.message_text import ImageMessageText
+from agent_relay.application.images.ports import ImageStore
 from agent_relay.domain.rooms.delivery import (
     PROCESSING_FAILURE,
     QUEUED_NOTE,
@@ -35,10 +37,12 @@ class DeliveryService:
         store: DeliveryRepository,
         driver: DeliveryDriver,
         logger: logging.Logger,
+        images: ImageStore | None = None,
     ) -> None:
         self.store = store
         self.driver = driver
         self.logger = logger
+        self.message_text = ImageMessageText(images)
         self.history_cursors: dict[str, str | None] = {}
         self.unavailable_history_sessions: set[str] = set()
 
@@ -62,6 +66,9 @@ class DeliveryService:
             if work.message.reply_to_message_id
             else ""
         )
+        content = self.message_text.text(
+            work.room_id, message_text(work.message.content, work.message.capabilities)
+        )
         text = (
             f"roomId: {work.room_id}\n"
             f"messageId: {work.message.id}\n"
@@ -69,7 +76,7 @@ class DeliveryService:
             f"createdAt: {created_at}\n"
             f"sender: {sender}\n"
             f"{refer_to}\n"
-            f"{message_text(work.message.content, work.message.capabilities)}"
+            f"{content}"
         )
         try:
             receipt = self.driver.submit(

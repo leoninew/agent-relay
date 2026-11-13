@@ -13,6 +13,7 @@ export default {
     noSubscribers: "No subscribers",
     noSubscriptions: "No subscribed topics",
     codexSessionId: "Codex ID",
+    copyCodexId: "Copy Codex ID",
     sequence: "Sequence",
     sender: "Sender",
     sentAt: "Sent at",
@@ -201,6 +202,8 @@ export default {
     published: "Message published.",
     copied: "Message copied.",
     copyFailed: "Could not copy the message. Try again or copy it manually.",
+    codexIdCopied: "Codex ID copied.",
+    codexIdCopyFailed: "Could not copy the Codex ID. Try again or copy it manually.",
     cleared: "Cleared {messages} messages and removed {members} members.",
   },
   errors: {

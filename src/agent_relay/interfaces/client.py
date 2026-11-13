@@ -127,7 +127,7 @@ class RelayClient:
         encoded_body = (
             json.dumps(body, ensure_ascii=False).encode("utf-8") if body is not None else None
         )
-        headers = {"Accept": "application/json"}
+        headers = {"Accept": "application/json", "X-Agent-Relay-Image-Paths": "local"}
         if encoded_body is not None:
             headers["Content-Type"] = "application/json"
         request = Request(url, data=encoded_body, headers=headers, method=method)

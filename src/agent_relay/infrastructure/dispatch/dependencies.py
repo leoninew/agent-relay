@@ -7,6 +7,7 @@ from agent_relay.application.members.sessions import SessionDriver
 from agent_relay.infrastructure.dispatch.delivery import DeliveryRunner
 from agent_relay.infrastructure.dispatch.lock import SubmitterLock
 from agent_relay.infrastructure.dispatch.presence import MemberPresenceRunner
+from agent_relay.infrastructure.images.files import FileImageStore
 from agent_relay.infrastructure.persistence.database import Database
 from agent_relay.infrastructure.persistence.dependencies import (
     create_delivery_store,
@@ -20,7 +21,7 @@ def create_delivery_runner(
     store = create_delivery_store(database)
     return DeliveryRunner(
         store,
-        DeliveryService(store, driver, logger),
+        DeliveryService(store, driver, logger, FileImageStore(database.path.parent / "rooms")),
         SubmitterLock(database.path),
         logger,
         concurrency,

@@ -517,17 +517,20 @@
   visibility: hidden;
   transition: opacity 150ms;
 }
-.message-actions .icon-button {
+.message-actions .icon-button,
+.detail-copyable-id .icon-button {
   width: 14px;
   height: 14px;
   border-radius: 0;
   padding: 0;
 }
-.message-actions .icon-button svg {
+.message-actions .icon-button svg,
+.detail-copyable-id .icon-button svg {
   width: 14px;
   height: 14px;
 }
-.message-actions .icon-button:hover:not(:disabled) {
+.message-actions .icon-button:hover:not(:disabled),
+.detail-copyable-id .icon-button:hover:not(:disabled) {
   background: transparent;
 }
 .message:hover .message-actions {
@@ -1216,6 +1219,15 @@ button.topic-chip:hover:not(:disabled) {
 .detail-message-meta dd {
   min-width: 0;
   margin: 0;
+  overflow-wrap: anywhere;
+}
+.detail-copyable-id {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.detail-copyable-id > span {
+  min-width: 0;
   overflow-wrap: anywhere;
 }
 .detail-topics {

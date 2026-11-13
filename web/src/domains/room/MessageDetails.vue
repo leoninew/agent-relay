@@ -117,7 +117,18 @@
             </template>
             <template v-if="member.sessionId">
               <dt>{{ t("details.codexSessionId") }}</dt>
-              <dd>{{ member.sessionId }}</dd>
+              <dd class="detail-copyable-id">
+                <span>{{ member.sessionId }}</span>
+                <button
+                  type="button"
+                  class="icon-button"
+                  :aria-label="t('details.copyCodexId')"
+                  :title="t('details.copyCodexId')"
+                  @click="copyCodexId(member.sessionId)"
+                >
+                  <AppIcon name="copy" />
+                </button>
+              </dd>
             </template>
           </dl>
         </section>
@@ -197,6 +208,7 @@
   import { useI18n } from "vue-i18n";
   import { memberSessionName } from "@/domains/room/memberSessionName";
   import type { Member, RoomMessage, Session, Topic } from "@/services/roomApi";
+  import { useToastsStore } from "@/stores/toasts";
   import { formatDateTime } from "@/utils/time";
 
   const props = withDefaults(
@@ -212,6 +224,7 @@
     { message: undefined, topic: undefined, member: undefined, busy: false },
   );
   const { t } = useI18n();
+  const toasts = useToastsStore();
   defineEmits<{
     close: [];
     collapse: [];
@@ -223,6 +236,15 @@
 
   function sessionName(member: Pick<Member, "id">): string | undefined {
     return memberSessionName(member, props.members, props.sessions);
+  }
+
+  async function copyCodexId(sessionId: string): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(sessionId);
+      toasts.success({ key: "notice.codexIdCopied" });
+    } catch {
+      toasts.error({ key: "notice.codexIdCopyFailed" });
+    }
   }
 
   const detailLabel = computed(() =>

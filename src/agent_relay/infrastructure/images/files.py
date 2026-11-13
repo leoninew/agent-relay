@@ -17,13 +17,15 @@ _FORMATS = {
 
 
 class FileImageStore:
+    """Store images under <rooms root>/<room ID>/images."""
+
     def __init__(self, root: Path) -> None:
         self.root = root.expanduser().resolve()
 
     def _directory(self, room_id: str) -> Path:
         if not re.fullmatch(r"room-[A-Za-z0-9_-]+", room_id):
             raise RoomNotFoundError("Room not found")
-        return self.root / room_id
+        return self.root / room_id / "images"
 
     def save(self, room_id: str, content: bytes) -> StoredImage:
         if not content:

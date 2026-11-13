@@ -13,6 +13,7 @@ export default {
     noSubscribers: "暂无成员订阅",
     noSubscriptions: "未订阅话题",
     codexSessionId: "Codex ID",
+    copyCodexId: "复制 Codex ID",
     sequence: "序号",
     sender: "发送人",
     sentAt: "发送时间",
@@ -198,6 +199,8 @@ export default {
     published: "消息已发布",
     copied: "消息正文已复制",
     copyFailed: "复制失败，请重试或手动复制消息正文",
+    codexIdCopied: "Codex ID 已复制",
+    codexIdCopyFailed: "Codex ID 复制失败，请重试或手动复制",
     cleared: "已清空 {messages} 条消息，移除 {members} 位成员",
   },
   errors: {
