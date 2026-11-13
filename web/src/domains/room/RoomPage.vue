@@ -134,12 +134,13 @@
         :sessions="snapshot.sessions"
         :reply-to="replyTo"
         :sending="sending || clearing"
+        :ready="!loading"
         :locked="Boolean(pendingPublication)"
         :error="sendError"
         :catalog="capabilities.catalog.value"
         @refresh-capabilities="capabilities.refresh"
         @send="sendMessage"
-        @cancel-reply="replyTo = undefined"
+        @cancel-reply="cancelReply"
       />
       <div v-if="pendingPublication && !sending" class="room-alert" role="status">
         <span>{{ t("room.pending") }}</span>
@@ -258,6 +259,7 @@
   import { useMessageQueue } from "@/domains/room/useMessageQueue";
   import { useRoomPanel } from "@/domains/room/useRoomPanel";
   import { useRoomCapabilities } from "@/domains/room/useRoomCapabilities";
+  import { useRoomDraft } from "@/domains/room/useRoomDraft";
   import { ApiClientError, describeApiError } from "@/services/api";
   import {
     addRoomMember,
@@ -359,11 +361,15 @@
   const replyTo = ref<RoomMessage>();
   const composer = ref<InstanceType<typeof RoomComposer>>();
   const timeline = ref<InstanceType<typeof MessageTimeline>>();
-  const drafts = ref<Record<string, MessageDraft>>({});
+  const pendingPublication = ref<CreateMessage>();
+  const {
+    drafts,
+    open: openDraft,
+    remove: removeDraft,
+  } = useRoomDraft(undefined, () => sending.value || Boolean(pendingPublication.value));
   const capabilities = useRoomCapabilities(() =>
     roomsStore.rooms.find((room) => room.id === currentRoomId.value),
   );
-  const pendingPublication = ref<CreateMessage>();
   const setupMode = ref<"member" | "topic">();
   const editingMember = ref<Member>();
   const editingTopic = ref<Topic>();
@@ -510,6 +516,7 @@
       roomPanel.syncMessages(result.messages);
       if (clearDeletedFilters()) return await loadRoom();
       await refreshDetailMessage(roomId, version);
+      await refreshReplyTo(roomId, version);
       if (version !== loadVersion) return false;
       startEvents(roomId, version);
       return true;
@@ -533,6 +540,28 @@
       if (version === loadVersion) roomPanel.syncMessages([message]);
     } catch (caught) {
       if (version === loadVersion) toasts.error(describeApiError(caught, "errors.detailLoad"));
+    }
+  }
+
+  async function refreshReplyTo(roomId: string, version: number): Promise<void> {
+    const draft = drafts.value[roomId];
+    const messageId = draft?.replyToMessageId;
+    if (!messageId) return;
+    const current = () =>
+      version === loadVersion &&
+      currentRoomId.value === roomId &&
+      drafts.value[roomId]?.replyToMessageId === messageId;
+    try {
+      const message =
+        visibleMessages.value.find((message) => message.id === messageId) ??
+        (await fetchRoomMessage(roomId, messageId, queryController?.signal));
+      if (current()) replyTo.value = message;
+    } catch (caught) {
+      if (!current()) return;
+      if (caught instanceof ApiClientError && caught.status === 404 && !pendingPublication.value) {
+        cancelReply();
+      }
+      toasts.error(describeApiError(caught, "errors.detailLoad"));
     }
   }
 
@@ -611,7 +640,7 @@
     sendError.value = null;
     const saved = sessionStorage.getItem(`relay-publication:${roomId}`);
     pendingPublication.value = saved ? (JSON.parse(saved) as CreateMessage) : undefined;
-    if (pendingPublication.value) drafts.value[roomId] = pendingPublication.value;
+    openDraft(roomId, pendingPublication.value);
     await loadRoom();
     await nextTick();
     timeline.value?.scrollToEnd();
@@ -648,6 +677,12 @@
     if (sending.value || pendingPublication.value) return;
     replyTo.value = message;
     void composer.value?.quote(message);
+  }
+
+  function cancelReply(): void {
+    const draft = currentRoomId.value ? drafts.value[currentRoomId.value] : undefined;
+    if (draft) draft.replyToMessageId = undefined;
+    replyTo.value = undefined;
   }
 
   async function sendMessage(draft: MessageDraft): Promise<void> {
@@ -694,7 +729,7 @@
       return;
     }
     sessionStorage.removeItem(`relay-publication:${roomId}`);
-    delete drafts.value[roomId];
+    removeDraft(roomId);
     if (roomId !== currentRoomId.value) {
       sending.value = false;
       return;
@@ -816,7 +851,7 @@
       clearOpen.value = false;
       roomPanel.reset();
       messageQueue.reset();
-      replyTo.value = undefined;
+      cancelReply();
       resetSearch();
       await loadLatest();
     } catch (caught) {

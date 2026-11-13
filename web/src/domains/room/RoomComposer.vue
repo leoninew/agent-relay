@@ -238,11 +238,12 @@
       sessions: Session[];
       replyTo?: RoomMessage;
       sending: boolean;
+      ready?: boolean;
       locked?: boolean;
       error: MessageDescriptor | null;
       catalog?: ComposerCatalog;
     }>(),
-    { replyTo: undefined, catalog: undefined },
+    { replyTo: undefined, catalog: undefined, ready: true },
   );
   const { t } = useI18n();
   const emit = defineEmits<{
@@ -401,14 +402,31 @@
   });
 
   watch(
-    [() => props.topics, () => props.members],
+    [
+      () => props.topics,
+      () => props.members,
+      () => props.ready,
+      () => props.locked,
+      () => props.sending,
+    ],
     () => {
+      if (!props.ready || props.locked || props.sending) return;
+      const validTopicIds = topicIds.value.filter((id) =>
+        props.topics.some((topic) => topic.id === id),
+      );
+      const validMemberIds = mentionedMemberIds.value.filter((id) =>
+        agentMembers.value.some((member) => member.id === id),
+      );
+      if (
+        validTopicIds.length === topicIds.value.length &&
+        validMemberIds.length === mentionedMemberIds.value.length
+      ) {
+        return;
+      }
       draft.value = {
         ...draft.value,
-        topicIds: topicIds.value.filter((id) => props.topics.some((topic) => topic.id === id)),
-        mentionedMemberIds: mentionedMemberIds.value.filter((id) =>
-          agentMembers.value.some((member) => member.id === id),
-        ),
+        topicIds: validTopicIds,
+        mentionedMemberIds: validMemberIds,
       };
     },
     { immediate: true },
@@ -443,6 +461,7 @@
   async function quote(message: RoomMessage): Promise<void> {
     draft.value = {
       ...draft.value,
+      replyToMessageId: message.id,
       topicIds: message.topicIds.filter((id) => props.topics.some((topic) => topic.id === id)),
       mentionedMemberIds: message.mentionedMemberIds.filter((id) =>
         agentMembers.value.some((member) => member.id === id),
@@ -461,7 +480,7 @@
       topicIds: [...topicIds.value],
       mentionedMemberIds: [...mentionedMemberIds.value],
       ...(draft.value.capabilities?.length ? { capabilities: [...draft.value.capabilities] } : {}),
-      ...(props.replyTo ? { replyToMessageId: props.replyTo.id } : {}),
+      ...(draft.value.replyToMessageId ? { replyToMessageId: draft.value.replyToMessageId } : {}),
     });
   }
 
@@ -500,7 +519,13 @@
   }
 
   function reset(): void {
-    draft.value = { ...draft.value, content: "", mentionedMemberIds: [], capabilities: [] };
+    draft.value = {
+      ...draft.value,
+      content: "",
+      mentionedMemberIds: [],
+      capabilities: [],
+      replyToMessageId: undefined,
+    };
     query.value = undefined;
     attempted.value = false;
     textarea.value?.focus();

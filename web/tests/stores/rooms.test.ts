@@ -6,6 +6,11 @@ import { useRoomsStore } from "@/stores/rooms";
 
 import { roomFixture } from "../fixtures/room";
 
+const removeDraft = vi.hoisted(() => vi.fn());
+vi.mock("@/stores/messageDrafts", () => ({
+  createMessageDraftStorage: () => ({ remove: removeDraft }),
+}));
+
 vi.mock("@/services/roomApi", () => ({
   addRoomTopic: vi.fn(),
   clearRoom: vi.fn(),
@@ -33,6 +38,8 @@ describe("room state", () => {
     await store.remove(snapshot.room.id);
 
     expect(deleteRoom).toHaveBeenCalledWith(snapshot.room.id);
+    expect(removeDraft).toHaveBeenCalledOnce();
+    expect(removeDraft).toHaveBeenCalledWith(snapshot.room.id);
     expect(store.rooms).toEqual([otherRoom]);
     expect(store.snapshots[snapshot.room.id]).toBeUndefined();
     expect(store.snapshots[otherRoom.id].room).toEqual(otherRoom);
@@ -46,6 +53,7 @@ describe("room state", () => {
     vi.mocked(deleteRoom).mockRejectedValue(new Error("unavailable"));
 
     await expect(store.remove(snapshot.room.id)).rejects.toThrow("unavailable");
+    expect(removeDraft).not.toHaveBeenCalled();
     expect(store.rooms).toEqual([snapshot.room]);
     expect(store.snapshots[snapshot.room.id]).toEqual(snapshot);
   });
@@ -78,6 +86,7 @@ describe("room state", () => {
 
     await store.clear(snapshot.room.id);
 
+    expect(removeDraft).not.toHaveBeenCalled();
     expect(store.rooms).toEqual([snapshot.room, other.room]);
     expect(store.snapshots[snapshot.room.id]).toEqual({
       ...metadata,

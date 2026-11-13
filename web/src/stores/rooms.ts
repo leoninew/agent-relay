@@ -1,6 +1,8 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
 
+import { createMessageDraftStorage } from "@/stores/messageDrafts";
+
 import {
   addRoomTopic,
   clearRoom,
@@ -56,6 +58,7 @@ export const useRoomsStore = defineStore("rooms", () => {
 
   async function remove(roomId: string): Promise<void> {
     await deleteRoom(roomId);
+    createMessageDraftStorage().remove(roomId);
     rooms.value = rooms.value.filter((room) => room.id !== roomId);
     if (recentRoomId.value === roomId) recentRoomId.value = undefined;
     delete snapshots.value[roomId];
