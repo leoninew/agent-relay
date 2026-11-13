@@ -5,6 +5,7 @@ from agent_relay.application.delivery.ports import QueueDriver
 from agent_relay.application.members.sessions import SessionDriver
 from agent_relay.application.rooms.ports import RoomStore
 from agent_relay.bootstrap.settings import LoggingSettings
+from agent_relay.infrastructure.images.files import FileImageStore
 from agent_relay.infrastructure.persistence.database import Database
 from agent_relay.infrastructure.persistence.dependencies import (
     create_context_scope,
@@ -32,6 +33,7 @@ def create_http_dependencies(
         session_driver=sessions,
         queue_driver=queue,
         capability_driver=capabilities,
+        image_store=FileImageStore(database.path.parent / "images"),
         logging=HttpLogging(
             body_limit=logging.body.limit,
             request_begin=logging.request.begin,

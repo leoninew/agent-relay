@@ -22,6 +22,7 @@ export default {
     empty: "暂无详情",
   },
   timeline: {
+    imageFailed: "图片加载失败",
     label: "消息时间线",
     loading: "正在加载讨论…",
     unavailable: "暂时无法加载消息，请重试。",
@@ -43,6 +44,11 @@ export default {
     latest: "返回最新消息",
   },
   composer: {
+    uploadingImage: "正在上传 {name}…",
+    cancelImageUpload: "取消图片上传",
+    imagesUploading: "请等待图片上传完成",
+    imageUploadFailed: "图片上传失败，请重新粘贴或拖入文件重试。",
+    removeSkill: "移除 Skill",
     sendMessage: "发送消息",
     replyTo: "回复",
     cancelReply: "取消引用",
@@ -195,6 +201,9 @@ export default {
     cleared: "已清空 {messages} 条消息，移除 {members} 位成员",
   },
   errors: {
+    image_too_large: "每张图片不能超过 10 MiB。",
+    image_invalid: "请选择有效的静态 PNG、JPEG 或 WebP 图片。",
+    image_not_found: "图片不存在。",
     roomLoad: "聊天室加载失败，请重试。",
     messageLoad: "消息加载失败，请重试。",
     detailLoad: "消息详情更新失败，请重新打开。",

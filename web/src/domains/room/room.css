@@ -577,26 +577,38 @@ button.topic-chip:hover:not(:disabled) {
   white-space: normal;
   overflow-wrap: anywhere;
 }
-.message-skill-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
+.message-image-frame {
+  display: flex;
   max-width: 100%;
-  padding: 2px 6px;
-  border: 1px solid hsl(var(--primary) / 0.12);
-  border-radius: 4px;
-  color: hsl(var(--primary));
-  vertical-align: baseline;
+  margin-block: 8px;
 }
-.message-skill-chip > :last-child {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.message-image-frame img {
+  max-width: 100%;
+  max-height: 360px;
+  object-fit: contain;
+  border-radius: 6px;
+}
+.message-image-failure {
+  padding: 8px 12px;
+  color: hsl(var(--muted-foreground));
+  background: hsl(var(--muted));
+  border-radius: 6px;
+}
+.message-image-frame [hidden] {
+  display: none;
+}
+.message-skill-chip {
+  display: inline;
+  font: inherit;
+  color: hsl(var(--primary));
+  cursor: help;
 }
 .message-skill-chip > svg {
-  flex: none;
-  width: 14px;
-  height: 14px;
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  margin-inline-end: 4px;
+  vertical-align: -0.125em;
 }
 .message-content > :not(:first-child) {
   margin-top: 0.7em;
@@ -857,27 +869,6 @@ button.topic-chip:hover:not(:disabled) {
 }
 .composer-editor:focus-within {
   border-color: hsl(var(--muted-foreground) / 0.65);
-}
-.room-composer .app-input {
-  border: 0;
-  background: transparent;
-}
-.room-composer .app-input-control {
-  padding: 0 30px 0 0;
-}
-.room-composer .app-input.is-multiline .app-input-control {
-  min-height: 2lh;
-  max-height: 6lh;
-  height: auto;
-  overflow-y: auto;
-  resize: none;
-}
-.room-composer .app-input.is-invalid {
-  border-bottom: 1px solid hsl(var(--destructive));
-}
-.room-composer .app-input > .app-clear-button {
-  top: 0;
-  right: 0;
 }
 .composer-routing .app-checkbox-group {
   min-height: 28px;

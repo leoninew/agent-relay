@@ -49,6 +49,29 @@ export type SkillReference = {
   name: string;
 };
 
+export type UploadedImage = {
+  id: string;
+  url: string;
+  markdown: string;
+  mediaType: string;
+  size: number;
+};
+
+export async function uploadRoomImage(
+  roomId: string,
+  file: File,
+  signal: AbortSignal,
+): Promise<UploadedImage> {
+  const form = new FormData();
+  form.append("file", file);
+  const { data } = await apiClient.post<UploadedImage>(
+    `/api/room/${encodeURIComponent(roomId)}/image`,
+    form,
+    { signal },
+  );
+  return data;
+}
+
 export type McpServerReference = {
   type: "mcp_server";
   id: string;

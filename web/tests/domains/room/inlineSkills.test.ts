@@ -18,11 +18,11 @@ const fix: SkillReference = { type: "skill", id: "skill-fix", name: "dev-fix" };
 describe("skill picker query", () => {
   it.each([
     { content: "$", before: "", text: "" },
-    { content: "请检查消息$", before: "请检查消息", text: "" },
-    { content: "message$dev-check", before: "message", text: "dev-check" },
-    { content: "🙂消息，$", before: "🙂消息，", text: "" },
+    { content: "请检查消息($", before: "请检查消息(", text: "" },
+    { content: "message！$dev-check", before: "message！", text: "dev-check" },
+    { content: "🙂$", before: "🙂", text: "" },
     { content: "第一行\n第二行 $dev", before: "第一行\n第二行 ", text: "dev" },
-  ])("opens after message text and preserves it: $content", ({ content, before, text }) => {
+  ])("opens at a valid boundary and preserves it: $content", ({ content, before, text }) => {
     const query = skillQueryAt(content, content.length);
     expect(query).toEqual({ start: before.length, end: content.length, text });
     const replacement =
@@ -31,15 +31,15 @@ describe("skill picker query", () => {
   });
 
   it("replaces the whole query when the caret is inside its name", () => {
-    const content = "正文$dev-check 后面的消息";
-    const query = skillQueryAt(content, "正文$dev".length);
-    expect(query).toEqual({ start: 2, end: "正文$dev-check".length, text: "dev" });
-    expect(content.slice(0, query!.start) + content.slice(query!.end)).toBe("正文 后面的消息");
+    const content = "正文：$dev-check 后面的消息";
+    const query = skillQueryAt(content, "正文：$dev".length);
+    expect(query).toEqual({ start: 3, end: "正文：$dev-check".length, text: "dev" });
+    expect(content.slice(0, query!.start) + content.slice(query!.end)).toBe("正文： 后面的消息");
   });
 
   it("does not open without a dollar query at the caret", () => {
     expect(skillQueryAt("正常正文", 4)).toBeUndefined();
-    expect(skillQueryAt("正文$dev 查询之后", "正文$dev 查询之后".length)).toBeUndefined();
+    expect(skillQueryAt("正文$dev", "正文$dev".length)).toBeUndefined();
   });
 });
 

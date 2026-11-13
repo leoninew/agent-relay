@@ -1,7 +1,10 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, UploadFile
+from fastapi.responses import FileResponse
+from starlette.concurrency import run_in_threadpool
 
+from agent_relay.application.dto.images import UploadedImage
 from agent_relay.application.dto.members import (
     ChangedMember,
     CreatedMember,
@@ -25,12 +28,14 @@ from agent_relay.application.dto.rooms import (
     RoomSnapshot,
     UpdateRoom,
 )
+from agent_relay.application.images.ports import MAX_IMAGE_BYTES
 from agent_relay.domain.rooms.models import Member, Message, Room
 from agent_relay.interfaces.http.members.dependencies import (
     MemberServiceDependency,
     SessionDriverDependency,
 )
 from agent_relay.interfaces.http.rooms.dependencies import (
+    ImageServiceDependency,
     MessageServiceDependency,
     QueueClearServiceDependency,
     QueueDriverDependency,
@@ -40,6 +45,30 @@ from agent_relay.interfaces.http.rooms.dependencies import (
 )
 
 router = APIRouter(prefix="/room", tags=["room"])
+
+
+@router.post("/{room_id}/image", status_code=201)
+async def upload_image(
+    room_id: str, file: UploadFile, service: ImageServiceDependency
+) -> UploadedImage:
+    try:
+        content = await file.read(MAX_IMAGE_BYTES + 1)
+        return await run_in_threadpool(service.upload, room_id, content)
+    finally:
+        await file.close()
+
+
+@router.get("/{room_id}/image/{image_id}")
+def read_image(room_id: str, image_id: str, service: ImageServiceDependency) -> FileResponse:
+    image = service.read(room_id, image_id)
+    return FileResponse(
+        image.path,
+        media_type=image.media_type,
+        headers={
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "private, max-age=31536000, immutable",
+        },
+    )
 
 
 @router.get("")

@@ -111,6 +111,7 @@
           :members="snapshot.members"
           :sessions="snapshot.sessions"
           :topics="snapshot.topics"
+          :skill-descriptions="skillDescriptions"
           :selected-message-id="detailMessage?.id"
           details-open
           :loading="loading"
@@ -138,6 +139,7 @@
         :locked="Boolean(pendingPublication)"
         :error="sendError"
         :catalog="capabilities.catalog.value"
+        :skill-descriptions="skillDescriptions"
         @refresh-capabilities="capabilities.refresh"
         @send="sendMessage"
         @cancel-reply="cancelReply"
@@ -369,6 +371,9 @@
   } = useRoomDraft(undefined, () => sending.value || Boolean(pendingPublication.value));
   const capabilities = useRoomCapabilities(() =>
     roomsStore.rooms.find((room) => room.id === currentRoomId.value),
+  );
+  const skillDescriptions = computed(
+    () => new Map(capabilities.catalog.value.skills.map((skill) => [skill.id, skill.description])),
   );
   const setupMode = ref<"member" | "topic">();
   const editingMember = ref<Member>();

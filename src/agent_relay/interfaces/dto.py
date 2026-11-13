@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from agent_relay.application.capabilities.ports import CapabilityDriver
 from agent_relay.application.context.ports import ContextData
 from agent_relay.application.delivery.ports import QueueDriver
+from agent_relay.application.images.ports import ImageStore
 from agent_relay.application.members.sessions import SessionDriver
 from agent_relay.application.rooms.ports import RoomStore
 from agent_relay.application.transactions import RepositoryScope
@@ -29,6 +30,7 @@ class HttpDependencies:
     queue_driver: QueueDriver
     capability_driver: CapabilityDriver
     logging: HttpLogging
+    image_store: ImageStore | None = None
 
 
 @dataclass(frozen=True)

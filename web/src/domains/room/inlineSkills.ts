@@ -3,12 +3,18 @@ import type { CapabilityReference, SkillReference } from "@/services/roomApi";
 export type InlineSkill = { start: number; end: number; id: string };
 export type SkillQuery = { start: number; end: number; text: string };
 
+export function isSkillTriggerPrefix(content: string, start: number): boolean {
+  return start === 0 || /[\s\p{P}\p{S}]$/u.test(content.slice(0, start));
+}
+
 export function skillQueryAt(content: string, position: number): SkillQuery | undefined {
   const prefix = content.slice(0, position).match(/\$([\p{L}\p{N}_:./@-]*)$/u);
   if (!prefix) return undefined;
+  const start = position - prefix[1].length - 1;
+  if (!isSkillTriggerPrefix(content, start) || !isSourcePosition(content, start)) return undefined;
   const suffix = content.slice(position).match(/^[\p{L}\p{N}_:./@-]*/u)?.[0] ?? "";
   return {
-    start: position - prefix[1].length - 1,
+    start,
     end: position + suffix.length,
     text: prefix[1],
   };
@@ -27,8 +33,11 @@ export function formatSkillReference(reference: SkillReference): string {
   return `[${label}](skill:${reference.id})`;
 }
 
-export function inlineSkills(content: string): InlineSkill[] {
-  const references: InlineSkill[] = [];
+export function scanInlineSource<T extends { end: number }>(
+  content: string,
+  match: (start: number) => T | undefined,
+): T[] {
+  const references: T[] = [];
   let fence: { character: string; length: number } | undefined;
   let index = 0;
   while (index < content.length) {
@@ -72,14 +81,26 @@ export function inlineSkills(content: string): InlineSkill[] {
       index = close < 0 ? runEnd : close + run.length;
       continue;
     }
-    const reference = content[index] === "[" ? skillAt(content, index) : undefined;
+    const reference = match(index);
     if (reference) {
-      // An image with the same URL is not an executable Skill reference.
-      if (content[index - 1] !== "!") references.push(reference);
+      references.push(reference);
       index = reference.end;
     } else index++;
   }
   return references;
+}
+
+export function inlineSkills(content: string): InlineSkill[] {
+  return scanInlineSource(content, (index) =>
+    content[index] === "[" && content[index - 1] !== "!" ? skillAt(content, index) : undefined,
+  );
+}
+
+export function isSourcePosition(content: string, position: number): boolean {
+  return (
+    scanInlineSource(content, (index) => (index === position ? { end: index + 1 } : undefined))
+      .length > 0
+  );
 }
 
 function replaceSkills(content: string, replace: (reference: InlineSkill) => string): string {

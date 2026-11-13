@@ -88,7 +88,8 @@
         </p>
       </fieldset>
       <CapabilityTags
-        :capabilities="draft.capabilities"
+        :capabilities="headerCapabilities"
+        :skill-descriptions="skillDescriptions"
         removable
         :disabled="sending || locked"
         @remove="removeCapability"
@@ -96,38 +97,35 @@
       <label for="message-content" class="sr-only">{{ t("composer.content") }}</label>
       <div class="composer-editor">
         <div class="capability-input">
-          <AppInput
+          <SkillMessageEditor
             id="message-content"
-            ref="textarea"
-            v-model="content"
-            name="content"
-            maxlength="6000"
-            rows="2"
+            :key="roomId"
+            ref="editor"
+            :room-id="roomId"
+            :model-value="content"
+            :skills="draftSkills"
+            :available-skills="availableSkills"
+            :skill-descriptions="skillDescriptions"
+            :label="t('composer.content')"
             :placeholder="t('composer.placeholder')"
             :clear-label="t('composer.clearContent')"
-            multiline
-            autoresize
-            :disabled="sending || locked"
+            :remove-label="t('composer.removeSkill')"
+            :disabled="!ready || sending || locked"
             :invalid="showContentError"
-            aria-describedby="content-error"
-            :role="pickerOpen ? 'combobox' : undefined"
-            :aria-expanded="pickerOpen"
-            :aria-controls="pickerOpen ? 'capability-options' : undefined"
-            :aria-activedescendant="
+            :described-by="showContentError ? 'content-error' : undefined"
+            :picker-open="pickerOpen"
+            :active-descendant="
               pickerOpen && options[activeIndex] ? `capability-${activeIndex}` : undefined
             "
-            aria-autocomplete="list"
-            @input="syncQuery"
-            @click="syncQuery"
-            @keyup="syncQuery"
-            @select="syncQuery"
-            @focus="syncQuery"
-            @blur="query = undefined"
+            @change="updateContent"
+            @uploading="uploading = $event"
+            @too-long="insertionTooLong = true"
+            @query="query = $event"
             @compositionstart="
               composing = true;
               query = undefined;
             "
-            @compositionend="finishComposition"
+            @compositionend="composing = false"
             @keydown="onKeydown"
           />
           <div v-if="pickerOpen" class="capability-picker">
@@ -186,7 +184,7 @@
               aria-keyshortcuts="Enter"
               :aria-label="t(sending ? 'composer.sending' : 'composer.sendMessage')"
               :loading="sending"
-              :disabled="locked || Boolean(sendDisabledReason)"
+              :disabled="!ready || locked || Boolean(sendDisabledReason)"
               :loading-label="t('composer.sending')"
             >
               <template #icon><AppIcon name="enter" /></template>
@@ -213,22 +211,19 @@
   import AppCheckbox from "@/components/AppCheckbox.vue";
   import AppCheckboxGroup from "@/components/AppCheckboxGroup.vue";
   import AppIcon from "@/components/AppIcon.vue";
-  import AppInput from "@/components/AppInput.vue";
   import AppTooltip from "@/components/AppTooltip.vue";
   import MemberIdentity from "@/domains/room/MemberIdentity.vue";
   import CapabilityTags from "@/domains/room/CapabilityTags.vue";
+  import SkillMessageEditor from "@/domains/room/SkillMessageEditor.vue";
   import type { ComposerCatalog } from "@/domains/room/useRoomCapabilities";
   import { memberSessionName } from "@/domains/room/memberSessionName";
   import {
-    formatSkillReference,
     inlineSkills,
     messageText,
     referencedCapabilities,
     removeInlineSkill,
-    skillQueryAt,
     withoutInlineSkills,
   } from "@/domains/room/inlineSkills";
-  import type { SkillQuery } from "@/domains/room/inlineSkills";
   import type {
     CapabilityReference,
     MessageDraft,
@@ -251,8 +246,14 @@
       locked?: boolean;
       error: MessageDescriptor | null;
       catalog?: ComposerCatalog;
+      skillDescriptions?: ReadonlyMap<string, string>;
     }>(),
-    { replyTo: undefined, catalog: undefined, ready: true },
+    {
+      replyTo: undefined,
+      catalog: undefined,
+      ready: true,
+      skillDescriptions: () => new Map(),
+    },
   );
   const { t } = useI18n();
   const emit = defineEmits<{
@@ -264,12 +265,27 @@
   const draft = defineModel<MessageDraft>("draft", {
     default: () => ({ content: "", topicIds: [], mentionedMemberIds: [] }),
   });
-  const content = computed({
-    get: () => draft.value.content,
-    set: (content) => {
-      insertionTooLong.value = false;
-      draft.value = { ...draft.value, content, capabilities: capabilitiesForContent(content) };
-    },
+  const content = computed(() => draft.value.content);
+  const draftSkills = computed(() =>
+    (draft.value.capabilities ?? []).filter(
+      (reference): reference is SkillReference => reference.type === "skill",
+    ),
+  );
+  const availableSkills = computed(() =>
+    (props.catalog?.skills ?? [])
+      .filter((skill) => skill.enabled)
+      .map(({ id, name, description }) => ({ type: "skill" as const, id, name, description })),
+  );
+  const skillDescriptions = computed(
+    () =>
+      props.skillDescriptions ??
+      new Map((props.catalog?.skills ?? []).map((skill) => [skill.id, skill.description])),
+  );
+  const headerCapabilities = computed(() => {
+    const inline = new Set(inlineSkills(content.value).map((reference) => reference.id));
+    return draft.value.capabilities?.filter(
+      (reference) => reference.type !== "skill" || !inline.has(reference.id),
+    );
   });
   const topicIds = computed({
     get: () => draft.value.topicIds,
@@ -287,12 +303,14 @@
   const insertionTooLong = ref(false);
   let capabilityRoomId = props.roomId;
   const knownSkills = new Map<string, SkillReference>();
-  const textarea = ref<InstanceType<typeof AppInput>>();
+  const editor = ref<InstanceType<typeof SkillMessageEditor>>();
   const composing = ref(false);
-  const query = ref<SkillQuery>();
+  const uploading = ref(false);
+  const query = ref<{ text: string }>();
   const activeIndex = ref(0);
-  let dismissed: string | undefined;
-  const pickerOpen = computed(() => Boolean(query.value && !props.sending && !props.locked));
+  const pickerOpen = computed(() =>
+    Boolean(query.value && props.ready && !props.sending && !props.locked),
+  );
   const options = computed(() => {
     const search = query.value?.text.toLocaleLowerCase() ?? "";
     return (props.catalog?.skills ?? [])
@@ -320,29 +338,6 @@
     },
   );
 
-  async function syncQuery(): Promise<void> {
-    await nextTick();
-    const range = textarea.value?.selection();
-    if (
-      composing.value ||
-      props.sending ||
-      props.locked ||
-      !range ||
-      range.start !== range.end ||
-      dismissed === `${content.value}:${range.start}`
-    ) {
-      query.value = undefined;
-      return;
-    }
-    const nextQuery = skillQueryAt(content.value, range.start);
-    if (JSON.stringify(nextQuery) !== JSON.stringify(query.value)) query.value = nextQuery;
-  }
-
-  function finishComposition(): void {
-    composing.value = false;
-    void syncQuery();
-  }
-
   function capabilitiesForContent(
     content: string,
     additional: SkillReference[] = [],
@@ -351,12 +346,8 @@
       knownSkills.clear();
       capabilityRoomId = props.roomId;
     }
-    // Retain selected identities for native textarea undo, even after their last marker is deleted.
-    for (const skill of [
-      ...(props.catalog?.skills.filter((skill) => skill.enabled) ?? []),
-      ...(draft.value.capabilities ?? []),
-      ...additional,
-    ]) {
+    // Retain explicitly selected identities for editor undo after the last occurrence is deleted.
+    for (const skill of [...(draft.value.capabilities ?? []), ...additional]) {
       if (skill.type === "skill")
         knownSkills.set(skill.id, { type: "skill", id: skill.id, name: skill.name });
     }
@@ -366,28 +357,20 @@
     ]);
   }
 
-  async function selectCapability(reference: SkillReference): Promise<void> {
-    if (!query.value || props.sending || props.locked) return;
-    const range = query.value;
-    query.value = undefined;
-    const currentDraft = draft.value;
-    const marker = formatSkillReference(reference);
-    const content =
-      currentDraft.content.slice(0, range.start) +
-      marker +
-      " " +
-      currentDraft.content.slice(range.end);
-    if (content.length > 6000) {
-      insertionTooLong.value = true;
-      return;
-    }
+  function updateContent(content: string, skills: SkillReference[]): void {
+    if (!props.ready || props.sending || props.locked) return;
     insertionTooLong.value = false;
     draft.value = {
-      ...currentDraft,
+      ...draft.value,
       content,
-      capabilities: capabilitiesForContent(content, [reference]),
+      capabilities: capabilitiesForContent(content, skills),
     };
-    await textarea.value?.setSelection(range.start + marker.length + 1);
+  }
+
+  function selectCapability(reference: SkillReference): void {
+    if (!query.value || !props.ready || props.sending || props.locked) return;
+    insertionTooLong.value = false;
+    editor.value?.insertSkill(reference);
   }
 
   function removeCapability(reference: CapabilityReference): void {
@@ -442,6 +425,7 @@
       : t("validation.recipients"),
   );
   const sendDisabledReason = computed(() => {
+    if (uploading.value) return t("composer.imagesUploading");
     if (contentError.value) return contentError.value;
     if (!hasRecipients.value) return routingError.value;
     return undefined;
@@ -514,11 +498,11 @@
       ),
     };
     await nextTick();
-    textarea.value?.focus();
+    editor.value?.focus();
   }
 
   function submit(): void {
-    if (props.sending || props.locked) return;
+    if (!props.ready || props.sending || props.locked || uploading.value) return;
     attempted.value = true;
     if (showContentError.value || showRecipientError.value) return;
     const capabilities = capabilitiesForContent(content.value);
@@ -536,7 +520,7 @@
     if (pickerOpen.value) {
       if (event.key === "Escape") {
         event.preventDefault();
-        dismissed = `${content.value}:${textarea.value?.selection()?.start}`;
+        editor.value?.dismissQuery();
         query.value = undefined;
         return;
       }
@@ -566,6 +550,7 @@
   }
 
   function reset(): void {
+    editor.value?.clear();
     draft.value = {
       ...draft.value,
       content: "",
@@ -576,7 +561,7 @@
     query.value = undefined;
     attempted.value = false;
     insertionTooLong.value = false;
-    textarea.value?.focus();
+    editor.value?.focus();
   }
 
   defineExpose({ reset, quote, addTopic, addMember, selectTopic, selectMember });

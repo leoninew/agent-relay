@@ -20,6 +20,12 @@
   },
   "dependencies": {
     "@lucide/vue": "1.70.0",
+    "@tiptap/core": "3.33.1",
+    "@tiptap/vue-3": "3.33.1",
+    "@tiptap/pm": "3.33.1",
+    "@tiptap/extension-mention": "3.33.1",
+    "@tiptap/suggestion": "3.33.1",
+    "@tiptap/extensions": "3.33.1",
     "axios": "^1.20.0",
     "markdown-it": "^15.0.3",
     "pinia": "^3.0.3",

@@ -4,9 +4,13 @@
     class="capability-tags"
     :aria-label="t('dialog.capabilityReferences')"
   >
-    <li v-for="reference in capabilities" :key="`${reference.type}:${reference.id}`">
+    <li
+      v-for="reference in capabilities"
+      :key="`${reference.type}:${reference.id}`"
+      :class="{ 'is-skill': reference.type === 'skill' }"
+    >
       <AppIcon :name="reference.type === 'skill' ? 'skill' : 'plug'" />
-      <span :title="reference.name">{{ reference.name }}</span>
+      <span :title="description(reference)">{{ reference.name }}</span>
       <button
         v-if="removable"
         type="button"
@@ -27,12 +31,24 @@
   import type { CapabilityReference } from "@/services/roomApi";
 
   const { t } = useI18n();
-  defineProps<{
-    capabilities?: CapabilityReference[];
-    removable?: boolean;
-    disabled?: boolean;
-  }>();
+  const props = withDefaults(
+    defineProps<{
+      capabilities?: CapabilityReference[];
+      skillDescriptions?: ReadonlyMap<string, string>;
+      removable?: boolean;
+      disabled?: boolean;
+    }>(),
+    {
+      capabilities: () => [],
+      skillDescriptions: () => new Map(),
+    },
+  );
   defineEmits<{ remove: [reference: CapabilityReference] }>();
+  function description(reference: CapabilityReference): string {
+    return reference.type === "skill"
+      ? props.skillDescriptions.get(reference.id)?.trim() || reference.name
+      : reference.name;
+  }
 </script>
 
 <style scoped>
@@ -45,14 +61,19 @@
     list-style: none;
   }
   li {
+    max-width: 100%;
+    color: hsl(var(--primary));
+  }
+  li.is-skill {
+    cursor: help;
+  }
+  li:not(.is-skill) {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    max-width: 100%;
     padding: 2px 6px;
     border: 1px solid hsl(var(--primary) / 0.12);
     border-radius: 4px;
-    color: hsl(var(--primary));
     background: hsl(var(--primary) / 0.08);
   }
   li > svg {
@@ -60,7 +81,14 @@
     width: 14px;
     height: 14px;
   }
-  span {
+  li.is-skill > svg {
+    display: inline-block;
+    width: 1em;
+    height: 1em;
+    margin-inline-end: 4px;
+    vertical-align: -0.125em;
+  }
+  li:not(.is-skill) > span {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

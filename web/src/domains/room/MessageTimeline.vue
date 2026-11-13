@@ -4,6 +4,7 @@
     class="message-timeline"
     :aria-busy="loading"
     :aria-label="t('timeline.label')"
+    @error.capture="onImageError"
   >
     <AppLoading v-if="loading" class="timeline-placeholder">{{ t("timeline.loading") }}</AppLoading>
     <div v-else-if="unavailable" class="timeline-placeholder">{{ t("timeline.unavailable") }}</div>
@@ -125,7 +126,10 @@
                   t("timeline.reference", { reference: referenceLabel(message.replyToMessageId) })
                 }}</span>
               </button>
-              <CapabilityTags :capabilities="remainingCapabilities" />
+              <CapabilityTags
+                :capabilities="remainingCapabilities"
+                :skill-descriptions="skillDescriptions"
+              />
               <div class="message-content" v-html="renderedContent"></div>
             </div>
             <div class="message-actions">
@@ -191,6 +195,7 @@
       members: Member[];
       sessions: Session[];
       topics: Topic[];
+      skillDescriptions?: ReadonlyMap<string, string>;
       selectedMessageId?: string;
       detailsOpen: boolean;
       loading: boolean;
@@ -200,7 +205,11 @@
       hasNewer: boolean;
       loadingOlder: boolean;
     }>(),
-    { selectedMessageId: undefined, searching: false },
+    {
+      selectedMessageId: undefined,
+      searching: false,
+      skillDescriptions: () => new Map(),
+    },
   );
   defineEmits<{
     reply: [message: RoomMessage];
@@ -217,7 +226,10 @@
   const toasts = useToastsStore();
   const rows = computed(() =>
     props.messages.map((message) => {
-      const rendered = renderMessage(message.content, message.capabilities);
+      const rendered = renderMessage(message.content, message.capabilities, {
+        imageFailureText: t("timeline.imageFailed"),
+        skillDescriptions: props.skillDescriptions,
+      });
       return {
         message,
         status: deliverySummary(message),
@@ -227,6 +239,15 @@
     }),
   );
   let previousScroll = 0;
+  function onImageError(event: Event): void {
+    if (!(event.target instanceof HTMLImageElement)) return;
+    const frame = event.target.closest(".message-image-frame");
+    const failure = frame?.querySelector<HTMLElement>(".message-image-failure");
+    if (failure) {
+      event.target.hidden = true;
+      failure.hidden = false;
+    }
+  }
   let previousHeight = 0;
 
   function rememberScroll(): void {

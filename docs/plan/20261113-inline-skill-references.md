@@ -1,12 +1,28 @@
-# Plan / 计划：行内 Skill 数据结构兼容核对
+# Plan / 计划：行内 Skill 与编辑器演进
 
-最后修改时间: 2026-11-13 12:56:59
+最后修改时间: 2026-11-13 14:32:00
 
 ## Review status / 审查状态
 
 Accepted
 
-方案修订 2。依据 [已接受的意图](../intent/20261113-inline-skill-references.md) 与用户消息 `room-a2493e542ba3-msg-0133`，本轮停止于数据结构兼容核对，不实现第二步编辑器。修订 1 的第二步实施安排已被覆盖。
+方案修订 4。用户 `0162` 已授权尝试 Tiptap + Mention，由架构师重新评估并交高级开发实施。Tagify 工作已完整暂存，作为本次试切的保留基线；当前执行以 [Tiptap 消息编辑器计划](20261113-tiptap-message-editor.md) 为准，后文 Tagify 和结构核对记录保留历史意义。替换不改变第一步已交付的 `content + capabilities` 契约。
+
+## Previous implementation / 先前 Tagify 实施（修订 3）
+
+用户 0147“改为 Tagify mixed-content 方案实现”，0149“将实现工作移交给高级开发，架构师 要开始负责评估图片输入和展示 需求”授权此前第二步；准确原文由架构师消息 0152 补充。下述依赖、手写历史及 DOM adapter 属于待替换基线，不要求在 Tiptap 实现中继续保留。
+
+- 独立 `SkillMessageEditor.vue` 使用 Tagify mixed-content、允许重复标签，复用现有候选 UI；原文通过 text nodes 写入，标签由 `createTagElem` 创建，禁止把用户原文传给 `parseMixTags` 或 innerHTML。
+- DOM adapter 继续输出原始 `[名称](skill:ID)` 字符串；capabilities 以 ID 去重，保留原始 marker、代码／转义示例、换行及草稿/API/数据库契约。Tagify mixed JSON 不进入模型。
+- 自有编辑历史覆盖普通输入、候选插入、标签删除、清空与剪贴板；相同模型回写不重建 DOM 或选区，外部正文替换清空旧历史。编辑器随 roomId 重建，禁用或冻结时拒绝回写。
+- 候选按键先于发送；统一拦截 Tagify 的异步 Enter 处理，Enter 发送、Shift+Enter 换行，输入法组合确认不发送。6000 按序列化正文长度检查，仅标签禁发。
+- 内部剪贴板携带正文和身份，粘贴时按当前已知／可用 ID 核对；外部纯文本使用可读 `$名称`，不凭名称加载 Skill。上方不重复显示正文中已有的 Skill。
+- 高级开发独占 editor、RoomComposer、package/lock、行内 Skill 文档、必要样式和测试。架构师仅评估图片需求，不并行改这些文件。本轮不自动暂存、提交或启动浏览器／开发服务器。
+- Node 单测覆盖序列化、原子范围、历史、长度及剪贴板身份规则；实际 DOM、鼠标选区、输入法和系统剪贴板由用户人工测试，单测不作为这些行为的通过证据。
+
+实施接收：2026-11-13 13:36 +08:00，高级开发按 0150/0152 接手；实际基线 HEAD `73e0033bad1451d5a43c66f54e47ee7c6075e68e`，已有未提交 package.json、pnpm-lock.yaml、skillEditorModel.ts、skillEditorDom.ts 四项初稿。依赖为 Tagify 4.39.0、类型 4.27.0；接收时尚未接入组件。当前进入实现与验证，完成事实见后续交付记录。
+
+## Previous structure review / 先前结构核对（修订 2）
 
 ## Gap assessment / 差距评估
 

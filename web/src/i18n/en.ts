@@ -22,6 +22,7 @@ export default {
     empty: "No details",
   },
   timeline: {
+    imageFailed: "Image could not be loaded",
     label: "Message timeline",
     loading: "Loading discussion...",
     unavailable: "Could not load messages. Try again.",
@@ -43,6 +44,11 @@ export default {
     latest: "Return to latest messages",
   },
   composer: {
+    uploadingImage: "Uploading {name}…",
+    cancelImageUpload: "Cancel image upload",
+    imagesUploading: "Wait for image uploads to finish",
+    imageUploadFailed: "Image upload failed. Paste or drop the file again to retry.",
+    removeSkill: "Remove skill",
     sendMessage: "Send message",
     replyTo: "Reply to",
     cancelReply: "Cancel reply",
@@ -198,6 +204,9 @@ export default {
     cleared: "Cleared {messages} messages and removed {members} members.",
   },
   errors: {
+    image_too_large: "Each image must be no larger than 10 MiB.",
+    image_invalid: "Use a valid, still PNG, JPEG or WebP image.",
+    image_not_found: "Image not found.",
     roomLoad: "Could not load the room. Try again.",
     messageLoad: "Could not load messages. Try again.",
     detailLoad: "Could not update message details.",

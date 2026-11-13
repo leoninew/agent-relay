@@ -4,6 +4,7 @@ from fastapi import Depends
 from starlette.requests import HTTPConnection
 
 from agent_relay.application.delivery.ports import QueueDriver
+from agent_relay.application.images.service import ImageService
 from agent_relay.application.messages.service import MessageService
 from agent_relay.application.rooms.ports import RoomQueries
 from agent_relay.application.rooms.service import RoomService
@@ -61,3 +62,13 @@ def get_event_queries(store: IndependentRoomStoreDependency) -> RoomQueries:
 
 
 EventQueriesDependency = Annotated[RoomQueries, Depends(get_event_queries)]
+
+
+def get_image_service(connection: HTTPConnection, queries: RoomQueriesDependency) -> ImageService:
+    images = get_http_dependencies(connection).image_store
+    if images is None:
+        raise RuntimeError("Image storage is not configured")
+    return ImageService(queries, images)
+
+
+ImageServiceDependency = Annotated[ImageService, Depends(get_image_service)]
