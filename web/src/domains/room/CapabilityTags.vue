@@ -50,10 +50,10 @@
     gap: 4px;
     max-width: 100%;
     padding: 2px 6px;
-    border: 1px solid hsl(var(--border));
+    border: 1px solid hsl(var(--primary) / 0.12);
     border-radius: 4px;
-    color: hsl(var(--muted-foreground));
-    background: hsl(var(--muted));
+    color: hsl(var(--primary));
+    background: hsl(var(--primary) / 0.08);
   }
   li > svg {
     flex: none;
@@ -69,5 +69,6 @@
     width: 20px;
     height: 20px;
     padding: 2px;
+    color: inherit;
   }
 </style>

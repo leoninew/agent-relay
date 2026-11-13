@@ -174,6 +174,8 @@ export default {
     absolutePath: "请输入项目的绝对路径",
     session: "请选择要加入的会话",
     content: "请输入消息内容",
+    contentTooLong: "消息内容及 Skill 引用不能超过 6000 个字符",
+    skillReference: "Skill 引用无效，请通过 $ 列表重新选择",
     recipients: "请选择至少一个话题或 {'@'} 一位成员",
     noRecipients: "所选话题暂无成员，请选择其他话题或 {'@'} 成员",
   },

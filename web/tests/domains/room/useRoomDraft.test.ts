@@ -3,6 +3,7 @@ import type { EffectScope } from "vue";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { useRoomDraft } from "@/domains/room/useRoomDraft";
+import { formatSkillReference, referencedCapabilities } from "@/domains/room/inlineSkills";
 import type { CreateMessage } from "@/services/roomApi";
 import { createMessageDraftStorage } from "@/stores/messageDrafts";
 
@@ -52,6 +53,30 @@ describe("room draft editing", () => {
 
     expect(editing.drafts.value.first).toEqual(storage.load("first"));
     expect(storage.load("second")?.content).toBe("second draft");
+  });
+
+  it("restores inline skill positions and identities together with the quoted message", () => {
+    const skill = { type: "skill", id: "skill-check", name: "dev-check" } as const;
+    const marker = formatSkillReference(skill);
+    const content = `  前文🙂 ${marker}\n再用 ${marker} 检查  `;
+    const editing = editor();
+    editing.open("room");
+    editing.drafts.value.room = {
+      content,
+      topicIds: ["topic"],
+      mentionedMemberIds: ["member"],
+      capabilities: referencedCapabilities(content, [skill]),
+      replyToMessageId: "quote",
+    };
+
+    const restored = editor();
+    restored.open("room");
+    const draft = restored.drafts.value.room;
+
+    expect(draft.content).toBe(content);
+    expect(draft.replyToMessageId).toBe("quote");
+    expect(draft.capabilities).toEqual([skill]);
+    expect(referencedCapabilities(draft.content, draft.capabilities ?? [])).toEqual([skill]);
   });
 
   it("persists cleared text and cancelled quotes without restoring old content", () => {

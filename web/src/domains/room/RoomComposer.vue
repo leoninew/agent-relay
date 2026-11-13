@@ -12,7 +12,7 @@
         <strong>{{
           replyTo.senderId === "user" ? t("member.you") : (replyToMember?.name ?? replyTo.senderId)
         }}</strong>
-        · {{ replyTo.content }}
+        · {{ messageText(replyTo.content, replyTo.capabilities) }}
       </span>
       <button
         type="button"
@@ -88,7 +88,6 @@
         </p>
       </fieldset>
       <CapabilityTags
-        class="composer-capabilities"
         :capabilities="draft.capabilities"
         removable
         :disabled="sending || locked"
@@ -197,7 +196,7 @@
         </AppTooltip>
       </div>
       <p v-if="showContentError" id="content-error" class="field-error" role="alert">
-        {{ t("validation.content") }}
+        {{ contentError }}
       </p>
       <p v-if="error" class="field-error send-error" role="alert">{{ translateMessage(error) }}</p>
     </div>
@@ -220,6 +219,16 @@
   import CapabilityTags from "@/domains/room/CapabilityTags.vue";
   import type { ComposerCatalog } from "@/domains/room/useRoomCapabilities";
   import { memberSessionName } from "@/domains/room/memberSessionName";
+  import {
+    formatSkillReference,
+    inlineSkills,
+    messageText,
+    referencedCapabilities,
+    removeInlineSkill,
+    skillQueryAt,
+    withoutInlineSkills,
+  } from "@/domains/room/inlineSkills";
+  import type { SkillQuery } from "@/domains/room/inlineSkills";
   import type {
     CapabilityReference,
     MessageDraft,
@@ -258,7 +267,8 @@
   const content = computed({
     get: () => draft.value.content,
     set: (content) => {
-      draft.value = { ...draft.value, content };
+      insertionTooLong.value = false;
+      draft.value = { ...draft.value, content, capabilities: capabilitiesForContent(content) };
     },
   });
   const topicIds = computed({
@@ -274,9 +284,12 @@
     },
   });
   const attempted = ref(false);
+  const insertionTooLong = ref(false);
+  let capabilityRoomId = props.roomId;
+  const knownSkills = new Map<string, SkillReference>();
   const textarea = ref<InstanceType<typeof AppInput>>();
   const composing = ref(false);
-  const query = ref<{ start: number; end: number; text: string }>();
+  const query = ref<SkillQuery>();
   const activeIndex = ref(0);
   let dismissed: string | undefined;
   const pickerOpen = computed(() => Boolean(query.value && !props.sending && !props.locked));
@@ -291,14 +304,8 @@
         label: skill.displayName,
         description: `${skill.source}${skill.pluginId ? ` · ${skill.pluginId}` : ""} · ${skill.description}`,
       }))
-      .filter(
-        (option) =>
-          `${option.name} ${option.label} ${option.description}`
-            .toLocaleLowerCase()
-            .includes(search) &&
-          !(draft.value.capabilities ?? []).some(
-            (reference) => reference.type === option.type && reference.id === option.id,
-          ),
+      .filter((option) =>
+        `${option.name} ${option.label} ${option.description}`.toLocaleLowerCase().includes(search),
       )
       .map((option, index) => ({ ...option, index }));
   });
@@ -309,6 +316,7 @@
     () => [props.roomId, props.sending, props.locked],
     () => {
       query.value = undefined;
+      insertionTooLong.value = false;
     },
   );
 
@@ -326,19 +334,7 @@
       query.value = undefined;
       return;
     }
-    const prefix = content.value
-      .slice(0, range.start)
-      .match(/(?:^|[\s(（])\$([\p{L}\p{N}_:./@-]*)$/u);
-    if (!prefix) {
-      query.value = undefined;
-      return;
-    }
-    const suffix = content.value.slice(range.start).match(/^[\p{L}\p{N}_:./@-]*/u)?.[0] ?? "";
-    const nextQuery = {
-      start: range.start - prefix[1].length - 1,
-      end: range.start + suffix.length,
-      text: prefix[1],
-    };
+    const nextQuery = skillQueryAt(content.value, range.start);
     if (JSON.stringify(nextQuery) !== JSON.stringify(query.value)) query.value = nextQuery;
   }
 
@@ -347,34 +343,84 @@
     void syncQuery();
   }
 
+  function capabilitiesForContent(
+    content: string,
+    additional: SkillReference[] = [],
+  ): CapabilityReference[] {
+    if (capabilityRoomId !== props.roomId) {
+      knownSkills.clear();
+      capabilityRoomId = props.roomId;
+    }
+    // Retain selected identities for native textarea undo, even after their last marker is deleted.
+    for (const skill of [
+      ...(props.catalog?.skills.filter((skill) => skill.enabled) ?? []),
+      ...(draft.value.capabilities ?? []),
+      ...additional,
+    ]) {
+      if (skill.type === "skill")
+        knownSkills.set(skill.id, { type: "skill", id: skill.id, name: skill.name });
+    }
+    return referencedCapabilities(content, [
+      ...(draft.value.capabilities ?? []).filter((reference) => reference.type !== "skill"),
+      ...knownSkills.values(),
+    ]);
+  }
+
   async function selectCapability(reference: SkillReference): Promise<void> {
     if (!query.value || props.sending || props.locked) return;
     const range = query.value;
     query.value = undefined;
     const currentDraft = draft.value;
-    const capabilities = currentDraft.capabilities ?? [];
+    const marker = formatSkillReference(reference);
+    const content =
+      currentDraft.content.slice(0, range.start) +
+      marker +
+      " " +
+      currentDraft.content.slice(range.end);
+    if (content.length > 6000) {
+      insertionTooLong.value = true;
+      return;
+    }
+    insertionTooLong.value = false;
     draft.value = {
       ...currentDraft,
-      content: currentDraft.content.slice(0, range.start) + currentDraft.content.slice(range.end),
-      capabilities: capabilities.some(
-        (item) => item.type === reference.type && item.id === reference.id,
-      )
-        ? capabilities
-        : [...capabilities, { type: reference.type, id: reference.id, name: reference.name }],
+      content,
+      capabilities: capabilitiesForContent(content, [reference]),
     };
-    await textarea.value?.setSelection(range.start);
+    await textarea.value?.setSelection(range.start + marker.length + 1);
   }
 
   function removeCapability(reference: CapabilityReference): void {
     if (props.sending || props.locked) return;
+    insertionTooLong.value = false;
+    const content =
+      reference.type === "skill"
+        ? removeInlineSkill(draft.value.content, reference.id)
+        : draft.value.content;
     draft.value = {
       ...draft.value,
-      capabilities: draft.value.capabilities?.filter(
+      content,
+      capabilities: capabilitiesForContent(content).filter(
         (item) => item.type !== reference.type || item.id !== reference.id,
       ),
     };
   }
-  const showContentError = computed(() => attempted.value && !content.value.trim());
+  const contentError = computed(() => {
+    if (insertionTooLong.value || content.value.length > 6000)
+      return t("validation.contentTooLong");
+    if (!withoutInlineSkills(content.value).trim()) return t("validation.content");
+    const skills = new Set(
+      draft.value.capabilities
+        ?.filter((reference) => reference.type === "skill")
+        .map((item) => item.id),
+    );
+    if (inlineSkills(content.value).some((reference) => !skills.has(reference.id)))
+      return t("validation.skillReference");
+    return undefined;
+  });
+  const showContentError = computed(
+    () => Boolean(contentError.value) && (attempted.value || insertionTooLong.value),
+  );
   const replyToMember = computed(() =>
     props.members.find((member) => member.id === props.replyTo?.senderId),
   );
@@ -396,7 +442,7 @@
       : t("validation.recipients"),
   );
   const sendDisabledReason = computed(() => {
-    if (!content.value.trim()) return t("validation.content");
+    if (contentError.value) return contentError.value;
     if (!hasRecipients.value) return routingError.value;
     return undefined;
   });
@@ -475,11 +521,12 @@
     if (props.sending || props.locked) return;
     attempted.value = true;
     if (showContentError.value || showRecipientError.value) return;
+    const capabilities = capabilitiesForContent(content.value);
     emit("send", {
       content: content.value.trim(),
       topicIds: [...topicIds.value],
       mentionedMemberIds: [...mentionedMemberIds.value],
-      ...(draft.value.capabilities?.length ? { capabilities: [...draft.value.capabilities] } : {}),
+      ...(capabilities.length ? { capabilities } : {}),
       ...(draft.value.replyToMessageId ? { replyToMessageId: draft.value.replyToMessageId } : {}),
     });
   }
@@ -528,6 +575,7 @@
     };
     query.value = undefined;
     attempted.value = false;
+    insertionTooLong.value = false;
     textarea.value?.focus();
   }
 
@@ -535,14 +583,6 @@
 </script>
 
 <style scoped>
-  .composer-capabilities :deep(li) {
-    border-color: hsl(var(--primary) / 0.12);
-    color: hsl(var(--primary));
-    background: hsl(var(--primary) / 0.08);
-  }
-  .composer-capabilities :deep(.icon-button) {
-    color: inherit;
-  }
   .capability-input {
     position: relative;
     flex: 1;

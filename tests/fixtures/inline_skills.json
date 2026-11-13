@@ -1,0 +1,32 @@
+[
+  {
+    "content": "先用 [check](skill:skill-check)，再用 [fix](skill:skill-fix)，最后 [check](skill:skill-check)。",
+    "ids": ["skill-check", "skill-fix", "skill-check"],
+    "text": "先用 $dev-check，再用 $dev-fix，最后 $dev-check。"
+  },
+  {
+    "content": "`[check](skill:skill-check)`\n```md\n[fix](skill:skill-fix)\n```\n用 [check](skill:skill-check) 检查",
+    "ids": ["skill-check"],
+    "text": "`[check](skill:skill-check)`\n```md\n[fix](skill:skill-fix)\n```\n用 $dev-check 检查"
+  },
+  {
+    "content": "\\[check](skill:skill-check) ![fix](skill:skill-fix)\n    [check](skill:skill-check)",
+    "ids": [],
+    "text": "\\[check](skill:skill-check) ![fix](skill:skill-fix)\n    [check](skill:skill-check)"
+  },
+  {
+    "content": "> ~~~md\n> [check](skill:skill-check)\n> ~~~\n[fix](skill:skill-fix) 执行",
+    "ids": ["skill-fix"],
+    "text": "> ~~~md\n> [check](skill:skill-check)\n> ~~~\n$dev-fix 执行"
+  },
+  {
+    "content": "``示例 `[check](skill:skill-check)` `` 后用 [fix](skill:skill-fix)",
+    "ids": ["skill-fix"],
+    "text": "``示例 `[check](skill:skill-check)` `` 后用 $dev-fix"
+  },
+  {
+    "content": "未闭合 ` 后用 [check](skill:skill-check)",
+    "ids": ["skill-check"],
+    "text": "未闭合 ` 后用 $dev-check"
+  }
+]

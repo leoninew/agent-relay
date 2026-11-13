@@ -177,6 +177,8 @@ export default {
     absolutePath: "Enter an absolute project path.",
     session: "Choose a session to join.",
     content: "Enter a message.",
+    contentTooLong: "Message content and skill references must not exceed 6000 characters.",
+    skillReference: "Invalid skill reference. Select the skill again from the $ list.",
     recipients: "Choose at least one topic or member.",
     noRecipients: "Choose a topic with members or mention a member.",
   },

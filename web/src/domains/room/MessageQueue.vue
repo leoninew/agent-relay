@@ -43,7 +43,7 @@
                 type="button"
                 class="queue-message"
                 :aria-label="t('queue.viewMessage', { seq: row.message.seq })"
-                :title="row.message.content"
+                :title="row.text"
                 @click="$emit('select', row.message.id)"
               >
                 {{ row.preview }}
@@ -95,6 +95,7 @@
   import AppLoading from "@/components/AppLoading.vue";
   import AppSpinner from "@/components/AppSpinner.vue";
   import { deliveryStage } from "@/domains/room/deliveryStage";
+  import { messageText } from "@/domains/room/inlineSkills";
   import type { RoomMessage } from "@/services/roomApi";
 
   const props = defineProps<{
@@ -116,9 +117,11 @@
 
   const rows = computed(() =>
     props.messages.map((message) => {
-      const characters = Array.from(message.content);
+      const text = messageText(message.content, message.capabilities);
+      const characters = Array.from(text);
       return {
         message,
+        text,
         preview: characters.slice(0, 15).join("") + (characters.length > 15 ? "…" : ""),
         stage: deliveryStage(message.deliveries),
       };

@@ -41,3 +41,17 @@ def test_capability_references_reject_unknown_types_native_paths_and_unowned_fie
                 "capabilities": [capability],
             }
         )
+
+
+def test_inline_skill_requires_a_selected_identity_and_nonempty_body() -> None:
+    payload = {
+        "publicationId": "inline-skills",
+        "content": "请用 [check](skill:skill-check) 检查",
+        "mentionedMemberIds": ["user"],
+        "capabilities": [{"type": "skill", "id": "skill-check", "name": "dev-check"}],
+    }
+    assert CreateMessage.model_validate(payload).content == payload["content"]
+    with pytest.raises(ValidationError, match="matching capability"):
+        CreateMessage.model_validate({**payload, "capabilities": []})
+    with pytest.raises(ValidationError, match="content cannot be blank"):
+        CreateMessage.model_validate({**payload, "content": "[check](skill:skill-check)"})

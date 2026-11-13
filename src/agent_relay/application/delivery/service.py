@@ -26,6 +26,7 @@ from agent_relay.domain.rooms.delivery import (
     steer_accepted,
     submission_failed,
 )
+from agent_relay.domain.rooms.inline_skills import message_text
 
 
 class DeliveryService:
@@ -68,7 +69,7 @@ class DeliveryService:
             f"createdAt: {created_at}\n"
             f"sender: {sender}\n"
             f"{refer_to}\n"
-            f"{work.message.content}"
+            f"{message_text(work.message.content, work.message.capabilities)}"
         )
         try:
             receipt = self.driver.submit(

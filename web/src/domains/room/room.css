@@ -577,6 +577,27 @@ button.topic-chip:hover:not(:disabled) {
   white-space: normal;
   overflow-wrap: anywhere;
 }
+.message-skill-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 2px 6px;
+  border: 1px solid hsl(var(--primary) / 0.12);
+  border-radius: 4px;
+  color: hsl(var(--primary));
+  vertical-align: baseline;
+}
+.message-skill-chip > :last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.message-skill-chip > svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
 .message-content > :not(:first-child) {
   margin-top: 0.7em;
 }

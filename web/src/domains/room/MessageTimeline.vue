@@ -22,7 +22,10 @@
           {{ t("timeline.older") }}
         </AppButton>
       </div>
-      <template v-for="({ message, status, renderedContent }, index) in rows" :key="message.id">
+      <template
+        v-for="({ message, status, renderedContent, remainingCapabilities }, index) in rows"
+        :key="message.id"
+      >
         <div v-if="startsNewDay(index)" class="timeline-date">
           <span>{{ formatDate(message.createdAt) }}</span>
         </div>
@@ -122,8 +125,8 @@
                   t("timeline.reference", { reference: referenceLabel(message.replyToMessageId) })
                 }}</span>
               </button>
+              <CapabilityTags :capabilities="remainingCapabilities" />
               <div class="message-content" v-html="renderedContent"></div>
-              <CapabilityTags :capabilities="message.capabilities" />
             </div>
             <div class="message-actions">
               <button
@@ -168,7 +171,6 @@
 <script setup lang="ts">
   import CapabilityTags from "@/domains/room/CapabilityTags.vue";
   import { computed, ref } from "vue";
-  import MarkdownIt from "markdown-it";
   import { useI18n } from "vue-i18n";
 
   import AppIcon from "@/components/AppIcon.vue";
@@ -177,6 +179,8 @@
   import MemberIdentity from "@/domains/room/MemberIdentity.vue";
   import { deliveryStage } from "@/domains/room/deliveryStage";
   import { memberSessionName } from "@/domains/room/memberSessionName";
+  import { messageText } from "@/domains/room/inlineSkills";
+  import { renderMessage } from "@/domains/room/messageMarkdown";
   import type { Member, RoomMessage, Session, Topic } from "@/services/roomApi";
   import { useToastsStore } from "@/stores/toasts";
   import { formatDate, formatMinute, sameLocalDay } from "@/utils/time";
@@ -211,13 +215,16 @@
   const timeline = ref<HTMLElement>();
   const { t } = useI18n();
   const toasts = useToastsStore();
-  const markdown = new MarkdownIt({ breaks: true });
   const rows = computed(() =>
-    props.messages.map((message) => ({
-      message,
-      status: deliverySummary(message),
-      renderedContent: markdown.render(message.content),
-    })),
+    props.messages.map((message) => {
+      const rendered = renderMessage(message.content, message.capabilities);
+      return {
+        message,
+        status: deliverySummary(message),
+        renderedContent: rendered.html,
+        remainingCapabilities: rendered.remainingCapabilities,
+      };
+    }),
   );
   let previousScroll = 0;
   let previousHeight = 0;
@@ -276,7 +283,7 @@
 
   async function copyMessage(message: RoomMessage): Promise<void> {
     try {
-      await navigator.clipboard.writeText(message.content);
+      await navigator.clipboard.writeText(messageText(message.content, message.capabilities));
       toasts.success({ key: "notice.copied" });
     } catch {
       toasts.error({ key: "notice.copyFailed" });

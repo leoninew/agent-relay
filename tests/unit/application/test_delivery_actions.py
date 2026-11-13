@@ -134,6 +134,24 @@ def test_submission_includes_stable_message_lookup_facts_and_capabilities(
     )
 
 
+def test_submission_converts_inline_references_without_changing_saved_content(
+    work: ClaimedDelivery,
+    delivery_store: Mock,
+    queue_driver: Mock,
+) -> None:
+    content = "请用 [Example](skill:skill-example) 检查"
+    references = (SkillReference(id="skill-example", name="dev-check"),)
+    work = replace(
+        work,
+        message=work.message.model_copy(update={"content": content, "capabilities": references}),
+    )
+    DeliveryService(delivery_store, queue_driver, logging.getLogger("tests.delivery")).submit(work)
+    request = queue_driver.submit.call_args.args[2]
+    assert request.text.endswith("请用 $dev-check 检查")
+    assert request.capabilities == references
+    assert work.message.content == content
+
+
 def test_submission_adds_reference_line_when_message_replies_to_another(
     work: ClaimedDelivery,
     delivery_store: Mock,

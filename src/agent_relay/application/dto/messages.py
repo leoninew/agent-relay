@@ -3,6 +3,7 @@ from typing import Self
 
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
+from agent_relay.domain.rooms.inline_skills import inline_skills, without_inline_skills
 from agent_relay.domain.rooms.models import CapabilityReference, Message, RoomModel
 
 
@@ -59,6 +60,11 @@ class CreateMessage(RoomModel):
 
     @model_validator(mode="after")
     def require_targets(self) -> Self:
+        skills = {reference.id for reference in self.capabilities if reference.type == "skill"}
+        if any(reference.id not in skills for reference in inline_skills(self.content)):
+            raise ValueError("Inline skill requires a matching capability reference")
+        if not without_inline_skills(self.content).strip():
+            raise ValueError("Message content cannot be blank")
         if not self.topic_ids and not self.mentioned_member_ids:
             raise ValueError("Message requires a topic or a directly mentioned member")
         return self
