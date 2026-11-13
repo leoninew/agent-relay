@@ -122,7 +122,7 @@
           </dl>
         </section>
         <section class="message-detail-section">
-          <h3>{{ t("forms.subscribe") }}</h3>
+          <h3>{{ t("sidebar.topics") }}</h3>
           <ul v-if="memberTopics.length" class="detail-topics">
             <li v-for="topicItem in memberTopics" :key="topicItem.id">
               <span class="detail-topic"># {{ topicItem.name }}</span>
