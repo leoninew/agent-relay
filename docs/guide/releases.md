@@ -4,6 +4,21 @@
 
 在 Windows x64 的 GNU Make/Git Bash 环境中运行 `make binary`，生成完整桌面目录和版本化 ZIP。包内容与运行要求见[桌面使用指南](windows-desktop.md)。
 
+## 版本计算与更新
+
+使用本项目的 `scripts/version-calc.py`，默认定位脚本所属仓库。先预览，确认后应用：
+
+```bash
+uv run --locked --no-sync python scripts/version-calc.py
+uv run --locked --no-sync python scripts/version-calc.py --no-dry-run
+```
+
+版本从执行时 `HEAD` 可达的全部提交计算，按从旧到新的顺序处理：主版本固定为 `0`，提交标题以 `feat` 开头时次版本加一、修订号归零，其他提交使修订号加一。计算不依赖已有 tag，也不计入未提交修改；默认只输出结果。
+
+应用命令统一更新 `pyproject.toml` 的项目版本、`src/agent_relay/__init__.py` 的静态 `__version__` 和 `uv.lock`。`uv lock` 失败时恢复更新前的这三份文件；脚本不提交或创建 tag，也不更新已安装环境。
+
+“关于”通过 `/api/app` 读取当前服务代码的 `__version__`。源码运行、wheel 安装和 WebView EXE 使用同一规则，版本随代码发布；本机另一个 tool 或虚拟环境的安装元数据不参与取值。`make binary` 会校验运行版本与项目版本、发布 tag 一致，ZIP 文件名沿用项目版本。
+
 ## GitHub Release
 
 [Build Windows desktop](../../.github/workflows/build-desktop.yml) 支持 `v*` tag push 自动发布，或手动 `workflow_dispatch` 并填写已有版本 tag。工作流检出该 tag，执行 `make deps`、`make check`、`make test`、`make binary`，再将同一个 ZIP 上传到 GitHub Release 的 **Assets**；对应 run 的 **Artifacts** 也保留下载。
@@ -14,10 +29,10 @@ tag 必须等于 `pyproject.toml` 的版本前加 `v`。首次创建 Release，�
 
 [.gitlab-ci.yml](../../.gitlab-ci.yml) 使用两个 runner：
 
-| Runner tag | 配置与工具 |
-| --- | --- |
+| Runner tag     | 配置与工具                                                                                                                                                    |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `windows-bash` | Windows x64，Shell executor，`shell = "pwsh"`；将 Git Bash 的 `bash.exe`、GNU Make、Python、Node.js、uv、Corepack 和 `curl.exe` 放入 runner 服务账户的 `PATH` |
-| `linux-docker` | Linux Docker executor，可拉取 `registry.gitlab.com/gitlab-org/cli:latest` 镜像执行 Release job |
+| `linux-docker` | Linux Docker executor，可拉取 `registry.gitlab.com/gitlab-org/cli:latest` 镜像执行 Release job                                                                |
 
 Windows runner 的 Python 与 Node.js 版本分别按 `.python-version`、`.node-version` 准备；pnpm 版本按 `web/package.json` 的 `packageManager` 准备。可先在 `web/` 中执行 `corepack.cmd enable` 和 `corepack.cmd pnpm --version`。`PATH` 中 Git Bash 的 `bash.exe` 应排在 WSL 的同名入口之前；构建 job 通过 PowerShell 调用 Git Bash 执行现有 Makefile。Release job 使用支持 glab 发布的 GitLab 与 GitLab Runner 18.4+ 环境。
 
@@ -25,7 +40,7 @@ Windows runner 的 Python 与 Node.js 版本分别按 `.python-version`、`.node
 
 ## 触发 GitLab Release
 
-先按项目版本流程更新并提交 `pyproject.toml` 和 `uv.lock`，再向 GitLab 仓库推送对应 tag。例如，项目版本为 `0.23.1`、GitLab remote 名为 `gitlab`：
+先按上述流程同步并提交项目版本、运行版本和锁文件，再向 GitLab 仓库推送对应 tag。例如，项目版本为 `0.23.1`、GitLab remote 名为 `gitlab`：
 
 ```bash
 git tag -a v0.23.1 -m "Release v0.23.1"

@@ -4,12 +4,19 @@ import tomllib
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
 
+from agent_relay import __version__
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def project_version() -> str:
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
     version = str(project["version"])
+    if __version__ != version:
+        raise ValueError(
+            f"Runtime version {__version__!r} does not match project version {version!r}; "
+            "run scripts/version-calc.py --no-dry-run"
+        )
     tag = os.environ.get("CI_COMMIT_TAG")
     if tag is None and os.environ.get("GITHUB_REF_TYPE") == "tag":
         tag = os.environ.get("GITHUB_REF_NAME")

@@ -11,6 +11,8 @@
 
 解压后双击 `agent-relay-gui.exe`。必须保留整个目录；目标机器无需 Python 或 Node.js。
 
+右上角“关于”显示当前桌面程序的版本。版本与程序代码一同打包，不受本机另外安装的 CLI、uv tool 或开发环境版本影响。
+
 ## 配置与数据
 
 桌面固定使用 `app` profile，配置优先级为内置 `config/app.yaml` → `~/.agent-relay/.env` → 系统环境变量。修改覆盖文件后重启应用：
@@ -22,13 +24,13 @@ AGENT_RELAY_DATABASE__PATH=./data/agent-relay.sqlite3
 
 数据库相对路径从 `~/.agent-relay/` 解析；前端相对路径从程序资源目录解析。用户目录内容：
 
-| 路径 | 用途 |
-| --- | --- |
-| `.env` | 用户配置覆盖 |
-| `data/` | 默认数据库目录 |
-| `logs/agent-relay.log` | 应用日志 |
-| `webview/` | 排序等浏览器偏好 |
-| `preferences.json` | 界面语言等用户偏好；不存在时使用配置默认值 |
+| 路径                   | 用途                                       |
+| ---------------------- | ------------------------------------------ |
+| `.env`                 | 用户配置覆盖                               |
+| `data/`                | 默认数据库目录                             |
+| `logs/agent-relay.log` | 应用日志                                   |
+| `webview/`             | 排序等浏览器偏好                           |
+| `preferences.json`     | 界面语言等用户偏好；不存在时使用配置默认值 |
 
 替换或移动程序目录会保留这些数据。桌面不读取开发环境的 `.env.dev`。
 
