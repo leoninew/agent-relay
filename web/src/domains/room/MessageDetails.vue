@@ -68,12 +68,17 @@
     </header>
     <div class="message-details-content">
       <template v-if="topic">
-        <div class="detail-object-summary">
-          <div class="sidebar-list-item detail-object-identity">
-            <TopicIdentity :topic="topic" />
-          </div>
-          <p v-if="topic.description" class="detail-description">{{ topic.description }}</p>
-        </div>
+        <section class="message-detail-section detail-object-summary">
+          <h3>{{ t("sidebar.topics") }}</h3>
+          <dl class="detail-message-meta">
+            <dt>{{ t("details.name") }}</dt>
+            <dd>
+              <TopicIdentity :topic="topic" />
+            </dd>
+            <dt>{{ t("details.description") }}</dt>
+            <dd>{{ topic.description }}</dd>
+          </dl>
+        </section>
         <section class="message-detail-section">
           <h3>{{ t("sidebar.members") }}</h3>
           <ul v-if="topicMembers.length" class="detail-members">
@@ -95,18 +100,27 @@
         </section>
       </template>
       <template v-else-if="member">
-        <div class="detail-object-summary">
-          <div class="sidebar-list-item detail-object-identity">
-            <MemberIdentity :member="member" :session-name="sessionName(member)" />
-            <span
-              v-if="member.kind === 'agent'"
-              class="sidebar-item-meta sidebar-member-status"
-              :data-presence="member.presence"
-            >
-              {{ t(`sidebar.${member.presence}`) }}
-            </span>
-          </div>
-        </div>
+        <section class="message-detail-section detail-object-summary">
+          <h3>{{ t("sidebar.members") }}</h3>
+          <dl class="detail-message-meta">
+            <dt>{{ t("details.name") }}</dt>
+            <dd>
+              <MemberIdentity :member="member" :session-name="sessionName(member)" />
+            </dd>
+            <template v-if="member.kind === 'agent'">
+              <dt>{{ t("queue.status") }}</dt>
+              <dd>
+                <span class="detail-presence" :data-presence="member.presence">
+                  {{ t(`sidebar.${member.presence}`) }}
+                </span>
+              </dd>
+            </template>
+            <template v-if="member.sessionId">
+              <dt>{{ t("details.codexSessionId") }}</dt>
+              <dd>{{ member.sessionId }}</dd>
+            </template>
+          </dl>
+        </section>
         <section class="message-detail-section">
           <h3>{{ t("forms.subscribe") }}</h3>
           <ul v-if="memberTopics.length" class="detail-topics">
@@ -158,9 +172,9 @@
                 </td>
                 <td>
                   <span class="delivery-stage">{{ stage ? t(`delivery.${stage}`) : "-" }}</span>
-                  <small v-if="error" class="dispatch-error"
-                    >{{ t("delivery.diagnostic") }}: {{ error }}</small
-                  >
+                  <small v-if="error" class="dispatch-error">
+                    {{ t("delivery.diagnostic") }}: {{ error }}
+                  </small>
                 </td>
               </tr>
             </tbody>

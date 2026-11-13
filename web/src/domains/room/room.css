@@ -1,7 +1,7 @@
 .room-workbench {
   display: flex;
   flex-direction: column;
-  height: calc(100dvh - var(--app-header-height));
+  height: 100%;
   min-height: 0;
   padding: 4px 16px 16px;
   overflow: hidden;
@@ -27,6 +27,21 @@
   flex: 1;
 }
 
+.room-sidebar-panel,
+.room-details-panel {
+  flex-direction: column;
+}
+
+.room-panel-footer {
+  display: flex;
+  flex-shrink: 0;
+  padding: 0 6px 8px;
+}
+
+.room-sidebar-panel > .room-panel-footer {
+  justify-content: flex-end;
+}
+
 .room-resize-handle {
   position: relative;
   display: flex;
@@ -35,32 +50,6 @@
   flex: 0 0 24px;
   cursor: col-resize;
   outline: none;
-}
-
-.room-resize-grip {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 28px;
-  border: 1px solid hsl(var(--border));
-  border-radius: 4px;
-  background: hsl(var(--card));
-  color: hsl(var(--muted-foreground));
-  pointer-events: none;
-}
-
-.room-resize-grip svg {
-  width: 12px;
-  height: 16px;
-}
-
-.room-resize-handle:hover .room-resize-grip,
-.room-resize-handle:focus-visible .room-resize-grip,
-.room-resize-handle[data-state="drag"] .room-resize-grip {
-  border-color: hsl(var(--muted-foreground));
-  color: hsl(var(--primary));
 }
 
 .room-resize-handle::before {
@@ -873,6 +862,20 @@ button.topic-chip:hover:not(:disabled) {
   min-height: 28px;
   padding-block: 0;
 }
+.composer-send-trigger {
+  display: inline-flex;
+  border-radius: 6px;
+}
+.composer-send-trigger:has(:disabled) {
+  cursor: not-allowed;
+}
+.composer-send-trigger > :disabled {
+  pointer-events: none;
+}
+.composer-send-trigger:focus-visible {
+  outline: 1px dashed hsl(var(--muted-foreground) / 0.7);
+  outline-offset: 3px;
+}
 .composer-send-button {
   min-width: 88px;
   min-height: 32px;
@@ -1154,9 +1157,6 @@ button.topic-chip:hover:not(:disabled) {
   font-size: var(--font-size-caption);
   line-height: var(--line-height-caption);
 }
-.detail-object-identity:hover {
-  background: transparent;
-}
 .detail-heading-title {
   display: flex;
   align-items: baseline;
@@ -1186,13 +1186,6 @@ button.topic-chip:hover:not(:disabled) {
 }
 .detail-delete-link {
   color: hsl(var(--destructive));
-}
-.detail-description {
-  margin-top: 8px;
-  color: hsl(var(--muted-foreground));
-  font-size: var(--font-size-caption);
-  line-height: var(--line-height-caption);
-  overflow-wrap: anywhere;
 }
 .message-details-content > .message-detail-section:not(:first-child) {
   margin-top: 24px;
@@ -1337,7 +1330,7 @@ button.topic-chip:hover:not(:disabled) {
   .room-workbench {
     display: flex;
     flex-direction: column;
-    height: calc(100dvh - var(--app-header-height));
+    height: 100%;
     min-height: 0;
     padding: 8px;
   }

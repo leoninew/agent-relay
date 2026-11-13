@@ -10,7 +10,12 @@
     :aria-describedby="describedBy"
   >
     <slot />
-    <AppClearButton v-if="model.length" :label="clearLabel" :disabled="disabled" @clear="clear" />
+    <AppClearButton
+      v-if="clearLabel && model.length"
+      :label="clearLabel"
+      :disabled="disabled"
+      @clear="clear"
+    />
   </CheckboxGroupRoot>
 </template>
 
@@ -21,7 +26,7 @@
   import AppClearButton from "@/components/AppClearButton.vue";
 
   const props = defineProps<{
-    clearLabel: string;
+    clearLabel?: string;
     disabled?: boolean;
     invalid?: boolean;
     describedBy?: string;

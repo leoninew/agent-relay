@@ -1,6 +1,11 @@
 <template>
   <div class="room-workbench">
-    <SplitterGroup v-if="!mobile" direction="horizontal" class="room-splitter">
+    <SplitterGroup
+      v-if="!mobile"
+      :key="compact ? 'compact' : 'wide'"
+      direction="horizontal"
+      class="room-splitter"
+    >
       <SplitterPanel
         id="room-navigation-panel"
         ref="navigationPanel"
@@ -8,7 +13,7 @@
         class="room-sidebar-panel"
         size-unit="px"
         :order="0"
-        :default-size="initialNavigationWidth"
+        :default-size="panelPreferences.collapsed.navigation ? 40 : initialNavigationWidth"
         :min-size="160"
         :max-size="400"
         :collapsed-size="40"
@@ -28,16 +33,32 @@
             </button>
           </AppTooltip>
         </div>
-        <slot v-else name="sidebar" />
+        <template v-else>
+          <slot name="sidebar" />
+          <div class="room-panel-footer">
+            <AppTooltip :text="t('sidebar.collapseLeft')">
+              <button
+                type="button"
+                class="icon-button room-panel-collapse"
+                :aria-label="t('sidebar.collapseLeft')"
+                aria-controls="room-navigation-panel"
+                :aria-expanded="true"
+                @mousedown.stop
+                @touchstart.stop
+                @click="navigationPanel?.collapse()"
+              >
+                <AppIcon name="panel-left-close" />
+              </button>
+            </AppTooltip>
+          </div>
+        </template>
       </SplitterPanel>
       <SplitterResizeHandle
         class="room-resize-handle"
         :aria-label="t('sidebar.resizeLeft')"
         @dblclick="toggleNavigation"
         @keydown.enter.capture.prevent="toggleNavigation"
-      >
-        <span class="room-resize-grip"><AppIcon name="grip" /></span>
-      </SplitterResizeHandle>
+      />
       <SplitterPanel :order="1" :min-size="30" class="room-main-panel">
         <slot />
       </SplitterPanel>
@@ -47,9 +68,7 @@
         :aria-label="t('sidebar.resizeRight')"
         @dblclick="toggleDetails"
         @keydown.enter.capture.prevent="toggleDetails"
-      >
-        <span class="room-resize-grip"><AppIcon name="grip" /></span>
-      </SplitterResizeHandle>
+      />
       <SplitterPanel
         v-if="!compact"
         id="room-details-panel"
@@ -58,7 +77,7 @@
         class="room-details-panel"
         size-unit="px"
         :order="2"
-        :default-size="initialDetailsWidth"
+        :default-size="panelPreferences.collapsed.details ? 40 : initialDetailsWidth"
         :min-size="280"
         :max-size="640"
         :collapsed-size="40"
@@ -78,9 +97,27 @@
             </button>
           </AppTooltip>
         </div>
-        <div v-else class="room-context-panel">
-          <slot name="details" :collapse="collapseDetails" />
-        </div>
+        <template v-else>
+          <div class="room-context-panel">
+            <slot name="details" :collapse="collapseDetails" />
+          </div>
+          <div class="room-panel-footer">
+            <AppTooltip :text="t('sidebar.collapseRight')">
+              <button
+                type="button"
+                class="icon-button room-panel-collapse"
+                :aria-label="t('sidebar.collapseRight')"
+                aria-controls="room-details-panel"
+                :aria-expanded="true"
+                @mousedown.stop
+                @touchstart.stop
+                @click="collapseDetails"
+              >
+                <AppIcon name="panel-right-close" />
+              </button>
+            </AppTooltip>
+          </div>
+        </template>
       </SplitterPanel>
     </SplitterGroup>
     <template v-else>
@@ -111,17 +148,19 @@
     SplitterPanel,
     SplitterResizeHandle,
   } from "reka-ui";
-  import { onBeforeUnmount, ref, watch } from "vue";
+  import { nextTick, onBeforeUnmount, ref, watch } from "vue";
   import { useI18n } from "vue-i18n";
 
   import AppIcon from "@/components/AppIcon.vue";
   import AppTooltip from "@/components/AppTooltip.vue";
+  import { usePanelPreferencesStore } from "@/stores/panelPreferences";
 
   const { t } = useI18n();
   const props = defineProps<{ detailsOpen: boolean }>();
   const emit = defineEmits<{ collapseDetails: [] }>();
   const initialNavigationWidth = 240;
   const initialDetailsWidth = 420;
+  const panelPreferences = usePanelPreferencesStore();
   const navigationPanel = ref<InstanceType<typeof SplitterPanel>>();
   const detailsPanel = ref<InstanceType<typeof SplitterPanel>>();
   const mobileNavigationOpen = ref(false);
@@ -129,10 +168,20 @@
   const compactQuery = window.matchMedia("(max-width: 1150px)");
   const mobile = ref(mobileQuery.matches);
   const compact = ref(compactQuery.matches);
+  let changingViewport = false;
 
   function syncViewport(): void {
+    if (mobile.value === mobileQuery.matches && compact.value === compactQuery.matches) return;
+    changingViewport = true;
     mobile.value = mobileQuery.matches;
     compact.value = compactQuery.matches;
+    void nextTick(() => {
+      changingViewport = false;
+    });
+  }
+
+  function savePanelState(panel: "navigation" | "details", collapsed: boolean): void {
+    if (!changingViewport) panelPreferences.setCollapsed(panel, collapsed);
   }
 
   function toggleNavigation(): void {
@@ -157,6 +206,26 @@
   function restoreDetails(): void {
     detailsPanel.value?.resize(initialDetailsWidth);
   }
+
+  watch(
+    () => navigationPanel.value?.isCollapsed,
+    (collapsed, previous) => {
+      if (typeof collapsed === "boolean" && typeof previous === "boolean") {
+        savePanelState("navigation", collapsed);
+      }
+    },
+    { flush: "sync" },
+  );
+
+  watch(
+    () => detailsPanel.value?.isCollapsed,
+    (collapsed, previous) => {
+      if (typeof collapsed === "boolean" && typeof previous === "boolean") {
+        savePanelState("details", collapsed);
+      }
+    },
+    { flush: "sync" },
+  );
 
   watch(
     () => detailsPanel.value?.isCollapsed,

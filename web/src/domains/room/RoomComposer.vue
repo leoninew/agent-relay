@@ -32,7 +32,6 @@
             v-model="topicIds"
             class="routing-options"
             :aria-label="t('composer.topics')"
-            :clear-label="t('composer.clearTopics')"
             :disabled="sending || locked"
             :invalid="showRecipientError"
             :described-by="showRecipientError ? 'routing-error' : undefined"
@@ -57,7 +56,6 @@
             v-model="mentionedMemberIds"
             class="routing-options"
             :aria-label="t('composer.mentions')"
-            :clear-label="t('composer.clearMentions')"
             :disabled="sending || locked"
             :invalid="showRecipientError"
             :described-by="showRecipientError ? 'routing-error' : undefined"
@@ -177,19 +175,26 @@
             </div>
           </div>
         </div>
-        <AppButton
-          type="submit"
-          class="composer-send-button"
-          :title="t('composer.sendHint')"
-          aria-keyshortcuts="Enter"
-          :aria-label="t(sending ? 'composer.sending' : 'composer.sendMessage')"
-          :loading="sending"
-          :disabled="locked"
-          :loading-label="t('composer.sending')"
-        >
-          <template #icon><AppIcon name="enter" /></template>
-          {{ t("composer.send") }}
-        </AppButton>
+        <AppTooltip :text="sendDisabledReason ?? t('composer.sendHint')">
+          <span
+            class="composer-send-trigger"
+            :tabindex="sendDisabledReason ? 0 : undefined"
+            :aria-label="sendDisabledReason"
+          >
+            <AppButton
+              type="submit"
+              class="composer-send-button"
+              aria-keyshortcuts="Enter"
+              :aria-label="t(sending ? 'composer.sending' : 'composer.sendMessage')"
+              :loading="sending"
+              :disabled="locked || Boolean(sendDisabledReason)"
+              :loading-label="t('composer.sending')"
+            >
+              <template #icon><AppIcon name="enter" /></template>
+              {{ t("composer.send") }}
+            </AppButton>
+          </span>
+        </AppTooltip>
       </div>
       <p v-if="showContentError" id="content-error" class="field-error" role="alert">
         {{ t("validation.content") }}
@@ -210,6 +215,7 @@
   import AppCheckboxGroup from "@/components/AppCheckboxGroup.vue";
   import AppIcon from "@/components/AppIcon.vue";
   import AppInput from "@/components/AppInput.vue";
+  import AppTooltip from "@/components/AppTooltip.vue";
   import MemberIdentity from "@/domains/room/MemberIdentity.vue";
   import CapabilityTags from "@/domains/room/CapabilityTags.vue";
   import type { ComposerCatalog } from "@/domains/room/useRoomCapabilities";
@@ -381,12 +387,18 @@
         member.topicIds.some((topicId) => topicIds.value.includes(topicId)),
     ),
   );
-  const showRecipientError = computed(() => attempted.value && recipients.value.length === 0);
+  const hasRecipients = computed(() => recipients.value.length > 0);
+  const showRecipientError = computed(() => attempted.value && !hasRecipients.value);
   const routingError = computed(() =>
     topicIds.value.length || mentionedMemberIds.value.length
       ? t("validation.noRecipients")
       : t("validation.recipients"),
   );
+  const sendDisabledReason = computed(() => {
+    if (!content.value.trim()) return t("validation.content");
+    if (!hasRecipients.value) return routingError.value;
+    return undefined;
+  });
 
   watch(
     [() => props.topics, () => props.members],
