@@ -16,7 +16,7 @@
                   <strong :title="linkedSession?.name">
                     {{ linkedSession?.name ?? t("forms.noSessionName") }}
                   </strong>
-                  <span :title="member?.sessionId">{{ member?.sessionId }}</span>
+                  <span :title="member?.sessionId ?? undefined">{{ member?.sessionId }}</span>
                 </span>
               </div>
               <span v-if="member" class="session-option-meta">

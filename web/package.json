@@ -9,12 +9,12 @@
   },
   "scripts": {
     "dev": "vite --mode dev",
-    "build": "vue-tsc --noEmit && vite build --mode prod",
+    "build": "vue-tsc --build && vite build --mode prod",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix --fix-type=problem",
     "format": "prettier --check .",
     "format:write": "prettier --write .",
-    "typecheck": "vue-tsc --noEmit",
+    "typecheck": "vue-tsc --build",
     "test": "vitest run",
     "test:watch": "vitest"
   },

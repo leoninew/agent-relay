@@ -21,7 +21,8 @@
 
 <script setup lang="ts">
   import { CheckboxGroupRoot } from "reka-ui";
-  import { nextTick, ref } from "vue";
+  import { nextTick, useTemplateRef } from "vue";
+  import type { ComponentPublicInstance } from "vue";
 
   import AppClearButton from "@/components/AppClearButton.vue";
 
@@ -32,7 +33,7 @@
     describedBy?: string;
   }>();
   const model = defineModel<string[]>({ required: true });
-  const root = ref<InstanceType<typeof CheckboxGroupRoot>>();
+  const root = useTemplateRef<ComponentPublicInstance>("root");
 
   async function clear(): Promise<void> {
     if (props.disabled) return;

@@ -24,7 +24,7 @@ import {
 import { roomFixture } from "../fixtures/room";
 
 const adapterMock = vi.fn();
-let originalAdapter: AxiosAdapter | AxiosAdapter[] | undefined;
+let originalAdapter: typeof apiClient.defaults.adapter;
 
 describe("room API", () => {
   beforeEach(() => {

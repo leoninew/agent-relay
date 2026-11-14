@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiClientError, apiClient, describeApiError } from "@/services/api";
 
 const adapterMock = vi.fn();
-let originalAdapter: AxiosAdapter | AxiosAdapter[] | undefined;
+let originalAdapter: typeof apiClient.defaults.adapter;
 
 function mockResponse<T>(
   data: T,
