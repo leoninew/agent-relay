@@ -37,7 +37,9 @@ make web
 
 聊天正文、房间／成员／会话／话题名称及历史诊断保留原文；固定用户按身份显示为“你 / You”，不改写规范名或数据库内容。
 
-聊天室搜索框右侧的“清空”按钮会先要求确认，再软删除当前聊天室全部消息及投递记录，并移除当前无法连接的成员。话题、可连接成员与固定用户保留；界面不提供恢复入口。成员连接状态核验失败时操作报错，保留原数据。
+左侧栏顶部可切换或新建频道。“默认”使用房间目录；新建频道可勾选“创建 Git worktree”（默认关闭），从当前 commit 创建独立目录。成员、话题、消息、草稿和队列按频道隔离；Codex 会话需使用对应频道的工作目录。
+
+搜索框右侧的“清空”按钮会先要求确认，再软删除当前频道全部消息及投递记录，并移除当前无法连接的成员。话题、可连接成员与固定用户保留；界面不提供恢复入口。成员连接状态核验失败时操作报错，保留原数据。
 
 ## Windows 桌面应用
 
@@ -64,6 +66,8 @@ make test
 
 依次检查前后端类型、lint 和格式，运行后端与前端单元测试。单测按层隔离依赖，前端只验证规则、状态和请求契约，不包含 UI 或性能测试。使用 `make check fix=1` 自动修复 lint 和格式问题。
 
+频道迁移及 worktree 的集成检查单独执行 `uv run --locked pytest tests/integration`，使用临时 SQLite 和 Git 仓库，不连接实际 Codex 会话。
+
 修改依赖后更新并提交对应的 `uv.lock` 或 `web/pnpm-lock.yaml`。
 
 ## CLI 与 Codex 插件
@@ -76,6 +80,8 @@ agent-relay --help
 安装 CLI 及 Codex 的 MCP/协作 skill 后，重新开启 Codex 会话。Relay HTTP 服务需要单独启动；CLI/MCP 默认连接 `http://127.0.0.1:9080`，可通过 `AGENT_RELAY_URL` 修改地址。
 
 无需安装 CLI 时，可在仓库中运行 `uv run --locked agent-relay --help`。
+
+频道管理命令见 `agent-relay channel --help`。资源操作必须使用全局 `--channel-id CHANNEL` 或 `AGENT_RELAY_CHANNEL_ID`；MCP 必须提供 `channel_id`，默认频道同样显式指定。例如：`agent-relay --channel-id CHANNEL member catalog ROOM`。
 
 ## 代码与文档
 

@@ -74,6 +74,7 @@
     idPrefix: string;
     topics: Topic[];
     roomId?: string;
+    channelId?: string;
     disabled: boolean;
     error?: MessageDescriptor;
   }>();
@@ -91,7 +92,7 @@
   });
 
   async function createInlineTopic(): Promise<void> {
-    if (props.disabled || busy.value || !props.roomId) return;
+    if (props.disabled || busy.value || !props.roomId || !props.channelId) return;
     const topicName = newTopicName.value.trim();
     topicNameError.value = null;
     topicRequestError.value = null;
@@ -108,7 +109,11 @@
     const roomId = props.roomId;
     busy.value = true;
     try {
-      const topic = await roomsStore.createTopic(roomId, { name: topicName, description: "" });
+      const topic = await roomsStore.createTopic(
+        roomId,
+        { name: topicName, description: "" },
+        props.channelId,
+      );
       toasts.success({ key: "notice.topicCreated" });
       if (props.roomId === roomId) {
         topicIds.value = [...topicIds.value, topic.id];

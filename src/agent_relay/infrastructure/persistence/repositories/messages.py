@@ -24,6 +24,7 @@ class SQLAlchemyMessageRepository(SQLAlchemyMessageReads):
         self.session.add(
             MessageRecord(
                 room_id=room_id,
+                channel_id=self.channel_id,
                 id=message.id,
                 seq=message.seq,
                 publisher_id=message.sender_id,
@@ -37,33 +38,55 @@ class SQLAlchemyMessageRepository(SQLAlchemyMessageReads):
         self.session.flush()
         self.session.add_all(
             MessageTopicRecord(
-                room_id=room_id, message_id=message.id, topic_id=topic_id, position=position
+                room_id=room_id,
+                channel_id=self.channel_id,
+                message_id=message.id,
+                topic_id=topic_id,
+                position=position,
             )
             for position, topic_id in enumerate(message.topic_ids)
         )
         self.session.add_all(
             MessageMentionRecord(
-                room_id=room_id, message_id=message.id, member_id=member_id, position=position
+                room_id=room_id,
+                channel_id=self.channel_id,
+                message_id=message.id,
+                member_id=member_id,
+                position=position,
             )
             for position, member_id in enumerate(message.mentioned_member_ids)
         )
         self.session.add_all(
             MessageRecipientRecord(
-                room_id=room_id, message_id=message.id, member_id=member_id, position=position
+                room_id=room_id,
+                channel_id=self.channel_id,
+                message_id=message.id,
+                member_id=member_id,
+                position=position,
             )
             for position, member_id in enumerate(message.recipient_ids)
         )
         self.session.add(
             RoomEventRecord(
-                room_id=room_id, kind="message", entity_id=message.id, message_id=message.id
+                room_id=room_id,
+                channel_id=self.channel_id,
+                kind="message",
+                entity_id=message.id,
+                message_id=message.id,
             )
         )
         self.session.flush()
         for delivery in message.deliveries:
-            self.session.add(delivery_to_model(room_id, message.id, delivery))
+            record = delivery_to_model(room_id, message.id, delivery)
+            record.channel_id = self.channel_id
+            self.session.add(record)
             self.session.add(
                 RoomEventRecord(
-                    room_id=room_id, kind="delivery", entity_id=delivery.id, message_id=message.id
+                    room_id=room_id,
+                    channel_id=self.channel_id,
+                    kind="delivery",
+                    entity_id=delivery.id,
+                    message_id=message.id,
                 )
             )
         self.session.flush()
@@ -82,6 +105,7 @@ class SQLAlchemyMessageRepository(SQLAlchemyMessageReads):
             scope &= MessageRecord.id == message_id
         criteria = (
             (DeliveryRecord.room_id == room_id)
+            & (DeliveryRecord.channel_id == self.channel_id)
             & DeliveryRecord.deleted_at.is_(None)
             & DeliveryRecord.status.in_(ACTIVE_DELIVERY_STATUSES)
             & DeliveryRecord.message_id.in_(select(MessageRecord.id).where(scope))
@@ -101,7 +125,11 @@ class SQLAlchemyMessageRepository(SQLAlchemyMessageReads):
         )
         self.session.add_all(
             RoomEventRecord(
-                room_id=room_id, kind="delivery", entity_id=delivery_id, message_id=message_id
+                room_id=room_id,
+                channel_id=self.channel_id,
+                kind="delivery",
+                entity_id=delivery_id,
+                message_id=message_id,
             )
             for delivery_id, message_id in events
         )
@@ -117,6 +145,7 @@ class SQLAlchemyMessageRepository(SQLAlchemyMessageReads):
             for session_id, submission_id in self.session.execute(
                 select(DeliveryRecord.target_session_id, DeliveryRecord.queued_submission_id).where(
                     DeliveryRecord.room_id == room_id,
+                    DeliveryRecord.channel_id == self.channel_id,
                     DeliveryRecord.deleted_at.is_not(None),
                     DeliveryRecord.status.in_(("submitting", "queued")),
                     DeliveryRecord.submission_method.is_distinct_from("steer"),

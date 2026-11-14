@@ -13,7 +13,7 @@
         class="room-sidebar-panel"
         size-unit="px"
         :order="0"
-        :default-size="panelPreferences.collapsed.navigation ? 40 : initialNavigationWidth"
+        :default-size="panelPreferences.collapsed.navigation ? 40 : initialPanelWidth"
         :min-size="160"
         :max-size="400"
         :collapsed-size="40"
@@ -56,8 +56,7 @@
       <SplitterResizeHandle
         class="room-resize-handle"
         :aria-label="t('sidebar.resizeLeft')"
-        @dblclick="toggleNavigation"
-        @keydown.enter.capture.prevent="toggleNavigation"
+        @keydown.capture="guardCollapsedResize($event, navigationPanel?.isCollapsed)"
       />
       <SplitterPanel :order="1" :min-size="30" class="room-main-panel">
         <slot />
@@ -66,8 +65,7 @@
         v-if="!compact"
         class="room-resize-handle"
         :aria-label="t('sidebar.resizeRight')"
-        @dblclick="toggleDetails"
-        @keydown.enter.capture.prevent="toggleDetails"
+        @keydown.capture="guardCollapsedResize($event, detailsPanel?.isCollapsed)"
       />
       <SplitterPanel
         v-if="!compact"
@@ -77,9 +75,9 @@
         class="room-details-panel"
         size-unit="px"
         :order="2"
-        :default-size="panelPreferences.collapsed.details ? 40 : initialDetailsWidth"
-        :min-size="280"
-        :max-size="640"
+        :default-size="panelPreferences.collapsed.details ? 40 : initialPanelWidth"
+        :min-size="160"
+        :max-size="400"
         :collapsed-size="40"
         collapsible
       >
@@ -156,10 +154,9 @@
   import { usePanelPreferencesStore } from "@/stores/panelPreferences";
 
   const { t } = useI18n();
-  const props = defineProps<{ detailsOpen: boolean }>();
+  defineProps<{ detailsOpen: boolean }>();
   const emit = defineEmits<{ collapseDetails: [] }>();
-  const initialNavigationWidth = 240;
-  const initialDetailsWidth = 420;
+  const initialPanelWidth = 240;
   const panelPreferences = usePanelPreferencesStore();
   const navigationPanel = ref<InstanceType<typeof SplitterPanel>>();
   const detailsPanel = ref<InstanceType<typeof SplitterPanel>>();
@@ -184,27 +181,27 @@
     if (!changingViewport) panelPreferences.setCollapsed(panel, collapsed);
   }
 
-  function toggleNavigation(): void {
-    if (navigationPanel.value?.isCollapsed) restoreNavigation();
-    else navigationPanel.value?.collapse();
-  }
-
-  function toggleDetails(): void {
-    if (detailsPanel.value?.isCollapsed) restoreDetails();
-    else collapseDetails();
-  }
-
   function collapseDetails(): void {
     if (!compact.value) detailsPanel.value?.collapse();
     else emit("collapseDetails");
   }
 
+  function guardCollapsedResize(event: KeyboardEvent, collapsed: boolean | undefined): void {
+    if (
+      event.key === "Enter" ||
+      (collapsed &&
+        ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key))
+    ) {
+      event.preventDefault();
+    }
+  }
+
   function restoreNavigation(): void {
-    navigationPanel.value?.resize(initialNavigationWidth);
+    navigationPanel.value?.resize(initialPanelWidth);
   }
 
   function restoreDetails(): void {
-    detailsPanel.value?.resize(initialDetailsWidth);
+    detailsPanel.value?.resize(initialPanelWidth);
   }
 
   watch(
@@ -231,13 +228,6 @@
     () => detailsPanel.value?.isCollapsed,
     (collapsed) => {
       if (collapsed) emit("collapseDetails");
-    },
-  );
-
-  watch(
-    () => props.detailsOpen,
-    (open) => {
-      if (open && detailsPanel.value?.isCollapsed) restoreDetails();
     },
   );
 

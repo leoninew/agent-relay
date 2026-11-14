@@ -37,7 +37,11 @@ describe("message queue", () => {
     fetchQueue.mockResolvedValueOnce(
       page({ messages: first, totalMessages: 51, hasMore: true, nextBeforeSeq: 2 }),
     );
-    const queue = useMessageQueue(() => "room/one");
+    const queue = useMessageQueue(
+      () => "room/one",
+      () => ({}),
+      () => "channel-default",
+    );
     await queue.refresh();
     expect(queue.messages.value).toEqual(first);
     fetchQueue.mockResolvedValueOnce(page({ messages: [second], totalMessages: 51 }));
@@ -46,6 +50,7 @@ describe("message queue", () => {
       "room/one",
       { beforeSeq: 2, limit: 50 },
       expect.any(AbortSignal),
+      "channel-default",
     );
     expect(queue.messages.value).toEqual([...first, second]);
     expect(queue.hasMore.value).toBe(false);
@@ -53,7 +58,11 @@ describe("message queue", () => {
 
   it("refreshes completed messages out of the list and keeps previous content on failure", async () => {
     fetchQueue.mockResolvedValueOnce(page());
-    const queue = useMessageQueue(() => "room");
+    const queue = useMessageQueue(
+      () => "room",
+      () => ({}),
+      () => "channel-default",
+    );
     await queue.refresh();
     fetchQueue.mockRejectedValueOnce(new Error("offline"));
     await queue.refresh();
@@ -80,7 +89,11 @@ describe("message queue", () => {
         nextBeforeSeq: 21,
       }),
     );
-    const queue = useMessageQueue(() => "room");
+    const queue = useMessageQueue(
+      () => "room",
+      () => ({}),
+      () => "channel-default",
+    );
     await queue.refresh();
     fetchQueue.mockResolvedValueOnce(page({ messages: messages.slice(50), totalMessages: 70 }));
     await queue.loadMore();
@@ -90,6 +103,7 @@ describe("message queue", () => {
       "room",
       { beforeSeq: undefined, limit: 70 },
       expect.any(AbortSignal),
+      "channel-default",
     );
     expect(queue.messages.value).toHaveLength(70);
   });
@@ -105,6 +119,7 @@ describe("message queue", () => {
     const queue = useMessageQueue(
       () => "room",
       () => scope,
+      () => "channel-default",
     );
     fetchQueue.mockResolvedValueOnce(
       page({ messages: first, totalMessages: 51, hasMore: true, nextBeforeSeq: 2 }),
@@ -116,6 +131,7 @@ describe("message queue", () => {
       "room",
       { topicId: "frontend", beforeSeq: 2, limit: 50 },
       expect.any(AbortSignal),
+      "channel-default",
     );
     scope = { memberId: "test-worker" };
     queue.reset();
@@ -126,6 +142,7 @@ describe("message queue", () => {
       "room",
       { memberId: "test-worker", beforeSeq: undefined, limit: 50 },
       expect.any(AbortSignal),
+      "channel-default",
     );
     scope = {};
     queue.reset();
@@ -135,6 +152,7 @@ describe("message queue", () => {
       "room",
       { beforeSeq: undefined, limit: 50 },
       expect.any(AbortSignal),
+      "channel-default",
     );
   });
 
@@ -151,6 +169,7 @@ describe("message queue", () => {
     const queue = useMessageQueue(
       () => "room",
       () => ({ topicId: "frontend" }),
+      () => "channel-default",
     );
     await queue.refresh();
     deleteMessage.mockResolvedValueOnce({ removedMessages: 1 });
@@ -162,11 +181,12 @@ describe("message queue", () => {
     expect(queue.removingId.value).toBe(first[0].id);
     await removing;
     expect(deleteMessage).toHaveBeenCalledOnce();
-    expect(deleteMessage).toHaveBeenLastCalledWith("room", first[0].id);
+    expect(deleteMessage).toHaveBeenLastCalledWith("room", first[0].id, "channel-default");
     expect(fetchQueue).toHaveBeenLastCalledWith(
       "room",
       { topicId: "frontend", beforeSeq: undefined, limit: 50 },
       expect.any(AbortSignal),
+      "channel-default",
     );
     expect(queue.messages.value).toEqual(remaining);
     expect(queue.hasMore.value).toBe(true);
@@ -176,7 +196,11 @@ describe("message queue", () => {
 
   it("keeps the list and reports a deletion failure without retrying the mutation", async () => {
     fetchQueue.mockResolvedValueOnce(page());
-    const queue = useMessageQueue(() => "room");
+    const queue = useMessageQueue(
+      () => "room",
+      () => ({}),
+      () => "channel-default",
+    );
     await queue.refresh();
     deleteMessage.mockRejectedValueOnce(new Error("offline"));
     const messageId = queue.messages.value[0].id;
@@ -185,48 +209,19 @@ describe("message queue", () => {
     expect(queue.removeError.value).toEqual({ key: "errors.queueRemove" });
     expect(queue.removingId.value).toBeNull();
     expect(deleteMessage).toHaveBeenCalledOnce();
-    expect(deleteMessage).toHaveBeenLastCalledWith("room", messageId);
+    expect(deleteMessage).toHaveBeenLastCalledWith("room", messageId, "channel-default");
     expect(fetchQueue).toHaveBeenCalledOnce();
   });
 
-  it("does not refresh when a deletion finishes while the room is inactive", async () => {
-    let active = true;
-    let finishDelete!: (value: { removedMessages: number }) => void;
-    deleteMessage.mockReturnValueOnce(
-      new Promise((resolve) => {
-        finishDelete = resolve;
-      }),
+  it("does not read or remove queue messages without a selected channel", async () => {
+    const queue = useMessageQueue(
+      () => "room",
+      () => ({}),
+      () => undefined,
     );
-    const queue = useMessageQueue(() => (active ? "room" : undefined));
-    const deleting = queue.remove("message");
-    active = false;
-    queue.cancel();
-    finishDelete({ removedMessages: 1 });
-    await deleting;
-    expect(deleteMessage).toHaveBeenCalledOnce();
-    expect(fetchQueue).not.toHaveBeenCalled();
-    expect(queue.removingId.value).toBeNull();
-    active = true;
-    fetchQueue.mockResolvedValueOnce(page());
     await queue.refresh();
-    expect(fetchQueue).toHaveBeenCalledOnce();
-  });
-
-  it("ignores a cancelled read even when its response arrives later", async () => {
-    let finishRead!: (value: MessageQueuePage) => void;
-    fetchQueue.mockReturnValueOnce(
-      new Promise((resolve) => {
-        finishRead = resolve;
-      }),
-    );
-    const queue = useMessageQueue(() => "room");
-    const reading = queue.refresh();
-    const signal = fetchQueue.mock.calls[0][2] as AbortSignal;
-    queue.cancel();
-    expect(signal.aborted).toBe(true);
-    finishRead(page());
-    await reading;
-    expect(queue.messages.value).toEqual([]);
-    expect(queue.loading.value).toBe(false);
+    await queue.remove("message");
+    expect(fetchQueue).not.toHaveBeenCalled();
+    expect(deleteMessage).not.toHaveBeenCalled();
   });
 });

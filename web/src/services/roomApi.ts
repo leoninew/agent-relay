@@ -1,4 +1,5 @@
 import { apiClient } from "@/services/api";
+import { roomResourcePath } from "@/domains/channel/channelRoutes";
 
 export type Topic = {
   id: string;
@@ -61,11 +62,12 @@ export async function uploadRoomImage(
   roomId: string,
   file: File,
   signal: AbortSignal,
+  channelId: string,
 ): Promise<UploadedImage> {
   const form = new FormData();
   form.append("file", file);
   const { data } = await apiClient.post<UploadedImage>(
-    `/api/room/${encodeURIComponent(roomId)}/image`,
+    roomResourcePath(roomId, channelId, "/image"),
     form,
     { signal },
   );
@@ -94,10 +96,11 @@ export type SkillCatalog = { skills: SkillOption[]; errors: CatalogIssue[] };
 export async function fetchRoomSkills(
   roomId: string,
   forceReload = false,
-  signal?: AbortSignal,
+  signal: AbortSignal | undefined,
+  channelId: string,
 ): Promise<SkillCatalog> {
   const { data } = await apiClient.get<SkillCatalog>(
-    `/api/room/${encodeURIComponent(roomId)}/skills`,
+    roomResourcePath(roomId, channelId, "/skills"),
     { params: { force_reload: forceReload }, signal },
   );
   return data;
@@ -153,6 +156,10 @@ export type MessagePage = {
 };
 
 export type RoomSnapshot = RoomMetadata & MessagePage;
+export type ChannelRoomSnapshot = RoomSnapshot & {
+  channelId: string;
+  workingPath: string;
+};
 export type ClearedRoom = {
   removedMessages: number;
   removedMembers: number;
@@ -257,10 +264,8 @@ export async function deleteRoom(roomId: string): Promise<void> {
   await apiClient.delete(`/api/room/${encodeURIComponent(roomId)}`);
 }
 
-export async function clearRoom(roomId: string): Promise<ClearedRoom> {
-  const { data } = await apiClient.post<ClearedRoom>(
-    `/api/room/${encodeURIComponent(roomId)}/clear`,
-  );
+export async function clearRoom(roomId: string, channelId: string): Promise<ClearedRoom> {
+  const { data } = await apiClient.post<ClearedRoom>(roomResourcePath(roomId, channelId, "/clear"));
   return data;
 }
 
@@ -277,9 +282,10 @@ function queryParams(query: MessageQuery) {
 export async function fetchRoom(
   roomId: string,
   query: MessageQuery = {},
-  signal?: AbortSignal,
+  signal: AbortSignal | undefined,
+  channelId: string,
 ): Promise<RoomSnapshot> {
-  const { data } = await apiClient.get<RoomSnapshot>(`/api/room/${encodeURIComponent(roomId)}`, {
+  const { data } = await apiClient.get<RoomSnapshot>(roomResourcePath(roomId, channelId), {
     params: queryParams(query),
     signal,
   });
@@ -289,10 +295,11 @@ export async function fetchRoom(
 export async function fetchRoomMessages(
   roomId: string,
   query: MessageQuery,
-  signal?: AbortSignal,
+  signal: AbortSignal | undefined,
+  channelId: string,
 ): Promise<MessagePage> {
   const { data } = await apiClient.get<MessagePage>(
-    `/api/room/${encodeURIComponent(roomId)}/message`,
+    roomResourcePath(roomId, channelId, "/message"),
     { params: queryParams(query), signal },
   );
   return data;
@@ -301,10 +308,11 @@ export async function fetchRoomMessages(
 export async function fetchRoomMessage(
   roomId: string,
   messageId: string,
-  signal?: AbortSignal,
+  signal: AbortSignal | undefined,
+  channelId: string,
 ): Promise<RoomMessage> {
   const { data } = await apiClient.get<RoomMessage>(
-    `/api/room/${encodeURIComponent(roomId)}/message/${encodeURIComponent(messageId)}`,
+    roomResourcePath(roomId, channelId, `/message/${encodeURIComponent(messageId)}`),
     { signal },
   );
   return data;
@@ -313,10 +321,11 @@ export async function fetchRoomMessage(
 export async function fetchMessageQueue(
   roomId: string,
   query: MessageQueueQuery = {},
-  signal?: AbortSignal,
+  signal: AbortSignal | undefined,
+  channelId: string,
 ): Promise<MessageQueuePage> {
   const { data } = await apiClient.get<MessageQueuePage>(
-    `/api/room/${encodeURIComponent(roomId)}/queue`,
+    roomResourcePath(roomId, channelId, "/queue"),
     {
       params: {
         topic_id: query.topicId,
@@ -333,19 +342,21 @@ export async function fetchMessageQueue(
 export async function deleteQueueMessage(
   roomId: string,
   messageId: string,
+  channelId: string,
 ): Promise<QueueRemovalResult> {
   const { data } = await apiClient.delete<QueueRemovalResult>(
-    `/api/room/${encodeURIComponent(roomId)}/queue/${encodeURIComponent(messageId)}`,
+    roomResourcePath(roomId, channelId, `/queue/${encodeURIComponent(messageId)}`),
   );
   return data;
 }
 
 export async function fetchRoomMetadata(
   roomId: string,
-  signal?: AbortSignal,
+  signal: AbortSignal | undefined,
+  channelId: string,
 ): Promise<RoomMetadata> {
   const { data } = await apiClient.get<RoomMetadata>(
-    `/api/room/${encodeURIComponent(roomId)}/metadata`,
+    roomResourcePath(roomId, channelId, "/metadata"),
     { signal },
   );
   return data;
@@ -354,10 +365,11 @@ export async function fetchRoomMetadata(
 export async function fetchRoomEvents(
   roomId: string,
   afterEventId: number,
-  signal?: AbortSignal,
+  signal: AbortSignal | undefined,
+  channelId: string,
 ): Promise<RoomEventPage> {
   const { data } = await apiClient.get<RoomEventPage>(
-    `/api/room/${encodeURIComponent(roomId)}/event`,
+    roomResourcePath(roomId, channelId, "/event"),
     { params: { after_event_id: afterEventId }, signal },
   );
   return data;
@@ -366,9 +378,10 @@ export async function fetchRoomEvents(
 export async function postRoomMessage(
   roomId: string,
   message: CreateMessage,
+  channelId: string,
 ): Promise<RoomMessage> {
   const { data } = await apiClient.post<RoomMessage>(
-    `/api/room/${encodeURIComponent(roomId)}/message`,
+    roomResourcePath(roomId, channelId, "/message"),
     message,
   );
   return data;
@@ -377,16 +390,21 @@ export async function postRoomMessage(
 export async function fetchPublication(
   roomId: string,
   publicationId: string,
+  channelId: string,
 ): Promise<RoomMessage> {
   const { data } = await apiClient.get<RoomMessage>(
-    `/api/room/${encodeURIComponent(roomId)}/publication/${encodeURIComponent(publicationId)}`,
+    roomResourcePath(roomId, channelId, `/publication/${encodeURIComponent(publicationId)}`),
   );
   return data;
 }
 
-export async function addRoomMember(roomId: string, request: CreateMember): Promise<CreatedMember> {
+export async function addRoomMember(
+  roomId: string,
+  request: CreateMember,
+  channelId: string,
+): Promise<CreatedMember> {
   const { data } = await apiClient.post<CreatedMember>(
-    `/api/room/${encodeURIComponent(roomId)}/member`,
+    roomResourcePath(roomId, channelId, "/member"),
     request,
   );
   return data;
@@ -394,10 +412,11 @@ export async function addRoomMember(roomId: string, request: CreateMember): Prom
 
 export async function fetchRoomSessions(
   roomId: string,
-  signal?: AbortSignal,
+  signal: AbortSignal | undefined,
+  channelId: string,
 ): Promise<SessionCandidate[]> {
   const { data } = await apiClient.get<SessionCandidate[]>(
-    `/api/room/${encodeURIComponent(roomId)}/session`,
+    roomResourcePath(roomId, channelId, "/session"),
     { signal },
   );
   return data;
@@ -407,17 +426,22 @@ export async function updateRoomMember(
   roomId: string,
   memberId: string,
   request: UpdateMember,
+  channelId: string,
 ): Promise<ChangedMember> {
   const { data } = await apiClient.patch<ChangedMember>(
-    `/api/room/${encodeURIComponent(roomId)}/member/${encodeURIComponent(memberId)}`,
+    roomResourcePath(roomId, channelId, `/member/${encodeURIComponent(memberId)}`),
     request,
   );
   return data;
 }
 
-export async function addRoomTopic(roomId: string, request: CreateTopic): Promise<ChangedTopic> {
+export async function addRoomTopic(
+  roomId: string,
+  request: CreateTopic,
+  channelId: string,
+): Promise<ChangedTopic> {
   const { data } = await apiClient.post<ChangedTopic>(
-    `/api/room/${encodeURIComponent(roomId)}/topic`,
+    roomResourcePath(roomId, channelId, "/topic"),
     request,
   );
   return data;
@@ -427,24 +451,33 @@ export async function updateRoomTopic(
   roomId: string,
   topicId: string,
   request: CreateTopic,
+  channelId: string,
 ): Promise<ChangedTopic> {
   const { data } = await apiClient.patch<ChangedTopic>(
-    `/api/room/${encodeURIComponent(roomId)}/topic/${encodeURIComponent(topicId)}`,
+    roomResourcePath(roomId, channelId, `/topic/${encodeURIComponent(topicId)}`),
     request,
   );
   return data;
 }
 
-export async function deleteRoomTopic(roomId: string, topicId: string): Promise<ChangedTopic> {
+export async function deleteRoomTopic(
+  roomId: string,
+  topicId: string,
+  channelId: string,
+): Promise<ChangedTopic> {
   const { data } = await apiClient.delete<ChangedTopic>(
-    `/api/room/${encodeURIComponent(roomId)}/topic/${encodeURIComponent(topicId)}`,
+    roomResourcePath(roomId, channelId, `/topic/${encodeURIComponent(topicId)}`),
   );
   return data;
 }
 
-export async function deleteRoomMember(roomId: string, memberId: string): Promise<ChangedMember> {
+export async function deleteRoomMember(
+  roomId: string,
+  memberId: string,
+  channelId: string,
+): Promise<ChangedMember> {
   const { data } = await apiClient.delete<ChangedMember>(
-    `/api/room/${encodeURIComponent(roomId)}/member/${encodeURIComponent(memberId)}`,
+    roomResourcePath(roomId, channelId, `/member/${encodeURIComponent(memberId)}`),
   );
   return data;
 }

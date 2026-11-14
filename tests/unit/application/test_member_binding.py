@@ -72,6 +72,7 @@ def test_discovery_keeps_posix_paths_case_sensitive(
     session_driver: Mock,
 ) -> None:
     room_state.room.project_path = "/Work/project"
+    room_state.working_path = "/Work/project"
     session_driver.list_sessions.return_value = [
         SessionInfo("exact", "/Work/project/", "codex", "Exact", "idle"),
         SessionInfo("wrong-case", "/work/project", "codex", "Wrong", "idle"),
@@ -126,18 +127,20 @@ def test_invalid_join_does_not_save_resources(
 @pytest.mark.parametrize("failure", ["unavailable", "identity", "directory"])
 def test_presence_failure_records_unknown_and_continues_other_members(
     failure: str,
+    room_state: RoomState,
     room_store: MagicMock,
     room_repository: Mock,
     session_driver: Mock,
 ) -> None:
     room_repository.bindings.return_value = [
-        ("agent-relay", "frontend-worker-session"),
-        ("agent-relay", "backend-worker-session"),
+        ("agent-relay", "channel-default", "frontend-worker-session"),
+        ("agent-relay", "channel-default", "backend-worker-session"),
     ]
-    room_repository.joined_members.return_value = {
-        "frontend-worker-session": "frontend-worker",
-        "backend-worker-session": "backend-worker",
-    }
+    room_state.members = [
+        member
+        for member in room_state.members
+        if member.id in {"frontend-worker", "backend-worker"}
+    ]
 
     def inspect(session_id: str) -> SessionInfo:
         room_store.read.return_value.__exit__.assert_called_once()

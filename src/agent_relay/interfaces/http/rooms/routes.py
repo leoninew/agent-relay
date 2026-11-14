@@ -25,7 +25,6 @@ from agent_relay.application.dto.rooms import (
     CreateTopic,
     RoomEventPage,
     RoomMetadata,
-    RoomSnapshot,
     UpdateRoom,
 )
 from agent_relay.application.images.ports import MAX_IMAGE_BYTES
@@ -46,9 +45,10 @@ from agent_relay.interfaces.http.rooms.dependencies import (
 )
 
 router = APIRouter(prefix="/room", tags=["room"])
+channel_router = APIRouter(prefix="/room/{room_id}/channel/{channel_id}", tags=["channel"])
 
 
-@router.post("/{room_id}/image", status_code=201)
+@channel_router.post("/image", status_code=201)
 async def upload_image(
     room_id: str, file: UploadFile, service: ImageServiceDependency
 ) -> UploadedImage:
@@ -59,7 +59,7 @@ async def upload_image(
         await file.close()
 
 
-@router.get("/{room_id}/image/{image_id}")
+@channel_router.get("/image/{image_id}")
 def read_image(room_id: str, image_id: str, service: ImageServiceDependency) -> FileResponse:
     image = service.read(room_id, image_id)
     return FileResponse(
@@ -87,7 +87,7 @@ def delete_room(room_id: str, service: RoomServiceDependency) -> None:
     service.delete_room(room_id)
 
 
-@router.post("/{room_id}/clear")
+@channel_router.post("/clear")
 def clear_room(
     room_id: str, service: RoomClearServiceDependency, driver: SessionDriverDependency
 ) -> ClearedRoom:
@@ -99,34 +99,12 @@ def update_room(room_id: str, request: UpdateRoom, service: RoomServiceDependenc
     return service.update_room(room_id, request)
 
 
-@router.get("/{room_id}")
-def get_room(
-    room_id: str,
-    queries: RoomQueriesDependency,
-    output: MessageOutputDependency,
-    topic_id: Annotated[str | None, Query()] = None,
-    member_id: Annotated[str | None, Query()] = None,
-    keyword: Annotated[str | None, Query(max_length=200)] = None,
-    before_seq: Annotated[int | None, Query(ge=1)] = None,
-    limit: Annotated[int, Query(ge=1, le=200)] = 50,
-) -> RoomSnapshot:
-    snapshot = queries.snapshot(
-        room_id,
-        topic_id,
-        member_id=member_id,
-        keyword=keyword,
-        before_seq=before_seq,
-        limit=limit,
-    )
-    return output.page(room_id, snapshot)
-
-
-@router.get("/{room_id}/metadata")
+@channel_router.get("/metadata")
 def get_metadata(room_id: str, queries: RoomQueriesDependency) -> RoomMetadata:
     return queries.metadata(room_id)
 
 
-@router.get("/{room_id}/message")
+@channel_router.get("/message")
 def list_messages(
     room_id: str,
     queries: RoomQueriesDependency,
@@ -148,7 +126,7 @@ def list_messages(
     return output.page(room_id, page)
 
 
-@router.get("/{room_id}/queue")
+@channel_router.get("/queue")
 def get_message_queue(
     room_id: str,
     queries: RoomQueriesDependency,
@@ -164,7 +142,7 @@ def get_message_queue(
     return output.page(room_id, page)
 
 
-@router.get("/{room_id}/message/{message_id}")
+@channel_router.get("/message/{message_id}")
 def get_message(
     room_id: str,
     message_id: str,
@@ -174,7 +152,7 @@ def get_message(
     return output.message(room_id, queries.message(room_id, message_id))
 
 
-@router.delete("/{room_id}/queue", response_model_exclude_none=True)
+@channel_router.delete("/queue", response_model_exclude_none=True)
 def clear_message_queue(
     room_id: str,
     service: MessageServiceDependency,
@@ -191,14 +169,14 @@ def clear_message_queue(
     return service.clear_queue(room_id, topic_id=topic_id, member_id=member_id)
 
 
-@router.delete("/{room_id}/queue/{message_id}", response_model_exclude_none=True)
+@channel_router.delete("/queue/{message_id}", response_model_exclude_none=True)
 def delete_queue_message(
     room_id: str, message_id: str, service: MessageServiceDependency
 ) -> ClearedMessageQueue:
     return service.delete_queue_message(room_id, message_id)
 
 
-@router.get("/{room_id}/event")
+@channel_router.get("/event")
 def get_events(
     room_id: str,
     queries: RoomQueriesDependency,
@@ -208,7 +186,7 @@ def get_events(
     return queries.events(room_id, after_event_id, limit)
 
 
-@router.post("/{room_id}/message", status_code=201)
+@channel_router.post("/message", status_code=201)
 def create_message(
     room_id: str,
     request: CreateMessage,
@@ -218,7 +196,7 @@ def create_message(
     return output.message(room_id, service.post_message(room_id, request))
 
 
-@router.get("/{room_id}/publication/{publication_id}")
+@channel_router.get("/publication/{publication_id}")
 def get_publication(
     room_id: str,
     publication_id: str,
@@ -228,47 +206,47 @@ def get_publication(
     return output.message(room_id, service.publication(room_id, publication_id))
 
 
-@router.get("/{room_id}/session")
+@channel_router.get("/session")
 def list_sessions(room_id: str, service: MemberServiceDependency) -> list[SessionCandidate]:
     return service.candidates(room_id)
 
 
-@router.get("/{room_id}/session/{session_id}/member")
+@channel_router.get("/session/{session_id}/member")
 def get_session_member(room_id: str, session_id: str, queries: RoomQueriesDependency) -> Member:
     return queries.member_for_session(room_id, session_id)
 
 
-@router.post("/{room_id}/member", status_code=201)
+@channel_router.post("/member", status_code=201)
 def add_member(
     room_id: str, request: CreateMember, service: MemberServiceDependency
 ) -> CreatedMember:
     return service.add(room_id, request)
 
 
-@router.patch("/{room_id}/member/{member_id}")
+@channel_router.patch("/member/{member_id}")
 def update_member(
     room_id: str, member_id: str, request: UpdateMember, service: MemberServiceDependency
 ) -> ChangedMember:
     return service.update_member(room_id, member_id, request)
 
 
-@router.post("/{room_id}/topic", status_code=201)
+@channel_router.post("/topic", status_code=201)
 def add_topic(room_id: str, request: CreateTopic, service: RoomServiceDependency) -> ChangedTopic:
     return service.add_topic(room_id, request)
 
 
-@router.patch("/{room_id}/topic/{topic_id}")
+@channel_router.patch("/topic/{topic_id}")
 def update_topic(
     room_id: str, topic_id: str, request: CreateTopic, service: RoomServiceDependency
 ) -> ChangedTopic:
     return service.update_topic(room_id, topic_id, request)
 
 
-@router.delete("/{room_id}/topic/{topic_id}")
+@channel_router.delete("/topic/{topic_id}")
 def delete_topic(room_id: str, topic_id: str, service: RoomServiceDependency) -> ChangedTopic:
     return service.delete_topic(room_id, topic_id)
 
 
-@router.delete("/{room_id}/member/{member_id}")
+@channel_router.delete("/member/{member_id}")
 def delete_member(room_id: str, member_id: str, service: MemberServiceDependency) -> ChangedMember:
     return service.delete_member(room_id, member_id)

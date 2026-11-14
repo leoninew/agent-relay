@@ -8,6 +8,7 @@ from typing import Annotated, Any, NoReturn, Protocol, cast
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
+from uuid import uuid4
 
 from pydantic import Field
 
@@ -68,6 +69,7 @@ class RelayClient:
         *,
         opener: RequestOpener | None = None,
         session_id: str | None = None,
+        channel_id: str | None = None,
     ) -> None:
         try:
             parsed = urlsplit(base_url)
@@ -91,10 +93,26 @@ class RelayClient:
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         self.session_id = session_id
+        self.channel_id = channel_id
         self.opener = opener or cast(RequestOpener, build_opener(NoRedirectHandler()).open)
 
     def for_session(self, session_id: str) -> RelayClient:
-        return RelayClient(self.base_url, self.timeout, opener=self.opener, session_id=session_id)
+        return RelayClient(
+            self.base_url,
+            self.timeout,
+            opener=self.opener,
+            session_id=session_id,
+            channel_id=self.channel_id,
+        )
+
+    def for_channel(self, channel_id: str) -> RelayClient:
+        return RelayClient(
+            self.base_url,
+            self.timeout,
+            opener=self.opener,
+            session_id=self.session_id,
+            channel_id=channel_id,
+        )
 
     def _member_id(self, room_id: str, member_id: str | None = None) -> str:
         if member_id is not None:
@@ -102,7 +120,7 @@ class RelayClient:
         if not self.session_id:
             raise RelayClientError(2, "session_required", "当前调用没有 Codex 会话上下文")
         result = self.request(
-            "GET", f"{_room_path(room_id)}/session/{_segment(self.session_id)}/member"
+            "GET", f"{self._channel_path(room_id)}/session/{_segment(self.session_id)}/member"
         )
         if not isinstance(result.data, dict) or not isinstance(result.data.get("id"), str):
             raise RelayClientError(
@@ -128,6 +146,8 @@ class RelayClient:
             json.dumps(body, ensure_ascii=False).encode("utf-8") if body is not None else None
         )
         headers = {"Accept": "application/json", "X-Agent-Relay-Image-Paths": "local"}
+        if self.session_id:
+            headers["X-Agent-Relay-Session-Id"] = self.session_id
         if encoded_body is not None:
             headers["Content-Type"] = "application/json"
         request = Request(url, data=encoded_body, headers=headers, method=method)
@@ -214,6 +234,40 @@ class RelayClient:
         """List the available project chatrooms."""
         return self.request("GET", "/api/room")
 
+    def channel_list(self, room_id: str) -> ApiResult:
+        """List channels and their working directories."""
+        return self.request("GET", f"{_room_path(room_id)}/channel")
+
+    def channel_get(self, room_id: str, channel_id: str) -> ApiResult:
+        """Look up a channel creation result without sending another create request."""
+        return self.request("GET", f"{_room_path(room_id)}/channel/{_segment(channel_id)}")
+
+    def channel_create(
+        self, room_id: str, name: str, use_worktree: bool = False, description: str = ""
+    ) -> ApiResult:
+        """Create a channel, optionally with a worktree from current HEAD. Keep the returned ID."""
+        channel_id = f"channel-{uuid4().hex[:12]}"
+        try:
+            return self.request(
+                "POST",
+                f"{_room_path(room_id)}/channel",
+                body={
+                    "name": name,
+                    "description": description,
+                    "useWorktree": use_worktree,
+                    "channelId": channel_id,
+                },
+            )
+        except RelayClientError as exc:
+            exc.error["channelId"] = channel_id
+            raise
+
+    def channel_archive(self, room_id: str, target_channel_id: str) -> ApiResult:
+        """Archive a non-default channel while retaining its worktree, branch and history."""
+        return self.request(
+            "DELETE", f"{_room_path(room_id)}/channel/{_segment(target_channel_id)}"
+        )
+
     def room_create(self, name: str, project_path: str) -> ApiResult:
         """Create a chatroom for an absolute project directory."""
         return self.request("POST", "/api/room", body={"name": name, "projectPath": project_path})
@@ -234,7 +288,7 @@ class RelayClient:
         """
         return self.request(
             "GET",
-            _room_path(room_id),
+            f"{self._channel_path(room_id)}/snapshot",
             params={
                 "topic_id": topic_id,
                 "member_id": member_id,
@@ -246,13 +300,13 @@ class RelayClient:
 
     def room_metadata(self, room_id: str) -> ApiResult:
         """Read room resources, delivery counts, query positions and the event cursor."""
-        return self.request("GET", f"{_room_path(room_id)}/metadata")
+        return self.request("GET", f"{self._channel_path(room_id)}/metadata")
 
     def room_events(self, room_id: str, after_event_id: int = 0, limit: int = 200) -> ApiResult:
         """Read one bounded page of persisted events after the supplied cursor."""
         return self.request(
             "GET",
-            f"{_room_path(room_id)}/event",
+            f"{self._channel_path(room_id)}/event",
             params={"after_event_id": after_event_id, "limit": limit},
         )
 
@@ -265,7 +319,7 @@ class RelayClient:
         """Create a topic; its creation is independent of member forms."""
         return self.request(
             "POST",
-            f"{_room_path(room_id)}/topic",
+            f"{self._channel_path(room_id)}/topic",
             body={"name": name, "description": description},
         )
 
@@ -273,13 +327,13 @@ class RelayClient:
         """Update a topic's name and description; an empty description clears it."""
         return self.request(
             "PATCH",
-            f"{_room_path(room_id)}/topic/{_segment(topic_id)}",
+            f"{self._channel_path(room_id)}/topic/{_segment(topic_id)}",
             body={"name": name, "description": description},
         )
 
     def topic_delete(self, room_id: str, topic_id: str) -> ApiResult:
         """Delete a topic and clear its subscriptions without changing saved deliveries."""
-        return self.request("DELETE", f"{_room_path(room_id)}/topic/{_segment(topic_id)}")
+        return self.request("DELETE", f"{self._channel_path(room_id)}/topic/{_segment(topic_id)}")
 
     def member_list(self, room_id: str) -> ApiResult:
         """List members and their subscriptions, including records marked deleted_at."""
@@ -288,7 +342,7 @@ class RelayClient:
 
     def member_sessions(self, room_id: str) -> ApiResult:
         """Refresh Codex session candidates for the room's directory and their usability."""
-        return self.request("GET", f"{_room_path(room_id)}/session")
+        return self.request("GET", f"{self._channel_path(room_id)}/session")
 
     def member_add(
         self, room_id: str, session_id: str, name: str, topic_ids: list[str] | None = None
@@ -296,7 +350,7 @@ class RelayClient:
         """Join a usable existing Codex session; subscriptions can be empty."""
         return self.request(
             "POST",
-            f"{_room_path(room_id)}/member",
+            f"{self._channel_path(room_id)}/member",
             body={"sessionId": session_id, "name": name, "topicIds": topic_ids or []},
         )
 
@@ -306,18 +360,18 @@ class RelayClient:
         """Update a member's name and subscriptions; omitted topic_ids clears subscriptions."""
         return self.request(
             "PATCH",
-            _member_path(room_id, member_id),
+            self._member_path(room_id, member_id),
             body={"name": name, "topicIds": topic_ids or []},
         )
 
     def member_delete(self, room_id: str, member_id: str) -> ApiResult:
         """Remove a member from new routing without modifying its original Codex session."""
-        return self.request("DELETE", _member_path(room_id, member_id))
+        return self.request("DELETE", self._member_path(room_id, member_id))
 
     def member_catalog(self, room_id: str, member_id: str | None = None) -> ApiResult:
         """Read room/project context, active topic/member IDs and this member's subscriptions."""
         return self.request(
-            "GET", f"{_member_path(room_id, self._member_id(room_id, member_id))}/catalog"
+            "GET", f"{self._member_path(room_id, self._member_id(room_id, member_id))}/catalog"
         )
 
     def member_context(
@@ -346,14 +400,14 @@ class RelayClient:
         }
         return self.request(
             "POST",
-            f"{_member_path(room_id, self._member_id(room_id, member_id))}/context",
+            f"{self._member_path(room_id, self._member_id(room_id, member_id))}/context",
             body={key: value for key, value in values.items() if value is not None},
         )
 
     def member_positions(self, room_id: str, member_id: str | None = None) -> ApiResult:
         """Read this member's topic query positions and later message counts, without advancing."""
         return self.request(
-            "GET", f"{_member_path(room_id, self._member_id(room_id, member_id))}/position"
+            "GET", f"{self._member_path(room_id, self._member_id(room_id, member_id))}/position"
         )
 
     def message_list(
@@ -372,7 +426,7 @@ class RelayClient:
         """
         return self.request(
             "GET",
-            f"{_room_path(room_id)}/message",
+            f"{self._channel_path(room_id)}/message",
             params={
                 "topic_id": topic_id,
                 "member_id": member_id,
@@ -397,7 +451,7 @@ class RelayClient:
         """
         return self.request(
             "GET",
-            f"{_room_path(room_id)}/queue",
+            f"{self._channel_path(room_id)}/queue",
             params={
                 "topic_id": topic_id,
                 "member_id": member_id,
@@ -422,7 +476,7 @@ class RelayClient:
         """
         result = self.request(
             "DELETE",
-            f"{_room_path(room_id)}/queue",
+            f"{self._channel_path(room_id)}/queue",
             params={
                 "topic_id": topic_id,
                 "member_id": member_id,
@@ -443,7 +497,7 @@ class RelayClient:
 
     def message_get(self, room_id: str, message_id: str) -> ApiResult:
         """Read one saved message and its persisted per-member delivery history."""
-        return self.request("GET", f"{_room_path(room_id)}/message/{_segment(message_id)}")
+        return self.request("GET", f"{self._channel_path(room_id)}/message/{_segment(message_id)}")
 
     def message_publish(
         self,
@@ -461,7 +515,11 @@ class RelayClient:
         References do not inherit targets. A saved message does not confirm queue reception.
         """
         publisher = self._member_id(room_id, as_member) if self.session_id else as_member
-        path = _member_path(room_id, publisher) if publisher is not None else _room_path(room_id)
+        path = (
+            self._member_path(room_id, publisher)
+            if publisher is not None
+            else self._channel_path(room_id)
+        )
         return self.request(
             "POST",
             f"{path}/message",
@@ -479,7 +537,11 @@ class RelayClient:
     ) -> ApiResult:
         """Find the original saved publication without sending again; use the same as_member."""
         publisher = self._member_id(room_id, as_member) if self.session_id else as_member
-        path = _member_path(room_id, publisher) if publisher is not None else _room_path(room_id)
+        path = (
+            self._member_path(room_id, publisher)
+            if publisher is not None
+            else self._channel_path(room_id)
+        )
         return self.request("GET", f"{path}/publication/{_segment(publication_id)}")
 
     def delivery_list(
@@ -512,6 +574,14 @@ class RelayClient:
             3, "delivery_not_found", "消息中不存在该投递记录", request_id=result.request_id
         )
 
+    def _channel_path(self, room_id: str) -> str:
+        if not self.channel_id:
+            raise RelayClientError(2, "channel_required", "请显式指定频道 ID")
+        return f"{_room_path(room_id)}/channel/{_segment(self.channel_id)}"
+
+    def _member_path(self, room_id: str, member_id: str) -> str:
+        return f"{self._channel_path(room_id)}/member/{_segment(member_id)}"
+
     @staticmethod
     def _rows(result: ApiResult, field: str) -> list[dict[str, Any]]:
         if not isinstance(result.data, dict):
@@ -532,10 +602,6 @@ def _segment(value: str) -> str:
 
 def _room_path(room_id: str) -> str:
     return f"/api/room/{_segment(room_id)}"
-
-
-def _member_path(room_id: str, member_id: str) -> str:
-    return f"{_room_path(room_id)}/member/{_segment(member_id)}"
 
 
 def _string(value: object) -> str | None:

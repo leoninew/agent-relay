@@ -30,7 +30,10 @@
             >
               <NavigationMenuLink as-child :active="route.params.roomId === room.id">
                 <RouterLink
-                  :to="{ name: 'room-detail', params: { roomId: room.id } }"
+                  :to="{
+                    name: 'channel',
+                    params: { roomId: room.id, channelId: DEFAULT_CHANNEL_ID },
+                  }"
                   class="room-tab"
                   :aria-label="t('navigation.switchProject', { name: room.name })"
                   :title="t('navigation.reorderProject', { name: room.name })"
@@ -62,7 +65,7 @@
                     :collision-padding="12"
                   >
                     <DropdownMenuItem class="room-menu-action" @select="startEdit(room)">
-                      <AppIcon name="edit" />{{ t("navigation.editName") }}
+                      <AppIcon name="edit" />{{ t("navigation.edit") }}
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       class="room-menu-action room-menu-danger"
@@ -150,6 +153,7 @@
   import type { MessageDescriptor } from "@/i18n";
 
   import AppIcon from "@/components/AppIcon.vue";
+  import { DEFAULT_CHANNEL_ID } from "@/domains/channel/channelRoutes";
   import { useStoredOrder } from "@/composables/useStoredOrder";
   import RoomDeleteDialog from "@/domains/room/RoomDeleteDialog.vue";
   import RoomSetupDialog from "@/domains/room/RoomSetupDialog.vue";
@@ -210,7 +214,10 @@
       const room = await roomsStore.create(request);
       roomsStore.createOpen = false;
       toasts.success({ key: "notice.roomCreated" });
-      await router.push({ name: "room-detail", params: { roomId: room.id } });
+      await router.push({
+        name: "channel",
+        params: { roomId: room.id, channelId: DEFAULT_CHANNEL_ID },
+      });
     } catch (caught) {
       createError.value = describeApiError(caught, "errors.create");
       toasts.error(createError.value);
@@ -273,7 +280,9 @@
     if (route.params.roomId === room.id) {
       const nextRoom = rooms.value[0];
       await router.replace(
-        nextRoom ? { name: "room-detail", params: { roomId: nextRoom.id } } : { name: "room" },
+        nextRoom
+          ? { name: "channel", params: { roomId: nextRoom.id, channelId: DEFAULT_CHANNEL_ID } }
+          : { name: "room" },
       );
     }
   }

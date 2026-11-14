@@ -1,9 +1,10 @@
 """MCP adapter over the same HTTP client used by the Click commands."""
 
+import inspect
 import json
 from collections.abc import Awaitable, Callable
-from functools import partial, wraps
-from typing import Any
+from functools import wraps
+from typing import Any, cast
 
 from mcp.server.mcpserver import Context, MCPServer
 from mcp.types import CallToolResult, TextContent, ToolAnnotations
@@ -28,6 +29,8 @@ READ_TOOLS = frozenset(
         "publication_get",
         "delivery_list",
         "delivery_get",
+        "channel_list",
+        "channel_get",
     }
 )
 
@@ -44,16 +47,50 @@ WRITE_TOOLS = frozenset(
         "member_delete",
         "member_context",
         "message_publish",
+        "channel_create",
+        "channel_archive",
     }
 )
 
 
 def _tool_handler(
     action: Callable[..., ApiResult],
+    client: RelayClient,
 ) -> Callable[..., Awaitable[CallToolResult]]:
+    scoped = action.__name__ not in {
+        "room_list",
+        "room_create",
+        "channel_list",
+        "channel_get",
+        "channel_create",
+        "channel_archive",
+    }
+
     @wraps(action)
-    async def handle(**arguments: Any) -> CallToolResult:
-        return await _invoke(partial(action, **arguments))
+    async def handle(ctx: Context[None, Any], **arguments: Any) -> CallToolResult:
+        def invoke() -> ApiResult:
+            caller = _caller(client, ctx)
+            if scoped:
+                caller = caller.for_channel(arguments.pop("channel_id"))
+            return cast(ApiResult, getattr(caller, action.__name__)(**arguments))
+
+        return await _invoke(invoke)
+
+    parameters = list(inspect.signature(action).parameters.values())
+    parameters.append(
+        inspect.Parameter("ctx", inspect.Parameter.KEYWORD_ONLY, annotation=Context[None, Any])
+    )
+    if scoped:
+        parameters.append(
+            inspect.Parameter("channel_id", inspect.Parameter.KEYWORD_ONLY, annotation=str)
+        )
+    handle.__dict__["__signature__"] = inspect.signature(action).replace(parameters=parameters)
+    handle.__annotations__ = {
+        **action.__annotations__,
+        "ctx": Context[None, Any],
+    }
+    if scoped:
+        handle.__annotations__["channel_id"] = str
 
     return handle
 
@@ -91,8 +128,10 @@ def create_mcp_server(client: RelayClient) -> MCPServer[None]:
         "agent-relay",
         instructions=(
             "Use the agent-relay skill to collaborate. Member tools resolve your identity from "
-            "the MCP request's Codex threadId and room_id. Use member_catalog to discover "
-            "topics and members, including the human member named 你. Publish explicit messages "
+            "the MCP request's Codex threadId, room_id and channel_id. Use member_catalog to "
+            "discover topics and members, including the human member named 你. Use channel_list "
+            "to discover channels; pass channel_id explicitly for channel operations. "
+            "Publish explicit messages "
             "using topics and/or member mentions; ordinary model output is not published. "
             "Human recipients never enter the Codex queue. queue_list reads active unfinished "
             "deliveries; delivery_list and delivery_get preserve history, including deletedAt. "
@@ -104,12 +143,17 @@ def create_mcp_server(client: RelayClient) -> MCPServer[None]:
         ),
     )
 
-    async def member_catalog(room_id: str, ctx: Context[None, Any]) -> CallToolResult:
+    async def member_catalog(
+        room_id: str, channel_id: str, ctx: Context[None, Any]
+    ) -> CallToolResult:
         """Discover your room/project context, member identity, topics, subscriptions and peers."""
-        return await _invoke(lambda: _caller(client, ctx).member_catalog(room_id))
+        return await _invoke(
+            lambda: _caller(client, ctx).for_channel(channel_id).member_catalog(room_id)
+        )
 
     async def member_context(
         room_id: str,
+        channel_id: str,
         ctx: Context[None, Any],
         message_id: str | None = None,
         topic_id: str | None = None,
@@ -123,25 +167,34 @@ def create_mcp_server(client: RelayClient) -> MCPServer[None]:
         Persists provided messages and advances query positions, which are not read receipts.
         """
         return await _invoke(
-            lambda: _caller(client, ctx).member_context(
-                room_id,
-                message_id=message_id,
-                topic_id=topic_id,
-                keyword=keyword,
-                before_seq=before_seq,
-                after_seq=after_seq,
-                limit=limit,
+            lambda: (
+                _caller(client, ctx)
+                .for_channel(channel_id)
+                .member_context(
+                    room_id,
+                    message_id=message_id,
+                    topic_id=topic_id,
+                    keyword=keyword,
+                    before_seq=before_seq,
+                    after_seq=after_seq,
+                    limit=limit,
+                )
             )
         )
 
-    async def member_positions(room_id: str, ctx: Context[None, Any]) -> CallToolResult:
+    async def member_positions(
+        room_id: str, channel_id: str, ctx: Context[None, Any]
+    ) -> CallToolResult:
         """Read your topic query positions and later message counts, without advancing them."""
-        return await _invoke(lambda: _caller(client, ctx).member_positions(room_id))
+        return await _invoke(
+            lambda: _caller(client, ctx).for_channel(channel_id).member_positions(room_id)
+        )
 
     async def message_publish(
         room_id: str,
         publication_id: str,
         content: str,
+        channel_id: str,
         ctx: Context[None, Any],
         topic_ids: list[str] | None = None,
         mentioned_member_ids: list[str] | None = None,
@@ -153,21 +206,31 @@ def create_mcp_server(client: RelayClient) -> MCPServer[None]:
         Retain publication_id for lookup. References do not inherit targets. Saved is not received.
         """
         return await _invoke(
-            lambda: _caller(client, ctx).message_publish(
-                room_id,
-                publication_id,
-                content,
-                topic_ids,
-                mentioned_member_ids,
-                reply_to_message_id,
+            lambda: (
+                _caller(client, ctx)
+                .for_channel(channel_id)
+                .message_publish(
+                    room_id,
+                    publication_id,
+                    content,
+                    topic_ids,
+                    mentioned_member_ids,
+                    reply_to_message_id,
+                )
             )
         )
 
     async def publication_get(
-        room_id: str, publication_id: str, ctx: Context[None, Any]
+        room_id: str, publication_id: str, channel_id: str, ctx: Context[None, Any]
     ) -> CallToolResult:
         """Find your original saved publication without sending again."""
-        return await _invoke(lambda: _caller(client, ctx).publication_get(room_id, publication_id))
+        return await _invoke(
+            lambda: (
+                _caller(client, ctx)
+                .for_channel(channel_id)
+                .publication_get(room_id, publication_id)
+            )
+        )
 
     member_tools: dict[str, Callable[..., Awaitable[CallToolResult]]] = {
         "member_catalog": member_catalog,
@@ -178,7 +241,9 @@ def create_mcp_server(client: RelayClient) -> MCPServer[None]:
     }
     for name in sorted(READ_TOOLS | WRITE_TOOLS):
         handler = (
-            member_tools[name] if name in member_tools else _tool_handler(getattr(client, name))
+            member_tools[name]
+            if name in member_tools
+            else _tool_handler(getattr(client, name), client)
         )
         read_only = name in READ_TOOLS
         server.add_tool(

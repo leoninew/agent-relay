@@ -1,4 +1,7 @@
+from contextlib import AbstractContextManager
+
 from agent_relay.application.rooms.queries import RoomReader
+from agent_relay.infrastructure.persistence.channel_guard import room_operation
 from agent_relay.infrastructure.persistence.database import Database
 from agent_relay.infrastructure.persistence.repositories.messages import SQLAlchemyMessageRepository
 from agent_relay.infrastructure.persistence.repositories.rooms import SQLAlchemyRoomRepository
@@ -12,10 +15,23 @@ class SQLAlchemyRoomData(SQLAlchemyRoomRepository, SQLAlchemyMessageRepository):
 
 class SQLAlchemyRoomStore(SQLAlchemyScope[SQLAlchemyRoomData]):
     def __init__(
-        self, database: Database, transaction: SQLAlchemyTransaction | None = None
+        self,
+        database: Database,
+        transaction: SQLAlchemyTransaction | None = None,
+        *,
+        channel_id: str,
     ) -> None:
         self.database = database
-        super().__init__(database, SQLAlchemyRoomData, transaction)
+        self.channel_id = channel_id
+        super().__init__(
+            database, lambda session: SQLAlchemyRoomData(session, channel_id), transaction
+        )
+
+    def for_channel(self, channel_id: str) -> "SQLAlchemyRoomStore":
+        return SQLAlchemyRoomStore(self.database, self.transaction, channel_id=channel_id)
+
+    def guard(self, room_id: str) -> AbstractContextManager[None]:
+        return room_operation(self.database.path, room_id)
 
     @property
     def queries(self) -> RoomReader:

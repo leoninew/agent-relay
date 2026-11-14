@@ -21,9 +21,13 @@ def fixed_user() -> Member:
     )
 
 
-def new_room_state(room: Room, created_at: datetime) -> RoomState:
+def new_room_state(
+    room: Room, created_at: datetime, *, channel_id: str, working_path: str
+) -> RoomState:
     return RoomState(
         room=room,
+        channel_id=channel_id,
+        working_path=working_path,
         members=[fixed_user()],
         topics=[
             Topic(

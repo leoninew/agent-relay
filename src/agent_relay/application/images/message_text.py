@@ -12,15 +12,16 @@ from agent_relay.domain.rooms.models import Message
 class ImageMessageText:
     """Project image URLs to existing local files for messages read by agents."""
 
-    def __init__(self, images: ImageStore | None = None) -> None:
+    def __init__(self, images: ImageStore | None, channel_id: str) -> None:
         self.images = images
+        self.channel_id = channel_id
 
     def text(self, room_id: str, content: str) -> str:
         if self.images is None:
             return content
         start = 0
         parts: list[str] = []
-        for reference in inline_images(content, room_id):
+        for reference in inline_images(content, room_id, self.channel_id):
             parts.append(content[start : reference.start])
             try:
                 image = self.images.read(room_id, reference.id)

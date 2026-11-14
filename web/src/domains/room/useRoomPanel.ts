@@ -4,6 +4,7 @@ import type { MessageQueueScope, RoomMessage } from "@/services/roomApi";
 
 type PanelTarget =
   | { kind: "message"; message: RoomMessage }
+  | { kind: "channel"; id: string }
   | { kind: "topic"; id: string }
   | { kind: "member"; id: string };
 
@@ -26,25 +27,29 @@ export function useRoomPanel(messages: () => RoomMessage[]) {
     return selected.kind === "message" ? selected.message : undefined;
   });
 
-  function show(next: PanelTarget): void {
-    target.value = next;
-    drawerOpen.value = true;
-  }
-
   function selectSidebar(kind: SidebarKind, resourceId: string | undefined): boolean {
     const selection = kind === "topic" ? selectedTopicId : selectedMemberId;
     const changed = selection.value !== resourceId;
     selection.value = resourceId;
-    if (resourceId !== undefined) show({ kind, id: resourceId });
+    if (resourceId !== undefined) target.value = { kind, id: resourceId };
     else if (selectedTopicId.value === undefined && selectedMemberId.value === undefined) {
       closeDetails();
     } else if (target.value?.kind === kind) closeDetails();
-    drawerOpen.value = true;
     return changed;
   }
 
-  function showMessage(selected: RoomMessage): void {
-    show({ kind: "message", message: selected });
+  function selectMessage(selected: RoomMessage): void {
+    target.value = { kind: "message", message: selected };
+  }
+
+  function selectChannel(channelId: string): void {
+    target.value = { kind: "channel", id: channelId };
+  }
+
+  function changeChannel(channelId: string): void {
+    selectedTopicId.value = undefined;
+    selectedMemberId.value = undefined;
+    selectChannel(channelId);
   }
 
   function openDrawer(): void {
@@ -77,7 +82,9 @@ export function useRoomPanel(messages: () => RoomMessage[]) {
     message,
     queueScope,
     selectSidebar,
-    showMessage,
+    selectMessage,
+    selectChannel,
+    changeChannel,
     openDrawer,
     closeDetails,
     syncMessages,

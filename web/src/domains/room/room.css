@@ -100,10 +100,10 @@
 .room-sidebar {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 12px;
   min-width: 0;
   min-height: 0;
-  padding-block: 0 12px;
+  padding-block: 0 8px;
   overflow-y: auto;
 }
 
@@ -128,20 +128,20 @@
   min-width: 0;
 }
 .sidebar-section > .sidebar-section-heading {
-  min-height: 56px;
-  margin-bottom: 8px;
-  padding: 12px 16px;
+  min-height: 40px;
+  margin-bottom: 4px;
+  padding: 4px 16px;
   border-bottom: 1px solid hsl(var(--border));
 }
 .sidebar-list {
   display: grid;
-  gap: 4px;
+  gap: 2px;
   min-width: 0;
   padding: 0 8px;
 }
 .sidebar-sortable-list {
   display: grid;
-  gap: 4px;
+  gap: 2px;
   min-width: 0;
 }
 .sidebar-node {
@@ -261,6 +261,10 @@
   align-items: center;
   gap: 12px;
   min-width: 0;
+  flex: 1 1 auto;
+}
+.conversation-title > .room-panel-title,
+.conversation-title > .details-toggle {
   flex-shrink: 0;
 }
 .conversation-actions {
@@ -976,8 +980,8 @@ button.topic-chip:hover:not(:disabled) {
   gap: 8px;
   width: 100%;
   min-width: 0;
-  min-height: 36px;
-  padding: 4px 8px;
+  min-height: 32px;
+  padding: 3px 8px;
   border: 1px solid transparent;
   border-radius: 7px;
   color: hsl(var(--muted-foreground));
@@ -1291,13 +1295,10 @@ button.topic-chip:hover:not(:disabled) {
 .delivery-stage {
   white-space: nowrap;
 }
-.dispatch-error {
-  display: block;
-  margin-top: 4px;
-  color: hsl(var(--destructive));
-  font-size: var(--font-size-caption);
-  line-height: var(--line-height-caption);
-  overflow-wrap: anywhere;
+.dispatch-diagnostic {
+  cursor: help;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
 }
 .timeline-page-actions {
   display: flex;
@@ -1336,7 +1337,7 @@ button.topic-chip:hover:not(:disabled) {
     position: fixed;
     z-index: 20;
     inset: var(--app-header-height) 0 0 auto;
-    width: min(420px, 100vw);
+    width: min(240px, 100vw);
     border-left: 1px solid hsl(var(--border));
     background: hsl(var(--card));
     box-shadow: -12px 0 28px hsl(var(--foreground) / 0.12);
@@ -1411,6 +1412,14 @@ button.topic-chip:hover:not(:disabled) {
   }
   .room-panel-heading {
     padding-inline: 12px;
+  }
+  .conversation-heading {
+    flex-wrap: wrap;
+  }
+  .conversation-title,
+  .conversation-actions {
+    flex-basis: 100%;
+    max-width: none;
   }
   .message {
     max-width: 92%;

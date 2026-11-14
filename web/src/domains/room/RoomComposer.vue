@@ -102,6 +102,7 @@
             :key="roomId"
             ref="editor"
             :room-id="roomId"
+            :channel-id="channelId"
             :model-value="content"
             :skills="draftSkills"
             :available-skills="availableSkills"
@@ -237,6 +238,7 @@
   const props = withDefaults(
     defineProps<{
       roomId: string;
+      channelId: string;
       topics: Topic[];
       members: Member[];
       sessions: Session[];
@@ -554,7 +556,6 @@
     draft.value = {
       ...draft.value,
       content: "",
-      mentionedMemberIds: [],
       capabilities: [],
       replyToMessageId: undefined,
     };

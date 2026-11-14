@@ -104,6 +104,7 @@
   const { t } = useI18n();
   const props = defineProps<{
     snapshot: RoomSnapshot;
+    channelId: string;
     busy: boolean;
     selectedMemberId?: string;
   }>();
@@ -117,6 +118,7 @@
   );
   const { orderedItems: members, moveItem: moveMember } = useSidebarOrder(
     () => props.snapshot.room.id,
+    () => props.channelId,
     "members",
     () => props.snapshot.members.filter((member) => member.kind === "agent" && !member.deletedAt),
   );

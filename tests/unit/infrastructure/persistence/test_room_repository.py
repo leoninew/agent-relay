@@ -5,7 +5,7 @@ from sqlalchemy import Update
 from sqlalchemy.dialects import sqlite
 from sqlalchemy.orm import Session
 
-from agent_relay.infrastructure.persistence.models import RoomEventRecord, RoomRecord
+from agent_relay.infrastructure.persistence.models import ChannelRecord, RoomEventRecord, RoomRecord
 from agent_relay.infrastructure.persistence.repositories.rooms import SQLAlchemyRoomRepository
 
 
@@ -14,7 +14,9 @@ def test_clear_marks_messages_and_deliveries_in_one_room_without_deleting_histor
     session.scalars.return_value = ["first", "second"]
     now = datetime.now(UTC)
 
-    removed = SQLAlchemyRoomRepository(session).clear_messages("target-room", now)
+    removed = SQLAlchemyRoomRepository(session, "channel-default").clear_messages(
+        "target-room", now
+    )
 
     assert removed == 2
     for statement in [session.scalars.call_args.args[0], session.execute.call_args.args[0]]:
@@ -34,12 +36,16 @@ def test_clear_marks_messages_and_deliveries_in_one_room_without_deleting_histor
 
 def test_clear_event_forces_resync_before_replaying_any_old_message_events() -> None:
     session = Mock(spec=Session)
-    session.get.return_value = RoomRecord(
-        id="room", name="Room", project_path="d:/project", description=""
-    )
+    session.get.side_effect = [
+        RoomRecord(id="room", name="Room", project_path="d:/project", description=""),
+        ChannelRecord(id="channel-default", room_id="room", working_path="d:/project"),
+        ChannelRecord(id="channel-default", room_id="room", working_path="d:/project"),
+    ]
     session.scalar.side_effect = [400, 401]
 
-    result = SQLAlchemyRoomRepository(session).events("room", after_event_id=10, limit=1)
+    result = SQLAlchemyRoomRepository(session, "channel-default").events(
+        "room", after_event_id=10, limit=1
+    )
 
     assert result.resync_required and result.events == [] and result.next_event_id == 401
     session.scalars.assert_not_called()

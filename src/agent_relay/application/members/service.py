@@ -47,7 +47,7 @@ class MemberService:
 
     def candidates(self, room_id: str) -> list[SessionCandidate]:
         with self.store.read() as rooms:
-            cwd = rooms.room(room_id).project_path
+            cwd = normalize_project_path(rooms.working_path(room_id))
         sessions = self._metadata(self.driver.list_sessions)
         observed_at = datetime.now(UTC)
         self.record_observations(room_id, sessions, observed_at)
@@ -80,8 +80,12 @@ class MemberService:
         """Refresh session metadata without changing member names or subscriptions."""
         by_id = {info.id: info for info in sessions}
         with self.store.write() as rooms:
-            cwd = rooms.room(room_id).project_path
-            for session_id, member_id in rooms.joined_members(room_id).items():
+            state = rooms.resources(room_id)
+            cwd = normalize_project_path(state.working_path)
+            for member in state.members:
+                if member.kind != "agent" or member.deleted_at is not None or not member.session_id:
+                    continue
+                session_id, member_id = member.session_id, member.id
                 info = by_id.get(session_id)
                 valid = info is not None and normalize_project_path(info.cwd) == cwd
                 presence = info.presence if valid and info is not None else "unknown"
@@ -135,7 +139,7 @@ class MemberService:
         with self.store.read() as rooms:
             state = rooms.resources(room_id)
             self._validate_add(state, request)
-            cwd = state.room.project_path
+            cwd = normalize_project_path(state.working_path)
         # External metadata reads never hold a SQLite transaction or resume a thread.
         info = self._metadata(lambda: self.driver.inspect(request.session_id))
         if info.id != request.session_id:
@@ -190,7 +194,7 @@ class MemberService:
         with self.store.read() as rooms:
             bindings = rooms.bindings()
         sessions: list[SessionInfo] = []
-        for session_id in dict.fromkeys(session_id for _, session_id in bindings):
+        for session_id in dict.fromkeys(session_id for _, _, session_id in bindings):
             if cancelled():
                 return
             try:
@@ -203,5 +207,9 @@ class MemberService:
             except Exception:
                 logger.exception("Member presence unavailable session=%s", session_id)
         observed_at = datetime.now(UTC)
-        for room_id in dict.fromkeys(room_id for room_id, _ in bindings):
-            self.record_observations(room_id, sessions, observed_at)
+        for room_id, channel_id in dict.fromkeys(
+            (room_id, channel_id) for room_id, channel_id, _ in bindings
+        ):
+            MemberService(self.store.for_channel(channel_id), self.driver).record_observations(
+                room_id, sessions, observed_at
+            )

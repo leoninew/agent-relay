@@ -5,6 +5,7 @@ from starlette.requests import Request
 
 from agent_relay.application.rooms.ports import RoomStore
 from agent_relay.interfaces.dto import HttpDependencies, HttpLogging
+from agent_relay.interfaces.http.channels.dependencies import get_channel_service
 from agent_relay.interfaces.http.persistence import get_independent_room_store, get_room_store
 from agent_relay.interfaces.http.transactions import RequestTransaction
 
@@ -14,10 +15,12 @@ def test_providers_separate_request_transactions_from_rpc_scopes() -> None:
     request_store = Mock(spec=RoomStore)
     independent_store = Mock(spec=RoomStore)
     factory = Mock(return_value=request_store)
+    channel_factory = Mock()
     dependencies = HttpDependencies(
         request_room_store=factory,
+        request_channel_service=channel_factory,
         room_store=independent_store,
-        context_scope=Mock(),
+        context_for_channel=Mock(),
         session_driver=Mock(),
         queue_driver=Mock(),
         capability_driver=Mock(),
@@ -34,5 +37,9 @@ def test_providers_separate_request_transactions_from_rpc_scopes() -> None:
 
     assert get_room_store(request) is request_store
     factory.assert_called_once_with(transaction)
-    assert get_independent_room_store(request) is independent_store
+    assert get_channel_service(request) is channel_factory.return_value
+    channel_factory.assert_called_once_with(transaction)
+    request.scope["path_params"] = {"channel_id": "channel-api"}
+    assert get_independent_room_store(request) is independent_store.for_channel.return_value
+    independent_store.for_channel.assert_called_once_with("channel-api")
     transaction.finish.assert_not_called()

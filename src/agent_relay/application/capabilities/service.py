@@ -23,7 +23,7 @@ class CapabilityService:
 
     def skills(self, room_id: str, *, force_reload: bool = False) -> SkillCatalog:
         with self.store.read() as rooms:
-            project_path = rooms.room(room_id).project_path
+            project_path = rooms.working_path(room_id)
         return self._catalog(
             lambda: self.driver.list_skills(project_path, force_reload=force_reload)
         )
@@ -46,7 +46,7 @@ class CapabilityService:
                 raise RoomConflictError(
                     "成员绑定的 Codex 会话不存在", code="session_binding_not_found"
                 )
-            project_path = state.room.project_path
+            project_path = state.working_path
             if normalize_project_path(session.project_path) != normalize_project_path(project_path):
                 raise RoomConflictError(
                     "成员会话不属于当前聊天室项目目录", code="session_project_mismatch"

@@ -100,7 +100,9 @@ src/agent_relay/
 
 正式运行时仅保留 SQLAlchemy 实现。`Database` 规范化现有 `database.path`，创建 Engine 和禁用 autobegin/autoflush 的 sessionmaker；读事务显式 BEGIN，写事务在序号、幂等或唯一性检查前 BEGIN IMMEDIATE。后台锁仍使用同一规范化数据库路径加 `.dispatch.lock`，调度频率与并发设置保持原值。
 
-ORM 映射当前 `message_deleted_20261112` 的 14 张表，消息能力引用直接保存在 `messages.capabilities` JSON 列；SQL-first Alembic 仍是 schema 来源，不调用 create_all，不隐式修复/升级不匹配的库。`migrate_on_startup` 显式开关和独立 migrate 入口保持原方式。ISO 文本类型保留时区与精度，回执类型仅保存额外 metadata，标识由独立列重建并校验。首版默认数据库仍为 SQLite。
+ORM 映射当前 `channel_description_20261114` 的 15 张表，消息能力引用直接保存在 `messages.capabilities` JSON 列；SQL-first Alembic 仍是 schema 来源，不调用 create_all，不隐式修复/升级不匹配的库。频道复合键约束资源关系；`RoomStore.for_channel(channel_id)` 将显式频道作用域绑定到仓储，默认频道同样使用频道接口。sessions 元数据及消息 seq 保持房间级，查询和投递使用频道的 working_path。房间及频道采用软归档，保留外部回执和工作目录。
+
+`ChannelService` 通过请求级依赖绑定现有 `RequestTransactionMiddleware`，复用 `SQLAlchemyScope`；频道、固定用户、默认话题和事件在同一请求事务内提交，异常由切面统一回滚。频道业务属性为名称和描述，不维护创建中或待核验状态。可选 worktree 在创建时从当前 HEAD 建立并核对，错误直接返回；数据库回滚不删除 Git 目录或分支。创建、归档、输入及 activation 共用房间级文件锁。创建响应未知时按同 ID 查询，不重复创建。`migrate_on_startup` 和独立 migrate 入口保持原方式。ISO 文本类型保留时区与精度，回执类型仅保存额外 metadata，标识由独立列重建并校验。
 
 运行时 CRUD 和动态筛选使用 SQLAlchemy 表达式。`persistence/sqlite.py` 集中保留：连接时的 `PRAGMA foreign_keys = ON`、`PRAGMA busy_timeout = 5000`，事务开始时的 `BEGIN`/`BEGIN IMMEDIATE`，白名单表的固定 rowid 排序列，以及 `instr` 字面子串、`julianday(value) <= julianday(cutoff)` 时间窗口函数。其他仓储不拼接 SQL，也不使用 text() 包装旧查询。产品源码不直接依赖 sqlite3 API；SQLAlchemy 底层仍使用 SQLite DBAPI，历史迁移 SQL 保留。
 

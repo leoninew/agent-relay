@@ -13,7 +13,7 @@ from agent_relay.application.members.sessions import SessionDriver, SessionUnava
 from agent_relay.application.rooms.ports import RoomStore
 from agent_relay.domain.rooms.errors import RoomConflictError
 from agent_relay.domain.rooms.members import retire_member
-from agent_relay.domain.rooms.models import Room, RoomState, Topic
+from agent_relay.domain.rooms.models import DEFAULT_CHANNEL_ID, Room, RoomState, Topic
 from agent_relay.domain.rooms.resources import (
     new_room_state,
     require_topic,
@@ -38,13 +38,26 @@ class RoomService:
                 project_path=project_path,
                 description="",
             )
-            state = new_room_state(room, datetime.now(UTC))
+            state = new_room_state(
+                room,
+                datetime.now(UTC),
+                channel_id=DEFAULT_CHANNEL_ID,
+                working_path=room.project_path,
+            )
             rooms.insert_room(room, state.members[0])
-            rooms.save_resources(state, RoomState(room=room, members=[state.members[0]]))
+            rooms.save_resources(
+                state,
+                RoomState(
+                    room=room,
+                    channel_id=state.channel_id,
+                    working_path=state.working_path,
+                    members=[state.members[0]],
+                ),
+            )
             return room.model_copy(deep=True)
 
     def delete_room(self, room_id: str) -> None:
-        with self.store.write() as rooms:
+        with self.store.guard(room_id), self.store.write() as rooms:
             rooms.room(room_id)
             rooms.delete_room(room_id)
 
@@ -56,7 +69,7 @@ class RoomService:
                 for member in state.members
                 if member.kind == "agent" and member.deleted_at is None
             }
-            project_path = state.room.project_path
+            project_path = normalize_project_path(state.working_path)
         unavailable: set[str] = set()
         if bindings:
             try:

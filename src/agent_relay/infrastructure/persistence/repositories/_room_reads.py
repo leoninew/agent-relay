@@ -1,5 +1,6 @@
 from collections import defaultdict
 from datetime import datetime
+from pathlib import Path
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -7,8 +8,13 @@ from sqlalchemy.orm import Session
 from agent_relay.application.dto.desktop import ShutdownNotificationTarget
 from agent_relay.application.dto.positions import TopicPosition
 from agent_relay.application.dto.rooms import RoomEvent, RoomEventPage, RoomMetadata, RoomSummary
-from agent_relay.domain.rooms.errors import RoomNotFoundError
-from agent_relay.domain.rooms.models import USER_MEMBER_ID, Member, Room, RoomState
+from agent_relay.domain.rooms.errors import RoomConflictError, RoomNotFoundError
+from agent_relay.domain.rooms.models import (
+    USER_MEMBER_ID,
+    Member,
+    Room,
+    RoomState,
+)
 from agent_relay.infrastructure.persistence.mappers import (
     member_from_model,
     room_from_model,
@@ -16,6 +22,7 @@ from agent_relay.infrastructure.persistence.mappers import (
     topic_from_model,
 )
 from agent_relay.infrastructure.persistence.models import (
+    ChannelRecord,
     DeliveryRecord,
     MemberRecord,
     MemberTopicRecord,
@@ -31,30 +38,59 @@ from agent_relay.infrastructure.persistence.sqlite import insertion_order
 
 
 class SQLAlchemyRoomReads:
-    def __init__(self, session: Session) -> None:
+    def __init__(self, session: Session, channel_id: str) -> None:
         self.session = session
+        self.channel_id = channel_id
 
     def room(self, room_id: str) -> Room:
         record = self.session.get(RoomRecord, room_id)
-        if record is None:
+        if record is None or record.archived_at is not None:
             raise RoomNotFoundError("聊天室不存在", code="room_not_found")
+        channel = self.session.get(ChannelRecord, (room_id, self.channel_id))
+        if channel is None:
+            raise RoomNotFoundError("频道不存在", code="channel_not_found")
+        if channel.archived_at is not None:
+            raise RoomConflictError("频道当前不可用", code="channel_unavailable")
         return room_from_model(record)
+
+    def working_path(self, room_id: str) -> str:
+        self.room(room_id)
+        channel = self.session.get(ChannelRecord, (room_id, self.channel_id))
+        if channel is None:
+            raise RoomNotFoundError("频道不存在", code="channel_not_found")
+        if channel.archived_at is not None:
+            raise RoomConflictError("频道当前不可用", code="channel_unavailable")
+        if channel.workspace_kind == "worktree" and not Path(channel.working_path).is_dir():
+            raise RoomConflictError("频道工作目录不存在", code="channel_directory_missing")
+        return channel.working_path
 
     def rooms(self) -> list[Room]:
         return [
             room_from_model(record)
             for record in self.session.scalars(
-                select(RoomRecord).order_by(insertion_order("rooms"))
+                select(RoomRecord)
+                .where(RoomRecord.archived_at.is_(None))
+                .order_by(insertion_order("rooms"))
             )
         ]
 
     def project_exists(self, project_path: str) -> bool:
         return (
             self.session.scalar(
-                select(RoomRecord.id).where(RoomRecord.project_path == project_path).limit(1)
+                select(RoomRecord.id)
+                .where(RoomRecord.project_path == project_path, RoomRecord.archived_at.is_(None))
+                .limit(1)
             )
             is not None
-        )
+        ) or self.session.scalar(
+            select(ChannelRecord.id)
+            .where(
+                ChannelRecord.working_path_key == project_path,
+                ChannelRecord.workspace_kind == "worktree",
+                ChannelRecord.archived_at.is_(None),
+            )
+            .limit(1)
+        ) is not None
 
     def _member(self, record: MemberRecord) -> Member:
         topic_ids = list(
@@ -62,6 +98,7 @@ class SQLAlchemyRoomReads:
                 select(MemberTopicRecord.topic_id)
                 .where(
                     MemberTopicRecord.room_id == record.room_id,
+                    MemberTopicRecord.channel_id == record.channel_id,
                     MemberTopicRecord.member_id == record.id,
                 )
                 .order_by(MemberTopicRecord.position)
@@ -73,6 +110,7 @@ class SQLAlchemyRoomReads:
         record = self.session.scalar(
             select(MemberRecord).where(
                 MemberRecord.room_id == room_id,
+                MemberRecord.channel_id == self.channel_id,
                 MemberRecord.id == (member_id if member_id is not None else USER_MEMBER_ID),
                 MemberRecord.deleted_at.is_(None),
             )
@@ -92,6 +130,8 @@ class SQLAlchemyRoomReads:
         )
         if record is None:
             raise RoomNotFoundError("该 Codex 会话尚未加入此聊天室", code="session_not_joined")
+        if record.channel_id != self.channel_id:
+            raise RoomConflictError("请显式选择会话所属频道", code="channel_required")
         return self._member(record)
 
     def joined_members(self, room_id: str) -> dict[str, str]:
@@ -108,11 +148,13 @@ class SQLAlchemyRoomReads:
             if session_id is not None
         }
 
-    def bindings(self) -> list[tuple[str, str]]:
+    def bindings(self) -> list[tuple[str, str, str]]:
         return [
-            (room_id, session_id)
-            for room_id, session_id in self.session.execute(
-                select(MemberRecord.room_id, MemberRecord.session_id).where(
+            (room_id, channel_id, session_id)
+            for room_id, channel_id, session_id in self.session.execute(
+                select(
+                    MemberRecord.room_id, MemberRecord.channel_id, MemberRecord.session_id
+                ).where(
                     MemberRecord.deleted_at.is_(None),
                     MemberRecord.session_id.is_not(None),
                     MemberRecord.kind == "agent",
@@ -123,12 +165,14 @@ class SQLAlchemyRoomReads:
 
     def resources(self, room_id: str) -> RoomState:
         room = self.room(room_id)
+        working_path = self.working_path(room_id)
         topics = [
             topic_from_model(record)
             for record in self.session.scalars(
                 select(TopicRecord)
                 .where(
                     TopicRecord.room_id == room_id,
+                    TopicRecord.channel_id == self.channel_id,
                 )
                 .order_by(insertion_order("topics"))
             )
@@ -138,6 +182,7 @@ class SQLAlchemyRoomReads:
             select(MemberTopicRecord.member_id, MemberTopicRecord.topic_id)
             .where(
                 MemberTopicRecord.room_id == room_id,
+                MemberTopicRecord.channel_id == self.channel_id,
             )
             .order_by(MemberTopicRecord.position)
         ):
@@ -148,6 +193,7 @@ class SQLAlchemyRoomReads:
                 select(MemberRecord)
                 .where(
                     MemberRecord.room_id == room_id,
+                    MemberRecord.channel_id == self.channel_id,
                 )
                 .order_by(MemberRecord.session_id.is_(None), insertion_order("members"))
             )
@@ -162,7 +208,14 @@ class SQLAlchemyRoomReads:
                 .order_by(insertion_order("sessions"))
             )
         ]
-        return RoomState(room=room, topics=topics, members=members, sessions=sessions)
+        return RoomState(
+            room=room,
+            channel_id=self.channel_id,
+            working_path=working_path,
+            topics=topics,
+            members=members,
+            sessions=sessions,
+        )
 
     def positions(self, room_id: str, member_id: str | None = None) -> list[TopicPosition]:
         position_seq = func.coalesce(TopicPositionRecord.seq, 0)
@@ -170,6 +223,7 @@ class SQLAlchemyRoomReads:
             select(MessageTopicRecord.message_id)
             .where(
                 MessageTopicRecord.room_id == MessageRecord.room_id,
+                MessageTopicRecord.channel_id == MessageRecord.channel_id,
                 MessageTopicRecord.message_id == MessageRecord.id,
                 MessageTopicRecord.topic_id == MemberTopicRecord.topic_id,
             )
@@ -181,6 +235,7 @@ class SQLAlchemyRoomReads:
             .select_from(MessageRecord)
             .where(
                 MessageRecord.room_id == MemberTopicRecord.room_id,
+                MessageRecord.channel_id == MemberTopicRecord.channel_id,
                 MessageRecord.deleted_at.is_(None),
                 MessageRecord.seq > position_seq,
                 topic_matches,
@@ -201,6 +256,7 @@ class SQLAlchemyRoomReads:
                 MemberRecord,
                 (
                     (MemberRecord.room_id == MemberTopicRecord.room_id)
+                    & (MemberRecord.channel_id == MemberTopicRecord.channel_id)
                     & (MemberRecord.id == MemberTopicRecord.member_id)
                     & MemberRecord.deleted_at.is_(None)
                 ),
@@ -209,6 +265,7 @@ class SQLAlchemyRoomReads:
                 TopicRecord,
                 (
                     (TopicRecord.room_id == MemberTopicRecord.room_id)
+                    & (TopicRecord.channel_id == MemberTopicRecord.channel_id)
                     & (TopicRecord.id == MemberTopicRecord.topic_id)
                     & TopicRecord.deleted_at.is_(None)
                 ),
@@ -217,11 +274,15 @@ class SQLAlchemyRoomReads:
                 TopicPositionRecord,
                 (
                     (TopicPositionRecord.room_id == MemberTopicRecord.room_id)
+                    & (TopicPositionRecord.channel_id == MemberTopicRecord.channel_id)
                     & (TopicPositionRecord.member_id == MemberTopicRecord.member_id)
                     & (TopicPositionRecord.topic_id == MemberTopicRecord.topic_id)
                 ),
             )
-            .where(MemberTopicRecord.room_id == room_id)
+            .where(
+                MemberTopicRecord.room_id == room_id,
+                MemberTopicRecord.channel_id == self.channel_id,
+            )
         )
         if member_id is not None:
             statement = statement.where(MemberTopicRecord.member_id == member_id)
@@ -238,6 +299,7 @@ class SQLAlchemyRoomReads:
                 select(DeliveryRecord.status, func.count())
                 .where(
                     DeliveryRecord.room_id == room_id,
+                    DeliveryRecord.channel_id == self.channel_id,
                     DeliveryRecord.deleted_at.is_(None),
                 )
                 .group_by(DeliveryRecord.status)
@@ -249,6 +311,7 @@ class SQLAlchemyRoomReads:
                 .select_from(MessageRecord)
                 .where(
                     MessageRecord.room_id == room_id,
+                    MessageRecord.channel_id == self.channel_id,
                     MessageRecord.deleted_at.is_(None),
                 )
             )
@@ -258,6 +321,7 @@ class SQLAlchemyRoomReads:
             self.session.scalar(
                 select(func.max(RoomEventRecord.event_id)).where(
                     RoomEventRecord.room_id == room_id,
+                    RoomEventRecord.channel_id == self.channel_id,
                 )
             )
             or 0
@@ -281,12 +345,13 @@ class SQLAlchemyRoomReads:
         )
 
     def events(self, room_id: str, after_event_id: int, limit: int = 200) -> RoomEventPage:
-        self.room(room_id)
+        self.working_path(room_id)
         if (
             self.session.scalar(
                 select(RoomEventRecord.event_id)
                 .where(
                     RoomEventRecord.room_id == room_id,
+                    RoomEventRecord.channel_id == self.channel_id,
                     RoomEventRecord.kind == "clear",
                     RoomEventRecord.event_id > after_event_id,
                 )
@@ -312,6 +377,7 @@ class SQLAlchemyRoomReads:
                 .where(
                     RoomEventRecord.room_id == room_id,
                     RoomEventRecord.event_id > after_event_id,
+                    RoomEventRecord.channel_id == self.channel_id,
                 )
                 .order_by(RoomEventRecord.event_id)
                 .limit(limit + 1)
@@ -337,7 +403,9 @@ class SQLAlchemyRoomReads:
 
     def _resync(self, room_id: str) -> RoomEventPage:
         latest = self.session.scalar(
-            select(func.max(RoomEventRecord.event_id)).where(RoomEventRecord.room_id == room_id)
+            select(func.max(RoomEventRecord.event_id)).where(
+                RoomEventRecord.room_id == room_id, RoomEventRecord.channel_id == self.channel_id
+            )
         )
         return RoomEventPage(
             events=[], next_event_id=latest or 0, has_more=False, resync_required=True
@@ -345,13 +413,20 @@ class SQLAlchemyRoomReads:
 
     def notification_targets(self, started_at: datetime) -> list[ShutdownNotificationTarget]:
         rows = self.session.execute(
-            select(MessageRecord.room_id, MemberRecord.id)
+            select(MessageRecord.room_id, MessageRecord.channel_id, MemberRecord.id)
             .join(
                 MemberRecord,
                 (MemberRecord.room_id == MessageRecord.room_id)
+                & (MemberRecord.channel_id == MessageRecord.channel_id)
                 & (MemberRecord.kind == "agent")
                 & MemberRecord.deleted_at.is_(None)
                 & MemberRecord.session_id.is_not(None),
+            )
+            .join(
+                ChannelRecord,
+                (ChannelRecord.room_id == MessageRecord.room_id)
+                & (ChannelRecord.id == MessageRecord.channel_id)
+                & ChannelRecord.archived_at.is_(None),
             )
             .where(
                 MessageRecord.publisher_id == USER_MEMBER_ID,
@@ -361,10 +436,10 @@ class SQLAlchemyRoomReads:
             .distinct()
             .order_by(MessageRecord.room_id, MemberRecord.id)
         ).tuples()
-        grouped: dict[str, list[str]] = defaultdict(list)
-        for room_id, member_id in rows:
-            grouped[room_id].append(member_id)
+        grouped: dict[tuple[str, str], list[str]] = defaultdict(list)
+        for room_id, channel_id, member_id in rows:
+            grouped[(room_id, channel_id)].append(member_id)
         return [
-            ShutdownNotificationTarget(room_id, tuple(member_ids))
-            for room_id, member_ids in grouped.items()
+            ShutdownNotificationTarget(room_id, tuple(member_ids), channel_id)
+            for (room_id, channel_id), member_ids in grouped.items()
         ]

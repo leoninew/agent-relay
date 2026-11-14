@@ -14,7 +14,7 @@ def test_message_reads_exclude_cleared_history(read: str) -> None:
     session = Mock(spec=Session)
     session.execute.return_value.tuples.return_value.all.return_value = []
     session.scalar.return_value = None
-    repository = SQLAlchemyMessageRepository(session)
+    repository = SQLAlchemyMessageRepository(session, "channel-default")
 
     if read == "message":
         with pytest.raises(RoomNotFoundError):
@@ -36,7 +36,7 @@ def test_message_reads_exclude_cleared_history(read: str) -> None:
 def test_message_sequence_and_publication_identity_include_cleared_history() -> None:
     session = Mock(spec=Session)
     session.scalar.return_value = 164
-    repository = SQLAlchemyMessageRepository(session)
+    repository = SQLAlchemyMessageRepository(session, "channel-default")
 
     assert repository.next_message_seq("room") == 164
     sequence_sql = str(session.scalar.call_args.args[0].compile(dialect=sqlite.dialect()))

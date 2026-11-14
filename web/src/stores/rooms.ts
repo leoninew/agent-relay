@@ -2,6 +2,7 @@ import { defineStore } from "pinia";
 import { ref } from "vue";
 
 import { createMessageDraftStorage } from "@/stores/messageDrafts";
+import { snapshotScope } from "@/domains/channel/channelRoutes";
 
 import {
   addRoomTopic,
@@ -58,36 +59,51 @@ export const useRoomsStore = defineStore("rooms", () => {
 
   async function remove(roomId: string): Promise<void> {
     await deleteRoom(roomId);
-    createMessageDraftStorage().remove(roomId);
+    for (const key of Object.keys(snapshots.value)) {
+      if (key.startsWith(`${roomId}:`)) {
+        delete snapshots.value[key];
+        createMessageDraftStorage().remove(key);
+      }
+    }
+    for (const key of Object.keys(metadataVersions)) {
+      if (key.startsWith(`${roomId}:`)) delete metadataVersions[key];
+    }
     rooms.value = rooms.value.filter((room) => room.id !== roomId);
     if (recentRoomId.value === roomId) recentRoomId.value = undefined;
-    delete snapshots.value[roomId];
-    delete metadataVersions[roomId];
   }
 
   async function rename(roomId: string, name: string): Promise<Room> {
     const room = await updateRoom(roomId, { name });
     updateRoomName(room);
-    const snapshot = snapshots.value[room.id];
-    if (snapshot) snapshot.room = room;
+    for (const [scope, snapshot] of Object.entries(snapshots.value)) {
+      if (scope.startsWith(`${room.id}:`)) snapshot.room = room;
+    }
     return room;
   }
 
-  async function clear(roomId: string): Promise<ClearedRoom> {
-    const result = await clearRoom(roomId);
-    sync({
-      ...result.metadata,
-      messages: [],
-      hasMore: false,
-      hasNewer: false,
-      nextBeforeSeq: null,
-    });
+  async function clear(roomId: string, channelId: string): Promise<ClearedRoom> {
+    const result = await clearRoom(roomId, channelId);
+    sync(
+      {
+        ...result.metadata,
+        messages: [],
+        hasMore: false,
+        hasNewer: false,
+        nextBeforeSeq: null,
+      },
+      channelId,
+    );
     return result;
   }
 
-  function sync(snapshot: RoomSnapshot): void {
-    snapshots.value[snapshot.room.id] = snapshot;
-    metadataVersions[snapshot.room.id] = snapshot.eventId;
+  function snapshotKey(roomId: string, channelId: string): string {
+    return snapshotScope(roomId, channelId);
+  }
+
+  function sync(snapshot: RoomSnapshot, channelId: string): void {
+    const scope = snapshotScope(snapshot.room.id, channelId);
+    snapshots.value[scope] = snapshot;
+    metadataVersions[scope] = snapshot.eventId;
     updateRoomName(snapshot.room);
   }
 
@@ -96,10 +112,11 @@ export const useRoomsStore = defineStore("rooms", () => {
     if (index !== -1) rooms.value.splice(index, 1, room);
   }
 
-  function syncMetadata(metadata: RoomMetadata): void {
-    const snapshot = snapshots.value[metadata.room.id];
-    if (!snapshot || metadata.eventId < (metadataVersions[metadata.room.id] ?? 0)) return;
-    metadataVersions[metadata.room.id] = metadata.eventId;
+  function syncMetadata(metadata: RoomMetadata, channelId: string): void {
+    const scope = snapshotScope(metadata.room.id, channelId);
+    const snapshot = snapshots.value[scope];
+    if (!snapshot || metadata.eventId < (metadataVersions[scope] ?? 0)) return;
+    metadataVersions[scope] = metadata.eventId;
     snapshot.room = metadata.room;
     snapshot.topics = metadata.topics;
     snapshot.members = metadata.members;
@@ -109,15 +126,22 @@ export const useRoomsStore = defineStore("rooms", () => {
     updateRoomName(metadata.room);
   }
 
-  function prependPage(roomId: string, page: MessagePage): void {
-    const snapshot = snapshots.value[roomId];
+  function prependPage(roomId: string, page: MessagePage, channelId: string): void {
+    const scope = snapshotScope(roomId, channelId);
+    const snapshot = snapshots.value[scope];
     snapshot.messages = orderedMessages([...page.messages, ...snapshot.messages]);
     snapshot.hasMore = page.hasMore;
     snapshot.nextBeforeSeq = page.nextBeforeSeq;
   }
 
-  function applyMessages(roomId: string, messages: RoomMessage[], query: MessageQuery): void {
-    const snapshot = snapshots.value[roomId];
+  function applyMessages(
+    roomId: string,
+    messages: RoomMessage[],
+    query: MessageQuery,
+    channelId: string,
+  ): void {
+    const scope = snapshotScope(roomId, channelId);
+    const snapshot = snapshots.value[scope];
     const included = new Set(snapshot.messages.map((message) => message.id));
     const newestSeq = snapshot.messages.at(-1)?.seq ?? 0;
     const updates = messages.filter(
@@ -134,9 +158,13 @@ export const useRoomsStore = defineStore("rooms", () => {
     snapshot.messages = orderedMessages([...snapshot.messages, ...updates]);
   }
 
-  async function createTopic(roomId: string, request: CreateTopic): Promise<Topic> {
-    const topic = await addRoomTopic(roomId, request);
-    syncMetadata(topic.metadata);
+  async function createTopic(
+    roomId: string,
+    request: CreateTopic,
+    channelId: string,
+  ): Promise<Topic> {
+    const topic = await addRoomTopic(roomId, request, channelId);
+    syncMetadata(topic.metadata, channelId);
     return topic;
   }
 
@@ -146,6 +174,7 @@ export const useRoomsStore = defineStore("rooms", () => {
     recentRoomId,
     createOpen,
     snapshots,
+    snapshotKey,
     load,
     create,
     rename,

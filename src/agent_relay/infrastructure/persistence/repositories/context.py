@@ -32,15 +32,18 @@ from agent_relay.infrastructure.persistence.sqlite import insertion_order, liter
 
 
 class SQLAlchemyContextRepository:
-    def __init__(self, session: Session) -> None:
+    def __init__(self, session: Session, channel_id: str) -> None:
         self.session = session
-        self.resources = SQLAlchemyRoomRepository(session)
-        self.messages = SQLAlchemyMessageRepository(session)
+        self.channel_id = channel_id
+        self.resources = SQLAlchemyRoomRepository(session, channel_id)
+        self.messages = SQLAlchemyMessageRepository(session, channel_id)
 
     def subscriptions(self, room_id: str, member_id: str) -> set[str]:
+        self.resources.working_path(room_id)
         member = self.session.scalar(
             select(MemberRecord.id).where(
                 MemberRecord.room_id == room_id,
+                MemberRecord.channel_id == self.channel_id,
                 MemberRecord.id == member_id,
                 MemberRecord.deleted_at.is_(None),
             )
@@ -53,11 +56,13 @@ class SQLAlchemyContextRepository:
                 .join(
                     TopicRecord,
                     (TopicRecord.room_id == MemberTopicRecord.room_id)
+                    & (TopicRecord.channel_id == MemberTopicRecord.channel_id)
                     & (TopicRecord.id == MemberTopicRecord.topic_id)
                     & TopicRecord.deleted_at.is_(None),
                 )
                 .where(
                     MemberTopicRecord.room_id == room_id,
+                    MemberTopicRecord.channel_id == self.channel_id,
                     MemberTopicRecord.member_id == member_id,
                 )
             )
@@ -75,14 +80,21 @@ class SQLAlchemyContextRepository:
             )
             for record in self.session.scalars(
                 select(TopicRecord)
-                .where(TopicRecord.room_id == room_id, TopicRecord.deleted_at.is_(None))
+                .where(
+                    TopicRecord.room_id == room_id,
+                    TopicRecord.channel_id == self.channel_id,
+                    TopicRecord.deleted_at.is_(None),
+                )
                 .order_by(insertion_order("topics"))
             )
         ]
         member_topics: dict[str, list[str]] = {}
         for target_id, topic_id in self.session.execute(
             select(MemberTopicRecord.member_id, MemberTopicRecord.topic_id)
-            .where(MemberTopicRecord.room_id == room_id)
+            .where(
+                MemberTopicRecord.room_id == room_id,
+                MemberTopicRecord.channel_id == self.channel_id,
+            )
             .order_by(MemberTopicRecord.position)
         ):
             member_topics.setdefault(target_id, []).append(topic_id)
@@ -97,7 +109,11 @@ class SQLAlchemyContextRepository:
             )
             for record in self.session.scalars(
                 select(MemberRecord)
-                .where(MemberRecord.room_id == room_id, MemberRecord.deleted_at.is_(None))
+                .where(
+                    MemberRecord.room_id == room_id,
+                    MemberRecord.channel_id == self.channel_id,
+                    MemberRecord.deleted_at.is_(None),
+                )
                 .order_by(insertion_order("members"))
             )
         ]
@@ -106,6 +122,8 @@ class SQLAlchemyContextRepository:
             room_name=room.name,
             room_description=room.description,
             project_path=room.project_path,
+            channel_id=self.channel_id,
+            working_path=self.resources.working_path(room_id),
             member_id=member_id,
             topics=topics,
             members=members,
@@ -120,6 +138,7 @@ class SQLAlchemyContextRepository:
             select(DeliveryRecord.message_id)
             .where(
                 DeliveryRecord.room_id == MessageRecord.room_id,
+                DeliveryRecord.channel_id == MessageRecord.channel_id,
                 DeliveryRecord.message_id == MessageRecord.id,
                 DeliveryRecord.target_member_id == scope.delivery_member_id,
             )
@@ -130,6 +149,7 @@ class SQLAlchemyContextRepository:
             select(MessageTopicRecord.message_id)
             .where(
                 MessageTopicRecord.room_id == MessageRecord.room_id,
+                MessageTopicRecord.channel_id == MessageRecord.channel_id,
                 MessageTopicRecord.message_id == MessageRecord.id,
                 MessageTopicRecord.topic_id.in_(scope.topic_ids),
             )
@@ -142,7 +162,9 @@ class SQLAlchemyContextRepository:
         self, room_id: str, request: ContextQuery, scope: VisibilityScope
     ) -> tuple[list[ContextMessage], bool]:
         statement = self.messages.statement().where(
-            MessageRecord.room_id == room_id, self._visibility(scope)
+            MessageRecord.room_id == room_id,
+            MessageRecord.channel_id == self.channel_id,
+            self._visibility(scope),
         )
         if request.message_id is not None:
             statement = statement.where(MessageRecord.id == request.message_id)
@@ -151,6 +173,7 @@ class SQLAlchemyContextRepository:
                 select(MessageTopicRecord.message_id)
                 .where(
                     MessageTopicRecord.room_id == MessageRecord.room_id,
+                    MessageTopicRecord.channel_id == MessageRecord.channel_id,
                     MessageTopicRecord.message_id == MessageRecord.id,
                     MessageTopicRecord.topic_id == request.topic_id,
                 )
@@ -187,6 +210,7 @@ class SQLAlchemyContextRepository:
     ) -> None:
         criteria = (
             (TopicPositionRecord.room_id == room_id)
+            & (TopicPositionRecord.channel_id == self.channel_id)
             & (TopicPositionRecord.member_id == member_id)
             & (TopicPositionRecord.topic_id == topic_id)
         )
@@ -194,7 +218,12 @@ class SQLAlchemyContextRepository:
         if current is None:
             self.session.add(
                 TopicPositionRecord(
-                    room_id=room_id, member_id=member_id, topic_id=topic_id, seq=seq, updated_at=now
+                    room_id=room_id,
+                    channel_id=self.channel_id,
+                    member_id=member_id,
+                    topic_id=topic_id,
+                    seq=seq,
+                    updated_at=now,
                 )
             )
             self.session.flush()
@@ -208,7 +237,11 @@ class SQLAlchemyContextRepository:
             )
             if changed is None:
                 return
-        self.session.add(RoomEventRecord(room_id=room_id, kind="position", entity_id=member_id))
+        self.session.add(
+            RoomEventRecord(
+                room_id=room_id, channel_id=self.channel_id, kind="position", entity_id=member_id
+            )
+        )
 
     def record_provision(
         self,
@@ -224,6 +257,7 @@ class SQLAlchemyContextRepository:
             ContextQueryRecord(
                 id=query_id,
                 room_id=room_id,
+                channel_id=self.channel_id,
                 member_id=member_id,
                 message_id=request.message_id,
                 topic_id=request.topic_id,
@@ -237,7 +271,11 @@ class SQLAlchemyContextRepository:
         self.session.flush()
         self.session.add_all(
             ContextMessageRecord(
-                room_id=room_id, query_id=query_id, message_id=message.id, position=position
+                room_id=room_id,
+                channel_id=self.channel_id,
+                query_id=query_id,
+                message_id=message.id,
+                position=position,
             )
             for position, message in enumerate(messages)
         )

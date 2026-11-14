@@ -21,7 +21,9 @@ def create_delivery_runner(
     store = create_delivery_store(database)
     return DeliveryRunner(
         store,
-        DeliveryService(store, driver, logger, FileImageStore(database.path.parent / "rooms")),
+        DeliveryService(
+            store, driver, logger, FileImageStore(database.path.parent / "rooms", "channel-default")
+        ),
         SubmitterLock(database.path),
         logger,
         concurrency,

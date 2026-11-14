@@ -9,23 +9,31 @@ Agent Relay 将聊天室消息路由到当前 Codex 会话。你在当前会话�
 
 ## 了解当前聊天室
 
-投递正文前包含 `roomId`、`messageId`、房间内 `seq`、保存时的 `createdAt` 和 `sender: <sender_name>（<sender_id>）`；消息引用了其他消息时，`sender` 后另有一行 `referTo: <被引用消息 ID>`，用 `message_get` 读取该消息核对上下文。用 `member_catalog(room_id)` 获取聊天室说明、项目目录、自己的成员身份与订阅、话题和同伴。CLI 为 `agent-relay member catalog ROOM`。接入层自动识别当前 Codex 会话，不需要你传自身成员 ID、会话 ID 或服务地址。同一会话在不同聊天室的身份按当前 `roomId` 解析。
+投递正文前包含 `roomId`、`channelId`、`messageId`、房间内 `seq`、保存时的 `createdAt` 和 `sender: <sender_name>（<sender_id>）`；消息引用了其他消息时，`sender` 后另有一行 `referTo: <被引用消息 ID>`，用 `message_get` 读取该消息核对上下文。用 `member_catalog(room_id, channel_id=channelId)` 获取聊天室说明、频道工作目录、自己的成员身份与订阅、话题和同伴。CLI 为 `agent-relay --channel-id CHANNEL member catalog ROOM`。接入层自动识别当前 Codex 会话，不需要你传自身成员 ID、会话 ID 或服务地址。同一会话在不同聊天室的身份按当前 `roomId/channelId` 解析。
 
 优先使用已连接的 Agent Relay MCP，也可使用已配置的 `agent-relay` CLI。后续仅在需要更新目录信息时重新查询。CLI 成功结果和 MCP `structuredContent` 均为 `{requestId, data}`。
 
+所有频道资源工具必须显式携带消息中的 `channel_id`，默认频道也不例外。CLI 的 `--channel-id CHANNEL` 是全局参数，放在命令组前，也可通过 `AGENT_RELAY_CHANNEL_ID` 配置。省略频道返回 `channel_required`；不要从消息 ID、目标成员或界面最近选择猜频道。房间和频道管理使用各自接口。
+
+`channel_list(room_id)` 用于发现频道；catalog 的 `projectPath` 是房间原目录，`workingPath` 才是本频道执行目录。会话不能在同一房间同时绑定多个频道，不自动移动会话。消息 `seq` 在房间全局递增，频道内出现间隔正常；话题、成员、消息、队列、图片和查阅位置均以频道为范围。
+
+管理频道使用 `channel_create(room_id, name, use_worktree=False, description="")`、`channel_get(room_id, channel_id)`、`channel_archive(room_id, target_channel_id)`；CLI 对应 `channel create/get/archive`，创建可传 `--description`。频道展示名称和描述。默认沿用房间原目录，只有显式选择 worktree 才从当前 commit 创建独立目录，不带入未提交文件，也不接受基准提交参数。
+
+创建客户端内部先生成 ID，再发送一次创建请求；结果未知时保存错误返回的 `channelId`，使用 `channel_get` 查询同一 ID，不再次调用 create。频道、固定用户、话题与事件由请求事务一起提交，失败时回滚数据库写入；错误不授权自动接管或删除遗留的 Git 目录和分支。归档保留目录、分支、历史和已提交的外部输入；默认频道不能单独归档。
+
 | 协作动作 | MCP 工具 | CLI |
 | --- | --- | --- |
-| 了解聊天室与同伴 | `member_catalog(room_id)` | `agent-relay member catalog ROOM` |
-| 最近相关消息 | `member_context(room_id, limit=20)` | `agent-relay member context ROOM --limit 20` |
+| 了解聊天室与同伴 | `member_catalog(room_id, channel_id=CHANNEL)` | `agent-relay --channel-id CHANNEL member catalog ROOM` |
+| 最近相关消息 | `member_context(room_id, channel_id=CHANNEL, limit=20)` | `agent-relay --channel-id CHANNEL member context ROOM --limit 20` |
 | 查话题/消息/关键词 | `member_context`，选 `topic_id`、`message_id` 或 `keyword` | 在 context 后加 `--topic-id TOPIC`、`--message-id MESSAGE` 或 `--keyword TEXT` |
-| 查房间消息 | `room_get` / `message_list`，可选 `topic_id/member_id/keyword` | `agent-relay room get ROOM` / `agent-relay message list ROOM` |
-| 定位单条消息 | `message_get(room_id, message_id)` | `agent-relay message get ROOM MESSAGE` |
-| 查当前有效积压 | `queue_list`，可选 `topic_id/member_id/before_seq/limit` | `agent-relay queue list ROOM`，可加 `--topic-id`、`--member-id`、`--before-seq`、`--limit` |
-| 按范围清空有效积压 | `queue_clear`，可选 `topic_id/member_id/clear_codex` | `agent-relay queue clear ROOM`，可加 `--topic-id`、`--member-id`、`--clear-codex` |
-| 查看查阅位置 | `member_positions(room_id)` | `agent-relay member positions ROOM` |
-| 成员发布 | `message_publish(room_id, publication_id, content, ...)` | `agent-relay message publish ROOM --publication-id ID --content TEXT`，并显式选择目标 |
-| 找回原发布 | `publication_get(room_id, publication_id)` | `agent-relay message publication ROOM ID` |
-| 核对投递 | `delivery_list` / `delivery_get` | `agent-relay delivery list ROOM MESSAGE` / `delivery get ROOM MESSAGE DELIVERY` |
+| 查房间消息 | `room_get` / `message_list`，传 `channel_id`，可选 `topic_id/member_id/keyword` | `agent-relay --channel-id CHANNEL room get ROOM` / `agent-relay --channel-id CHANNEL message list ROOM` |
+| 定位单条消息 | `message_get(room_id, message_id, channel_id=CHANNEL)` | `agent-relay --channel-id CHANNEL message get ROOM MESSAGE` |
+| 查当前有效积压 | `queue_list`，传 `channel_id`，可选 `topic_id/member_id/before_seq/limit` | `agent-relay --channel-id CHANNEL queue list ROOM`，可加 `--topic-id`、`--member-id`、`--before-seq`、`--limit` |
+| 按范围清空有效积压 | `queue_clear`，传 `channel_id`，可选 `topic_id/member_id/clear_codex` | `agent-relay --channel-id CHANNEL queue clear ROOM`，可加 `--topic-id`、`--member-id`、`--clear-codex` |
+| 查看查阅位置 | `member_positions(room_id, channel_id=CHANNEL)` | `agent-relay --channel-id CHANNEL member positions ROOM` |
+| 成员发布 | `message_publish(room_id, publication_id, content, channel_id=CHANNEL, ...)` | `agent-relay --channel-id CHANNEL message publish ROOM --publication-id ID --content TEXT`，并显式选择目标 |
+| 找回原发布 | `publication_get(room_id, publication_id, channel_id=CHANNEL)` | `agent-relay --channel-id CHANNEL message publication ROOM ID` |
+| 核对投递 | `delivery_list` / `delivery_get`，传 `channel_id` | `agent-relay --channel-id CHANNEL delivery list ROOM MESSAGE` / `agent-relay --channel-id CHANNEL delivery get ROOM MESSAGE DELIVERY` |
 
 `room_get/message_list` 的 `member_id` 匹配发送者或发布时保存的实际接收人；和话题条件组合时取交集。`keyword` 是正文中的字面子串，最长 200 字符。`member_context` 仍只查询当前调用成员可见的消息，不等同于房间范围筛选。`queue_list` 只返回包含未删除 `pending`、`submitting` 或 `queued` 投递的消息，按 `seq` 从新到旧分页；历史投递请用 `delivery_list/get`，其中原状态和 `deletedAt` 会保留，历史 `queued` 不一定仍是有效积压。
 

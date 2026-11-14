@@ -10,6 +10,7 @@ from agent_relay.bootstrap.settings import Settings
 _CLIENT_ENVIRONMENT_VARIABLES = {
     "AGENT_RELAY_PROFILE",
     "AGENT_RELAY_SESSION_ID",
+    "AGENT_RELAY_CHANNEL_ID",
     "AGENT_RELAY_URL",
     "AGENT_RELAY_HTTP_TIMEOUT",
 }

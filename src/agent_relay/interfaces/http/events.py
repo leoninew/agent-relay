@@ -11,7 +11,7 @@ from agent_relay.interfaces.http.rooms.dependencies import EventQueriesDependenc
 router = APIRouter()
 
 
-@router.websocket("/room/{room_id}/event/stream")
+@router.websocket("/room/{room_id}/channel/{channel_id}/event/stream")
 async def stream_events(
     websocket: WebSocket, room_id: str, queries: EventQueriesDependency, after_event_id: int = 0
 ) -> None:

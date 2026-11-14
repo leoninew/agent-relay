@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { MessageDraft } from "@/services/roomApi";
+import { DEFAULT_CHANNEL_ID } from "@/domains/channel/channelRoutes";
 import { createMessageDraftStorage } from "@/stores/messageDrafts";
 
 function storageFixture() {
@@ -47,5 +48,25 @@ describe("message drafts", () => {
     expect(drafts.load("second")?.content).toBe("second");
     expect(storage.getItem("relay-publication:first")).toBe("pending");
     expect(createMessageDraftStorage(storageFixture()).load("second")).toBeUndefined();
+  });
+
+  it("restores channel drafts independently and removes only the selected channel", () => {
+    const storage = storageFixture();
+    const draft: MessageDraft = {
+      content: "default",
+      topicIds: [],
+      mentionedMemberIds: [],
+    };
+    const drafts = createMessageDraftStorage(storage);
+    drafts.save(`room:${DEFAULT_CHANNEL_ID}`, draft);
+    drafts.save("room:channel-api", { ...draft, content: "api" });
+
+    const restored = createMessageDraftStorage(storage);
+    expect(restored.load(`room:${DEFAULT_CHANNEL_ID}`)).toEqual(draft);
+    expect(restored.load("room:channel-api")?.content).toBe("api");
+
+    restored.remove(`room:${DEFAULT_CHANNEL_ID}`);
+    expect(restored.load(`room:${DEFAULT_CHANNEL_ID}`)).toBeUndefined();
+    expect(restored.load("room:channel-api")?.content).toBe("api");
   });
 });

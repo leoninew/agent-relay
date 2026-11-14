@@ -9,9 +9,11 @@ from agent_relay.domain.rooms.delivery import INTERRUPTED_SUBMISSION, UNCONFIRME
 from agent_relay.domain.rooms.models import Delivery
 from agent_relay.infrastructure.persistence.mappers import delivery_from_model, delivery_values
 from agent_relay.infrastructure.persistence.models import (
+    ChannelRecord,
     DeliveryRecord,
     MemberRecord,
     RoomEventRecord,
+    RoomRecord,
 )
 from agent_relay.infrastructure.persistence.repositories.messages import SQLAlchemyMessageRepository
 from agent_relay.infrastructure.persistence.repositories.rooms import SQLAlchemyRoomRepository
@@ -26,7 +28,10 @@ class SQLAlchemyDeliveryRepository:
         changed = (
             self.session.execute(
                 statement.returning(
-                    DeliveryRecord.room_id, DeliveryRecord.id, DeliveryRecord.message_id
+                    DeliveryRecord.room_id,
+                    DeliveryRecord.channel_id,
+                    DeliveryRecord.id,
+                    DeliveryRecord.message_id,
                 ).execution_options(synchronize_session="fetch")
             )
             .tuples()
@@ -34,9 +39,13 @@ class SQLAlchemyDeliveryRepository:
         )
         self.session.add_all(
             RoomEventRecord(
-                room_id=room_id, kind="delivery", entity_id=delivery_id, message_id=message_id
+                room_id=room_id,
+                channel_id=channel_id,
+                kind="delivery",
+                entity_id=delivery_id,
+                message_id=message_id,
             )
-            for room_id, delivery_id, message_id in changed
+            for room_id, channel_id, delivery_id, message_id in changed
         )
         self.session.flush()
         return len(changed)
@@ -68,11 +77,25 @@ class SQLAlchemyDeliveryRepository:
             .join(
                 MemberRecord,
                 (MemberRecord.room_id == DeliveryRecord.room_id)
+                & (MemberRecord.channel_id == DeliveryRecord.channel_id)
                 & (MemberRecord.id == DeliveryRecord.target_member_id)
                 & (MemberRecord.session_id == DeliveryRecord.target_session_id)
                 & (MemberRecord.kind == "agent"),
             )
-            .where(DeliveryRecord.status == "pending", DeliveryRecord.deleted_at.is_(None), ~busy)
+            .join(
+                ChannelRecord,
+                (ChannelRecord.room_id == DeliveryRecord.room_id)
+                & (ChannelRecord.id == DeliveryRecord.channel_id),
+            )
+            .join(RoomRecord, RoomRecord.id == DeliveryRecord.room_id)
+            .where(
+                DeliveryRecord.status == "pending",
+                DeliveryRecord.deleted_at.is_(None),
+                MemberRecord.deleted_at.is_(None),
+                ChannelRecord.archived_at.is_(None),
+                RoomRecord.archived_at.is_(None),
+                ~busy,
+            )
             .order_by(insertion_order("deliveries"))
             .limit(1)
         )
@@ -92,11 +115,15 @@ class SQLAlchemyDeliveryRepository:
             return None
         return ClaimedDelivery(
             candidate.room_id,
-            SQLAlchemyRoomRepository(self.session).room(candidate.room_id),
-            SQLAlchemyMessageRepository(self.session).message(
+            SQLAlchemyRoomRepository(self.session, candidate.channel_id).room(candidate.room_id),
+            SQLAlchemyMessageRepository(self.session, candidate.channel_id).message(
                 candidate.room_id, candidate.message_id
             ),
             delivery_from_model(candidate),
+            candidate.channel_id,
+            SQLAlchemyRoomRepository(self.session, candidate.channel_id).working_path(
+                candidate.room_id
+            ),
         )
 
     def finish_delivery(self, room_id: str, delivery: Delivery) -> bool:
@@ -132,6 +159,22 @@ class SQLAlchemyDeliveryRepository:
                     DeliveryRecord.queued_submission_id == head.id,
                     DeliveryRecord.client_message_id == head.client_message_id,
                     DeliveryRecord.activation_attempted_at.is_(None),
+                    select(MemberRecord.id)
+                    .where(
+                        MemberRecord.room_id == DeliveryRecord.room_id,
+                        MemberRecord.channel_id == DeliveryRecord.channel_id,
+                        MemberRecord.id == DeliveryRecord.target_member_id,
+                        MemberRecord.session_id == session_id,
+                        MemberRecord.deleted_at.is_(None),
+                    )
+                    .exists(),
+                    select(ChannelRecord.id)
+                    .where(
+                        ChannelRecord.room_id == DeliveryRecord.room_id,
+                        ChannelRecord.id == DeliveryRecord.channel_id,
+                        ChannelRecord.archived_at.is_(None),
+                    )
+                    .exists(),
                 )
                 .values(activation_attempted_at=datetime.now(UTC))
             )

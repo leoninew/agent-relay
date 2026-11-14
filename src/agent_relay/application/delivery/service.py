@@ -42,7 +42,7 @@ class DeliveryService:
         self.store = store
         self.driver = driver
         self.logger = logger
-        self.message_text = ImageMessageText(images)
+        self.images = images
         self.history_cursors: dict[str, str | None] = {}
         self.unavailable_history_sessions: set[str] = set()
 
@@ -51,7 +51,8 @@ class DeliveryService:
 
     def submit(self, work: ClaimedDelivery) -> None:
         try:
-            self._submit(work)
+            with self.store.operation(work):
+                self._submit(work)
         except Exception:
             self.logger.exception("Delivery processing failed delivery=%s", work.delivery.id)
             delivery = submission_failed(work.delivery, PROCESSING_FAILURE, datetime.now(UTC))
@@ -66,11 +67,15 @@ class DeliveryService:
             if work.message.reply_to_message_id
             else ""
         )
-        content = self.message_text.text(
+        text_output = ImageMessageText(
+            self.images.for_channel(work.channel_id) if self.images else None, work.channel_id
+        )
+        content = text_output.text(
             work.room_id, message_text(work.message.content, work.message.capabilities)
         )
         text = (
             f"roomId: {work.room_id}\n"
+            f"channelId: {work.channel_id}\n"
             f"messageId: {work.message.id}\n"
             f"seq: {work.message.seq}\n"
             f"createdAt: {created_at}\n"
@@ -82,7 +87,7 @@ class DeliveryService:
             receipt = self.driver.submit(
                 delivery.target_session_id,
                 delivery.client_message_id,
-                QueueRequest(text, work.room.project_path, work.message.capabilities),
+                QueueRequest(text, work.working_path, work.message.capabilities),
             )
             if isinstance(receipt, SteerReceipt):
                 delivery = steer_accepted(delivery, receipt.turn_id, datetime.now(UTC))
@@ -116,14 +121,20 @@ class DeliveryService:
         prefix = f"{submission_note}；" if submission_note else ""
         try:
             head = self.driver.activation_candidate(session_id)
-            if head is None or not self.store.claim_activation(session_id, head):
+            if head is None:
                 self.store.delivery_note(
                     session_id,
                     client_message_id,
                     submission_note or QUEUED_NOTE,
                 )
                 return
-            self.driver.activate(session_id, head.id)
+            with self.store.activation_operation(session_id, head):
+                if not self.store.claim_activation(session_id, head):
+                    self.store.delivery_note(
+                        session_id, client_message_id, submission_note or QUEUED_NOTE
+                    )
+                    return
+                self.driver.activate(session_id, head.id)
             self.store.delivery_note(
                 session_id,
                 head.client_message_id or client_message_id,

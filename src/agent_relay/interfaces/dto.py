@@ -2,6 +2,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from agent_relay.application.capabilities.ports import CapabilityDriver
+from agent_relay.application.channels.service import ChannelService
 from agent_relay.application.context.ports import ContextData
 from agent_relay.application.delivery.ports import QueueDriver
 from agent_relay.application.images.ports import ImageStore
@@ -24,8 +25,9 @@ class HttpLogging:
 @dataclass(frozen=True)
 class HttpDependencies:
     request_room_store: Callable[[RequestTransaction], RoomStore]
+    request_channel_service: Callable[[RequestTransaction], ChannelService]
     room_store: RoomStore
-    context_scope: RepositoryScope[ContextData]
+    context_for_channel: Callable[[str], RepositoryScope[ContextData]]
     session_driver: SessionDriver
     queue_driver: QueueDriver
     capability_driver: CapabilityDriver

@@ -177,14 +177,15 @@
             {{ translateMessage(errors.name) }}
           </p>
         </div>
-        <div v-if="mode === 'room' && !room" class="setup-field">
+        <div v-if="mode === 'room'" class="setup-field">
           <label for="setup-path"
-            >{{ t("setup.projectPath") }} <span class="required-mark">*</span></label
+            >{{ t("setup.projectPath") }} <span v-if="!room" class="required-mark">*</span></label
           >
           <AppInput
             id="setup-path"
             v-model="projectPath"
             maxlength="500"
+            :readonly="!!room"
             :disabled="saving"
             :invalid="!!errors.projectPath"
             :clear-label="t('setup.clearPath')"
@@ -203,6 +204,7 @@
           id-prefix="setup-member"
           :topics="topics"
           :room-id="roomId"
+          :channel-id="channelId"
           :disabled="saving"
         />
         <div v-if="mode === 'topic'" class="setup-field">
@@ -278,6 +280,7 @@
     sessionsLoading?: boolean;
     sessionsError?: MessageDescriptor | null;
     roomId?: string;
+    channelId?: string;
     topic?: Topic;
   }>();
   const emit = defineEmits<{
@@ -294,7 +297,7 @@
   const sessionId = ref("");
   const sessionChoices = ref<InstanceType<typeof RadioGroupRoot>>();
   const unavailableOpen = ref(false);
-  const projectPath = ref("");
+  const projectPath = ref(props.room?.projectPath ?? "");
   const description = ref("");
   const topicIds = ref<string[]>([]);
   const topicSaving = ref(false);
@@ -344,7 +347,7 @@
     name.value = props.room?.name ?? props.topic?.name ?? "";
     sessionId.value = "";
     unavailableOpen.value = false;
-    projectPath.value = "";
+    projectPath.value = props.room?.projectPath ?? "";
     description.value = props.topic?.description ?? "";
     topicIds.value = [];
     errors.value = {};

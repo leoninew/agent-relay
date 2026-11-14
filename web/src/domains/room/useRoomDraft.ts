@@ -8,13 +8,13 @@ export function useRoomDraft(
   locked: () => boolean = () => false,
 ) {
   const drafts = ref<Record<string, MessageDraft>>({});
-  const currentRoomId = ref<string>();
+  const currentScope = ref<string>();
 
   watch(
-    () => (currentRoomId.value ? drafts.value[currentRoomId.value] : undefined),
+    () => (currentScope.value ? drafts.value[currentScope.value] : undefined),
     (draft) => {
-      const roomId = currentRoomId.value;
-      if (!roomId || !draft || locked()) return;
+      const scope = currentScope.value;
+      if (!scope || !draft || locked()) return;
       if (
         draft.content ||
         draft.topicIds.length ||
@@ -22,16 +22,16 @@ export function useRoomDraft(
         draft.capabilities?.length ||
         draft.replyToMessageId
       ) {
-        storage.save(roomId, draft);
-      } else storage.remove(roomId);
+        storage.save(scope, draft);
+      } else storage.remove(scope);
     },
     { deep: true, flush: "sync" },
   );
 
-  function open(roomId: string, pending?: MessageDraft): void {
-    currentRoomId.value = undefined;
-    const saved = pending ?? drafts.value[roomId] ?? storage.load(roomId);
-    drafts.value[roomId] = saved
+  function open(scope: string, pending?: MessageDraft): void {
+    currentScope.value = undefined;
+    const saved = pending ?? drafts.value[scope] ?? storage.load(scope);
+    drafts.value[scope] = saved
       ? {
           content: saved.content,
           topicIds: [...saved.topicIds],
@@ -42,13 +42,19 @@ export function useRoomDraft(
           ...(saved.replyToMessageId ? { replyToMessageId: saved.replyToMessageId } : {}),
         }
       : { content: "", topicIds: [], mentionedMemberIds: [] };
-    currentRoomId.value = roomId;
+    currentScope.value = scope;
   }
 
-  function remove(roomId: string): void {
-    delete drafts.value[roomId];
-    storage.remove(roomId);
+  function finish(scope: string, sent: MessageDraft): void {
+    const draft: MessageDraft = {
+      content: "",
+      topicIds: [...sent.topicIds],
+      mentionedMemberIds: [...sent.mentionedMemberIds],
+    };
+    drafts.value[scope] = draft;
+    if (draft.topicIds.length || draft.mentionedMemberIds.length) storage.save(scope, draft);
+    else storage.remove(scope);
   }
 
-  return { drafts, open, remove };
+  return { drafts, open, finish };
 }

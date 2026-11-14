@@ -50,6 +50,7 @@
   defineOptions({ inheritAttrs: false });
   const props = defineProps<{
     roomId: string;
+    channelId: string;
     modelValue: string;
     skills: SkillReference[];
     availableSkills: (SkillReference & { description?: string })[];
@@ -90,6 +91,7 @@
   const knownSkills = () => [...identities.values()];
   const uploads = createImageUploads({
     roomId: props.roomId,
+    channelId: props.channelId,
     editor: () => editor.value,
     disabled: () => Boolean(props.disabled),
     composing: () => composing,
@@ -233,7 +235,7 @@
           },
           appendTransaction(transactions, _old, state) {
             if (composing || !transactions.some((tr) => tr.docChanged)) return null;
-            const tr = reconcileReferences(state.tr, knownSkills(), props.roomId);
+            const tr = reconcileReferences(state.tr, knownSkills(), props.roomId, props.channelId);
             return tr.docChanged ? tr : null;
           },
         }),
@@ -259,7 +261,7 @@
   }
   const editor = useEditor({
     extensions: [Doc, Body, Text, Break, Skill, Image, UndoRedo, Contract],
-    content: decodeMessage(props.modelValue, knownSkills(), props.roomId),
+    content: decodeMessage(props.modelValue, knownSkills(), props.roomId, props.channelId),
     editable: !props.disabled,
     enableInputRules: false,
     enablePasteRules: false,
@@ -312,6 +314,7 @@
                   copied?.content ?? text,
                   knownSkills(),
                   props.roomId,
+                  props.channelId,
                 ),
                 0,
                 0,
@@ -330,7 +333,7 @@
           view.dispatch(
             view.state.tr.insert(
               Math.max(1, Math.min(position, view.state.doc.content.size - 1)),
-              messageSlice(view.state.schema, text, knownSkills(), props.roomId),
+              messageSlice(view.state.schema, text, knownSkills(), props.roomId, props.channelId),
             ),
           );
         return true;
@@ -410,7 +413,12 @@
             composing = false;
             emit("compositionend");
             if (props.disabled || active.view.composing) return;
-            const tr = reconcileReferences(active.state.tr, knownSkills(), props.roomId);
+            const tr = reconcileReferences(
+              active.state.tr,
+              knownSkills(),
+              props.roomId,
+              props.channelId,
+            );
             if (tr.docChanged) active.view.dispatch(tr);
             uploads.flush();
           }, 0);
@@ -488,7 +496,9 @@
       emit("compositionend");
       remember(props.skills);
       output = value;
-      const doc = active.schema.nodeFromJSON(decodeMessage(value, knownSkills(), props.roomId));
+      const doc = active.schema.nodeFromJSON(
+        decodeMessage(value, knownSkills(), props.roomId, props.channelId),
+      );
       outputIdentity = JSON.stringify(documentSkills(doc));
       active.view.updateState(
         EditorState.create({
@@ -508,7 +518,12 @@
       remember(skills);
       const active = editor.value;
       if (active && !props.disabled && !composing) {
-        const tr = reconcileReferences(active.state.tr, knownSkills(), props.roomId);
+        const tr = reconcileReferences(
+          active.state.tr,
+          knownSkills(),
+          props.roomId,
+          props.channelId,
+        );
         if (tr.docChanged) active.view.dispatch(tr.setMeta("addToHistory", false));
       }
     },
@@ -532,7 +547,12 @@
         uploads.cancelAll();
         dismissQuery();
       } else if (editor.value && !composing) {
-        const tr = reconcileReferences(editor.value.state.tr, knownSkills(), props.roomId);
+        const tr = reconcileReferences(
+          editor.value.state.tr,
+          knownSkills(),
+          props.roomId,
+          props.channelId,
+        );
         if (tr.docChanged) editor.value.view.dispatch(tr.setMeta("addToHistory", false));
       }
     },

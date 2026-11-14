@@ -1,22 +1,24 @@
 from datetime import datetime
 
-from sqlalchemy import delete, false, func, or_, update
+from sqlalchemy import delete, false, func, or_, select, update
 
-from agent_relay.domain.rooms.models import Member, Room, RoomChangeKind, RoomState
+from agent_relay.domain.rooms.errors import RoomConflictError
+from agent_relay.domain.rooms.models import (
+    DEFAULT_CHANNEL_ID,
+    Member,
+    Room,
+    RoomChangeKind,
+    RoomState,
+)
 from agent_relay.infrastructure.persistence.models import (
-    ContextMessageRecord,
-    ContextQueryRecord,
+    ChannelRecord,
     DeliveryRecord,
     MemberRecord,
     MemberTopicRecord,
-    MessageMentionRecord,
-    MessageRecipientRecord,
     MessageRecord,
-    MessageTopicRecord,
     RoomEventRecord,
     RoomRecord,
     SessionRecord,
-    TopicPositionRecord,
     TopicRecord,
 )
 from agent_relay.infrastructure.persistence.repositories._room_reads import SQLAlchemyRoomReads
@@ -25,14 +27,32 @@ from agent_relay.infrastructure.persistence.sqlite import time_at_or_before
 
 class SQLAlchemyRoomRepository(SQLAlchemyRoomReads):
     def _event(self, room_id: str, kind: RoomChangeKind, entity_id: str) -> None:
-        self.session.add(RoomEventRecord(room_id=room_id, kind=kind, entity_id=entity_id))
+        self.session.add(
+            RoomEventRecord(
+                room_id=room_id, channel_id=self.channel_id, kind=kind, entity_id=entity_id
+            )
+        )
 
     def insert_room(self, room: Room, user: Member) -> None:
         self.session.add(RoomRecord(**room.model_dump()))
         self.session.flush()
         self.session.add(
+            ChannelRecord(
+                room_id=room.id,
+                id=DEFAULT_CHANNEL_ID,
+                name="默认",
+                description="",
+                working_path=room.project_path,
+                working_path_key=room.project_path,
+                is_default=True,
+                workspace_kind="existing",
+            )
+        )
+        self.session.flush()
+        self.session.add(
             MemberRecord(
                 room_id=room.id,
+                channel_id=self.channel_id,
                 **user.model_dump(exclude={"topic_ids"}),
             )
         )
@@ -61,6 +81,7 @@ class SQLAlchemyRoomRepository(SQLAlchemyRoomReads):
                 self.session.merge(
                     TopicRecord(
                         room_id=room_id,
+                        channel_id=self.channel_id,
                         **topic.model_dump(),
                     )
                 )
@@ -77,9 +98,26 @@ class SQLAlchemyRoomRepository(SQLAlchemyRoomReads):
             previous = old_members.get(member.id)
             if previous == member:
                 continue
+            if member.session_id and member.deleted_at is None:
+                existing = self.session.scalar(
+                    select(MemberRecord.id).where(
+                        MemberRecord.room_id == room_id,
+                        MemberRecord.session_id == member.session_id,
+                        MemberRecord.deleted_at.is_(None),
+                        or_(
+                            MemberRecord.channel_id != self.channel_id,
+                            MemberRecord.id != member.id,
+                        ),
+                    )
+                )
+                if existing is not None:
+                    raise RoomConflictError(
+                        "该会话已加入此聊天室的频道", code="session_already_joined"
+                    )
             self.session.merge(
                 MemberRecord(
                     room_id=room_id,
+                    channel_id=self.channel_id,
                     **member.model_dump(exclude={"topic_ids"}),
                 )
             )
@@ -90,6 +128,7 @@ class SQLAlchemyRoomRepository(SQLAlchemyRoomReads):
                     delete(MemberTopicRecord)
                     .where(
                         MemberTopicRecord.room_id == room_id,
+                        MemberTopicRecord.channel_id == self.channel_id,
                         MemberTopicRecord.member_id == member.id,
                     )
                     .execution_options(synchronize_session="fetch")
@@ -98,6 +137,7 @@ class SQLAlchemyRoomRepository(SQLAlchemyRoomReads):
                     [
                         MemberTopicRecord(
                             room_id=room_id,
+                            channel_id=self.channel_id,
                             member_id=member.id,
                             topic_id=topic_id,
                             position=position,
@@ -109,42 +149,56 @@ class SQLAlchemyRoomRepository(SQLAlchemyRoomReads):
         self.session.flush()
 
     def delete_room(self, room_id: str) -> None:
-        self.session.flush()
-        for model in (
-            DeliveryRecord,
-            ContextMessageRecord,
-            ContextQueryRecord,
-            TopicPositionRecord,
-            MemberTopicRecord,
-            MessageTopicRecord,
-            MessageMentionRecord,
-            MessageRecipientRecord,
-            MessageRecord,
-            MemberRecord,
-            SessionRecord,
-            TopicRecord,
-            RoomEventRecord,
-        ):
-            self.session.execute(
-                delete(model)
+        if (
+            self.session.scalar(
+                select(DeliveryRecord.id)
                 .where(
-                    model.__table__.c.room_id == room_id,
+                    DeliveryRecord.room_id == room_id,
+                    DeliveryRecord.status == "submitting",
+                    DeliveryRecord.deleted_at.is_(None),
                 )
-                .execution_options(synchronize_session="fetch")
+                .limit(1)
             )
+            is not None
+        ):
+            raise RoomConflictError("聊天室操作正在进行", code="channel_operation_busy")
+        now = datetime.now().astimezone()
         self.session.execute(
-            delete(RoomRecord)
+            update(RoomRecord).where(RoomRecord.id == room_id).values(archived_at=now)
+        )
+        self.session.execute(
+            update(ChannelRecord)
+            .where(ChannelRecord.room_id == room_id, ChannelRecord.archived_at.is_(None))
+            .values(archived_at=now)
+        )
+        self.session.execute(
+            update(MemberRecord)
             .where(
-                RoomRecord.id == room_id,
+                MemberRecord.room_id == room_id,
+                MemberRecord.kind == "agent",
+                MemberRecord.deleted_at.is_(None),
             )
-            .execution_options(synchronize_session="fetch")
+            .values(deleted_at=now)
+        )
+        self.session.execute(
+            update(DeliveryRecord)
+            .where(
+                DeliveryRecord.room_id == room_id,
+                DeliveryRecord.status == "pending",
+                DeliveryRecord.deleted_at.is_(None),
+            )
+            .values(deleted_at=now, updated_at=now)
         )
 
     def clear_messages(self, room_id: str, deleted_at: datetime) -> int:
         removed = list(
             self.session.scalars(
                 update(MessageRecord)
-                .where(MessageRecord.room_id == room_id, MessageRecord.deleted_at.is_(None))
+                .where(
+                    MessageRecord.room_id == room_id,
+                    MessageRecord.channel_id == self.channel_id,
+                    MessageRecord.deleted_at.is_(None),
+                )
                 .values(deleted_at=deleted_at)
                 .returning(MessageRecord.id)
                 .execution_options(synchronize_session="fetch")
@@ -152,7 +206,11 @@ class SQLAlchemyRoomRepository(SQLAlchemyRoomReads):
         )
         self.session.execute(
             update(DeliveryRecord)
-            .where(DeliveryRecord.room_id == room_id, DeliveryRecord.deleted_at.is_(None))
+            .where(
+                DeliveryRecord.room_id == room_id,
+                DeliveryRecord.channel_id == self.channel_id,
+                DeliveryRecord.deleted_at.is_(None),
+            )
             .values(deleted_at=deleted_at, updated_at=deleted_at)
             .execution_options(synchronize_session="fetch")
         )
@@ -176,6 +234,7 @@ class SQLAlchemyRoomRepository(SQLAlchemyRoomReads):
             update(MemberRecord)
             .where(
                 MemberRecord.room_id == room_id,
+                MemberRecord.channel_id == self.channel_id,
                 MemberRecord.id == member_id,
                 MemberRecord.session_id == session_id,
                 MemberRecord.deleted_at.is_(None),

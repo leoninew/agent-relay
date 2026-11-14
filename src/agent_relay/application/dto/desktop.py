@@ -5,3 +5,4 @@ from dataclasses import dataclass
 class ShutdownNotificationTarget:
     room_id: str
     agent_member_ids: tuple[str, ...]
+    channel_id: str

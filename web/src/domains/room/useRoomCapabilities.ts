@@ -30,7 +30,10 @@ function cached<Result>(
   return entry.promise;
 }
 
-export function useRoomCapabilities(room: () => Room | undefined) {
+export function useRoomCapabilities(
+  room: () => Room | undefined,
+  channelId: () => string | undefined,
+) {
   const skillCache = new Map<string, Cached<SkillCatalog>>();
   const controllers = new Set<AbortController>();
   const skills = ref<SkillCatalog>({ skills: [], errors: [] });
@@ -49,15 +52,16 @@ export function useRoomCapabilities(room: () => Room | undefined) {
     if (!active) return;
     const version = ++skillVersion;
     const current = room();
+    const currentChannel = channelId();
     skills.value = { skills: [], errors: [] };
     skillError.value = undefined;
-    skillsLoading.value = Boolean(current);
-    if (!current) return;
+    skillsLoading.value = Boolean(current && currentChannel);
+    if (!current || !currentChannel) return;
     try {
       const result = await cached(
         skillCache,
-        current.projectPath,
-        () => request((signal) => fetchRoomSkills(current.id, force, signal)),
+        `${current.id}:${currentChannel}:${current.projectPath}`,
+        () => request((signal) => fetchRoomSkills(current.id, force, signal, currentChannel)),
         force,
       );
       if (version === skillVersion) skills.value = result;
@@ -69,7 +73,7 @@ export function useRoomCapabilities(room: () => Room | undefined) {
   }
 
   watch(
-    () => JSON.stringify([room()?.id, room()?.projectPath]),
+    () => JSON.stringify([room()?.id, room()?.projectPath, channelId()]),
     () => void loadSkills(),
     { immediate: true },
   );

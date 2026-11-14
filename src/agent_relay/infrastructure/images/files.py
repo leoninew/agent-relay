@@ -17,15 +17,21 @@ _FORMATS = {
 
 
 class FileImageStore:
-    """Store images under <rooms root>/<room ID>/images."""
+    """Store images under <rooms root>/<room ID>/channels/<channel ID>/images."""
 
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, channel_id: str) -> None:
         self.root = root.expanduser().resolve()
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", channel_id):
+            raise RoomNotFoundError("频道不存在", code="channel_not_found")
+        self.channel_id = channel_id
+
+    def for_channel(self, channel_id: str) -> "FileImageStore":
+        return FileImageStore(self.root, channel_id)
 
     def _directory(self, room_id: str) -> Path:
         if not re.fullmatch(r"room-[A-Za-z0-9_-]+", room_id):
             raise RoomNotFoundError("Room not found")
-        return self.root / room_id / "images"
+        return self.root / room_id / "channels" / self.channel_id / "images"
 
     def save(self, room_id: str, content: bytes) -> StoredImage:
         if not content:

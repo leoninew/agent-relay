@@ -31,31 +31,37 @@ describe("room state", () => {
     const snapshot = roomFixture();
     const otherRoom = { ...snapshot.room, id: "other" };
     store.rooms = [snapshot.room, otherRoom];
-    store.sync(snapshot);
-    store.sync({ ...snapshot, room: otherRoom });
+    store.sync(snapshot, "channel-default");
+    store.sync({ ...snapshot, room: otherRoom }, "channel-default");
     vi.mocked(deleteRoom).mockResolvedValue();
 
     await store.remove(snapshot.room.id);
 
     expect(deleteRoom).toHaveBeenCalledWith(snapshot.room.id);
     expect(removeDraft).toHaveBeenCalledOnce();
-    expect(removeDraft).toHaveBeenCalledWith(snapshot.room.id);
+    expect(removeDraft).toHaveBeenCalledWith(
+      store.snapshotKey(snapshot.room.id, "channel-default"),
+    );
     expect(store.rooms).toEqual([otherRoom]);
-    expect(store.snapshots[snapshot.room.id]).toBeUndefined();
-    expect(store.snapshots[otherRoom.id].room).toEqual(otherRoom);
+    expect(store.snapshots[store.snapshotKey(snapshot.room.id, "channel-default")]).toBeUndefined();
+    expect(store.snapshots[store.snapshotKey(otherRoom.id, "channel-default")].room).toEqual(
+      otherRoom,
+    );
   });
 
   it("retains a room and its snapshot when deletion fails", async () => {
     const store = useRoomsStore();
     const snapshot = roomFixture();
     store.rooms = [snapshot.room];
-    store.sync(snapshot);
+    store.sync(snapshot, "channel-default");
     vi.mocked(deleteRoom).mockRejectedValue(new Error("unavailable"));
 
     await expect(store.remove(snapshot.room.id)).rejects.toThrow("unavailable");
     expect(removeDraft).not.toHaveBeenCalled();
     expect(store.rooms).toEqual([snapshot.room]);
-    expect(store.snapshots[snapshot.room.id]).toEqual(snapshot);
+    expect(store.snapshots[store.snapshotKey(snapshot.room.id, "channel-default")]).toEqual(
+      snapshot,
+    );
   });
 
   it("clears messages and pagination while applying member changes only to that room", async () => {
@@ -63,8 +69,11 @@ describe("room state", () => {
     const snapshot = roomFixture();
     const other = { ...roomFixture(), room: { ...snapshot.room, id: "other" } };
     store.rooms = [snapshot.room, other.room];
-    store.sync({ ...snapshot, hasMore: true, hasNewer: true, nextBeforeSeq: 10 });
-    store.sync(other);
+    store.sync(
+      { ...snapshot, hasMore: true, hasNewer: true, nextBeforeSeq: 10 },
+      "channel-default",
+    );
+    store.sync(other, "channel-default");
     const metadata = {
       ...snapshot,
       members: snapshot.members.map((member, index) =>
@@ -84,37 +93,41 @@ describe("room state", () => {
     };
     vi.mocked(clearRoom).mockResolvedValue({ removedMessages: 2, removedMembers: 1, metadata });
 
-    await store.clear(snapshot.room.id);
+    await store.clear(snapshot.room.id, "channel-default");
 
     expect(removeDraft).not.toHaveBeenCalled();
     expect(store.rooms).toEqual([snapshot.room, other.room]);
-    expect(store.snapshots[snapshot.room.id]).toEqual({
+    expect(store.snapshots[store.snapshotKey(snapshot.room.id, "channel-default")]).toEqual({
       ...metadata,
       messages: [],
       hasMore: false,
       hasNewer: false,
       nextBeforeSeq: null,
     });
-    expect(store.snapshots[other.room.id]).toEqual(other);
-    store.syncMetadata({ ...snapshot, eventId: 15 });
-    expect(store.snapshots[snapshot.room.id].members[0].deletedAt).toBeTruthy();
+    expect(store.snapshots[store.snapshotKey(other.room.id, "channel-default")]).toEqual(other);
+    store.syncMetadata({ ...snapshot, eventId: 15 }, "channel-default");
+    expect(
+      store.snapshots[store.snapshotKey(snapshot.room.id, "channel-default")].members[0].deletedAt,
+    ).toBeTruthy();
   });
 
   it("retains messages and members when clearing fails", async () => {
     const store = useRoomsStore();
     const snapshot = roomFixture();
-    store.sync(snapshot);
+    store.sync(snapshot, "channel-default");
     vi.mocked(clearRoom).mockRejectedValue(new Error("unavailable"));
 
-    await expect(store.clear(snapshot.room.id)).rejects.toThrow("unavailable");
-    expect(store.snapshots[snapshot.room.id]).toEqual(snapshot);
+    await expect(store.clear(snapshot.room.id, "channel-default")).rejects.toThrow("unavailable");
+    expect(store.snapshots[store.snapshotKey(snapshot.room.id, "channel-default")]).toEqual(
+      snapshot,
+    );
   });
 
   it("updates the visible room name without changing its path", async () => {
     const store = useRoomsStore();
     const snapshot = roomFixture();
     store.rooms = [snapshot.room];
-    store.sync(snapshot);
+    store.sync(snapshot, "channel-default");
     vi.mocked(updateRoom).mockResolvedValue({ ...snapshot.room, name: "Renamed" });
 
     await store.rename(snapshot.room.id, "Renamed");
@@ -136,8 +149,8 @@ describe("room state", () => {
       topics: [],
       members: [],
     };
-    store.sync(first);
-    store.sync(second);
+    store.sync(first, "channel-default");
+    store.sync(second, "channel-default");
     const topic = {
       id: "review",
       name: "审查",
@@ -157,15 +170,58 @@ describe("room state", () => {
       },
     });
 
-    await store.createTopic(first.room.id, { name: "审查", description: "" });
+    await store.createTopic(first.room.id, { name: "审查", description: "" }, "channel-default");
 
-    expect(store.snapshots[first.room.id].topics).toContainEqual(topic);
-    expect(store.snapshots[first.room.id].messages).toEqual(first.messages);
-    expect(store.snapshots[first.room.id].eventId).toBe(10);
-    expect(store.snapshots[first.room.id].positions[0].seq).toBe(1);
-    expect(store.snapshots[second.room.id].topics).toEqual([]);
-    store.syncMetadata({ ...first, topics: [], eventId: 15 });
-    expect(store.snapshots[first.room.id].topics).toContainEqual(topic);
+    expect(
+      store.snapshots[store.snapshotKey(first.room.id, "channel-default")].topics,
+    ).toContainEqual(topic);
+    expect(store.snapshots[store.snapshotKey(first.room.id, "channel-default")].messages).toEqual(
+      first.messages,
+    );
+    expect(store.snapshots[store.snapshotKey(first.room.id, "channel-default")].eventId).toBe(10);
+    expect(
+      store.snapshots[store.snapshotKey(first.room.id, "channel-default")].positions[0].seq,
+    ).toBe(1);
+    expect(store.snapshots[store.snapshotKey(second.room.id, "channel-default")].topics).toEqual(
+      [],
+    );
+    store.syncMetadata({ ...first, topics: [], eventId: 15 }, "channel-default");
+    expect(
+      store.snapshots[store.snapshotKey(first.room.id, "channel-default")].topics,
+    ).toContainEqual(topic);
+  });
+
+  it("applies topic creation only to the explicitly selected channel", async () => {
+    const store = useRoomsStore();
+    const original = roomFixture();
+    const channel = { ...original, topics: [], members: [], messages: [] };
+    store.sync(original, "channel-default");
+    store.sync(channel, "channel-api");
+    const topic = {
+      id: "review",
+      name: "Review",
+      description: "",
+      createdAt: null,
+      deletedAt: null,
+    };
+    vi.mocked(addRoomTopic).mockResolvedValue({
+      ...topic,
+      metadata: { ...channel, topics: [topic], eventId: 20 },
+    });
+
+    await store.createTopic(original.room.id, { name: "Review", description: "" }, "channel-api");
+
+    expect(addRoomTopic).toHaveBeenCalledWith(
+      original.room.id,
+      { name: "Review", description: "" },
+      "channel-api",
+    );
+    expect(store.snapshots[store.snapshotKey(original.room.id, "channel-api")].topics).toEqual([
+      topic,
+    ]);
+    expect(store.snapshots[store.snapshotKey(original.room.id, "channel-default")].topics).toEqual(
+      original.topics,
+    );
   });
 
   it("prepends earlier pages once while retaining live delivery updates and global totals", () => {
@@ -173,17 +229,21 @@ describe("room state", () => {
     const initial = roomFixture();
     const earlier = { ...initial.messages[0], id: "older", seq: 0 };
     const previous = structuredClone(initial.messages[0]);
-    store.sync(initial);
+    store.sync(initial, "channel-default");
     const liveMessage = { ...initial.messages[0], content: "已更新投递状态" };
-    store.applyMessages(initial.room.id, [liveMessage], {});
-    store.prependPage(initial.room.id, {
-      messages: [earlier, previous],
-      hasMore: true,
-      nextBeforeSeq: 0,
-      hasNewer: true,
-    });
+    store.applyMessages(initial.room.id, [liveMessage], {}, "channel-default");
+    store.prependPage(
+      initial.room.id,
+      {
+        messages: [earlier, previous],
+        hasMore: true,
+        nextBeforeSeq: 0,
+        hasNewer: true,
+      },
+      "channel-default",
+    );
 
-    const snapshot = store.snapshots[initial.room.id];
+    const snapshot = store.snapshots[store.snapshotKey(initial.room.id, "channel-default")];
     expect(snapshot.messages.map((message) => message.id)).toEqual([
       "older",
       "msg-0001",
@@ -198,18 +258,25 @@ describe("room state", () => {
   it("applies delivery updates and appends new messages matching topic and member", () => {
     const store = useRoomsStore();
     const initial = roomFixture();
-    store.sync(initial);
+    store.sync(initial, "channel-default");
     const newest = { ...initial.messages[1], id: "msg-0003", seq: 3 };
     const unrelated = { ...newest, id: "msg-0004", seq: 4, senderId: "frontend-worker" };
-    store.applyMessages(initial.room.id, [newest, unrelated], {
-      topicId: "backend",
-      memberId: "backend-worker",
-    });
-    expect(store.snapshots[initial.room.id].messages.map((message) => message.seq)).toEqual([
-      1, 2, 3,
-    ]);
+    store.applyMessages(
+      initial.room.id,
+      [newest, unrelated],
+      {
+        topicId: "backend",
+        memberId: "backend-worker",
+      },
+      "channel-default",
+    );
+    expect(
+      store.snapshots[store.snapshotKey(initial.room.id, "channel-default")].messages.map(
+        (message) => message.seq,
+      ),
+    ).toEqual([1, 2, 3]);
 
-    store.snapshots[initial.room.id].hasNewer = true;
+    store.snapshots[store.snapshotKey(initial.room.id, "channel-default")].hasNewer = true;
     store.applyMessages(
       initial.room.id,
       [
@@ -217,23 +284,36 @@ describe("room state", () => {
         { ...newest, id: "msg-0005", seq: 5 },
       ],
       {},
+      "channel-default",
     );
-    expect(store.snapshots[initial.room.id].messages.at(-1)?.content).toBe("更新已加载消息");
-    expect(store.snapshots[initial.room.id].messages.map((message) => message.seq)).toEqual([
-      1, 2, 3,
-    ]);
+    expect(
+      store.snapshots[store.snapshotKey(initial.room.id, "channel-default")].messages.at(-1)
+        ?.content,
+    ).toBe("更新已加载消息");
+    expect(
+      store.snapshots[store.snapshotKey(initial.room.id, "channel-default")].messages.map(
+        (message) => message.seq,
+      ),
+    ).toEqual([1, 2, 3]);
   });
 
   it("only appends messages containing the literal search keyword", () => {
     const store = useRoomsStore();
     const initial = roomFixture();
-    store.sync({ ...initial, messages: [] });
+    store.sync({ ...initial, messages: [] }, "channel-default");
     const matching = { ...initial.messages[0], content: "接口%_ 已确认" };
     const unrelated = { ...initial.messages[1], content: "接口变更" };
 
-    store.applyMessages(initial.room.id, [matching, unrelated], { keyword: "接口%_" });
+    store.applyMessages(
+      initial.room.id,
+      [matching, unrelated],
+      { keyword: "接口%_" },
+      "channel-default",
+    );
 
-    expect(store.snapshots[initial.room.id].messages).toEqual([matching]);
+    expect(store.snapshots[store.snapshotKey(initial.room.id, "channel-default")].messages).toEqual(
+      [matching],
+    );
   });
 
   it.each([
@@ -274,11 +354,18 @@ describe("room state", () => {
       topicIds: [],
       deliveries: [],
     };
-    store.sync({ ...initial, messages: [] });
-    store.applyMessages(initial.room.id, [sent, received, otherTopic, direct, userOnly], query);
-
-    expect(store.snapshots[initial.room.id].messages.map((message) => message.seq)).toEqual(
-      expected,
+    store.sync({ ...initial, messages: [] }, "channel-default");
+    store.applyMessages(
+      initial.room.id,
+      [sent, received, otherTopic, direct, userOnly],
+      query,
+      "channel-default",
     );
+
+    expect(
+      store.snapshots[store.snapshotKey(initial.room.id, "channel-default")].messages.map(
+        (message) => message.seq,
+      ),
+    ).toEqual(expected);
   });
 });

@@ -67,7 +67,18 @@
       </div>
     </header>
     <div class="message-details-content">
-      <template v-if="topic">
+      <template v-if="channel">
+        <section class="message-detail-section detail-object-summary">
+          <h3>{{ t("channel.label") }}</h3>
+          <dl class="detail-message-meta">
+            <dt>{{ t("details.name") }}</dt>
+            <dd>{{ channel.isDefault ? t("channel.default") : channel.name }}</dd>
+            <dt>{{ t("details.description") }}</dt>
+            <dd>{{ channel.description }}</dd>
+          </dl>
+        </section>
+      </template>
+      <template v-else-if="topic">
         <section class="message-detail-section detail-object-summary">
           <h3>{{ t("sidebar.topics") }}</h3>
           <dl class="detail-message-meta">
@@ -182,10 +193,14 @@
                   <MemberIdentity :member="recipient" :session-name="sessionName(recipient)" />
                 </td>
                 <td>
-                  <span class="delivery-stage">{{ stage ? t(`delivery.${stage}`) : "-" }}</span>
-                  <small v-if="error" class="dispatch-error">
-                    {{ t("delivery.diagnostic") }}: {{ error }}
-                  </small>
+                  <AppTooltip v-if="error" :text="t('delivery.diagnostic', { error })">
+                    <span class="delivery-stage dispatch-diagnostic" tabindex="0">
+                      {{ stage ? t(`delivery.${stage}`) : "-" }}
+                    </span>
+                  </AppTooltip>
+                  <span v-else class="delivery-stage">{{
+                    stage ? t(`delivery.${stage}`) : "-"
+                  }}</span>
                 </td>
               </tr>
             </tbody>
@@ -202,11 +217,13 @@
   import { computed } from "vue";
 
   import AppIcon from "@/components/AppIcon.vue";
+  import AppTooltip from "@/components/AppTooltip.vue";
   import MemberIdentity from "@/domains/room/MemberIdentity.vue";
   import TopicIdentity from "@/domains/room/TopicIdentity.vue";
   import { deliveryStage } from "@/domains/room/deliveryStage";
   import { useI18n } from "vue-i18n";
   import { memberSessionName } from "@/domains/room/memberSessionName";
+  import type { Channel } from "@/services/channelApi";
   import type { Member, RoomMessage, Session, Topic } from "@/services/roomApi";
   import { useToastsStore } from "@/stores/toasts";
   import { formatDateTime } from "@/utils/time";
@@ -214,6 +231,7 @@
   const props = withDefaults(
     defineProps<{
       message?: RoomMessage;
+      channel?: Channel;
       topic?: Topic;
       member?: Member;
       topics: Topic[];
@@ -221,7 +239,7 @@
       sessions: Session[];
       busy?: boolean;
     }>(),
-    { message: undefined, topic: undefined, member: undefined, busy: false },
+    { message: undefined, channel: undefined, topic: undefined, member: undefined, busy: false },
   );
   const { t } = useI18n();
   const toasts = useToastsStore();
@@ -248,7 +266,15 @@
   }
 
   const detailLabel = computed(() =>
-    t(props.topic ? "details.topic" : props.member ? "details.member" : "details.message"),
+    t(
+      props.channel
+        ? "details.channel"
+        : props.topic
+          ? "details.topic"
+          : props.member
+            ? "details.member"
+            : "details.message",
+    ),
   );
 
   const sender = computed(() => {

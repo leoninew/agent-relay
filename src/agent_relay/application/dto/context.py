@@ -22,6 +22,8 @@ class CatalogMember(RoomModel):
 
 
 class MemberCatalog(RoomModel):
+    channel_id: str
+    working_path: str
     room_id: str
     room_name: str
     room_description: str

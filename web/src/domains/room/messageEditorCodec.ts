@@ -5,19 +5,20 @@ import MarkdownIt from "markdown-it";
 import { scanInlineSource } from "@/domains/room/inlineSkills";
 import { skillEditorParts } from "@/domains/room/skillEditorModel";
 import type { SkillReference } from "@/services/roomApi";
+import { roomResourcePath } from "@/domains/channel/channelRoutes";
 
 export type ImageReference = { id: string; url: string; alt: string; marker: string };
 type Reference = { start: number; end: number; node: JSONContent };
 const markdown = new MarkdownIt();
 
-export function imageReferences(content: string, roomId: string): Reference[] {
+export function imageReferences(content: string, roomId: string, channelId: string): Reference[] {
   return scanInlineSource(content, (start) => {
     if (content.slice(start, start + 2) !== "![") return;
     const match =
-      /^!\[((?:\\[^\r\n]|[^\]\\\r\n])*)\]\((\/api\/room\/[A-Za-z0-9_-]+\/image\/(img-[a-f0-9]{32}))\)/.exec(
+      /^!\[((?:\\[^\r\n]|[^\]\\\r\n])*)\]\((\/api\/room\/[A-Za-z0-9_-]+\/channel\/[A-Za-z0-9_-]+\/image\/(img-[a-f0-9]{32}))\)/.exec(
         content.slice(start),
       );
-    if (!match || match[2] !== `/api/room/${encodeURIComponent(roomId)}/image/${match[3]}`) return;
+    if (!match || match[2] !== roomResourcePath(roomId, channelId, `/image/${match[3]}`)) return;
     const image: ImageReference = {
       id: match[3],
       url: match[2],
@@ -32,6 +33,7 @@ function references(
   content: string,
   skills: readonly SkillReference[],
   roomId: string,
+  channelId: string,
 ): Reference[] {
   return [
     ...skillEditorParts(content, skills)
@@ -44,7 +46,7 @@ function references(
           attrs: { id: part.skill!.id, label: part.skill!.name, marker: part.text },
         },
       })),
-    ...imageReferences(content, roomId),
+    ...imageReferences(content, roomId, channelId),
   ].sort((a, b) => a.start - b.start);
 }
 
@@ -63,10 +65,11 @@ export function decodeMessage(
   content: string,
   skills: readonly SkillReference[],
   roomId: string,
+  channelId: string,
 ): JSONContent {
   const nodes: JSONContent[] = [];
   let from = 0;
-  for (const reference of references(content, skills, roomId)) {
+  for (const reference of references(content, skills, roomId, channelId)) {
     if (reference.start < from) continue;
     nodes.push(...textNodes(content.slice(from, reference.start)), reference.node);
     from = reference.end;
@@ -133,8 +136,9 @@ export function reconcileReferences(
   tr: Transaction,
   skills: readonly SkillReference[],
   roomId: string,
+  channelId: string,
 ): Transaction {
-  const desired = references(nodeSource(tr.doc), skills, roomId);
+  const desired = references(nodeSource(tr.doc), skills, roomId, channelId);
   for (const unit of units(tr.doc).reverse()) {
     if (!["mention", "imageReference"].includes(unit.node.type.name)) continue;
     const match = desired.find(
@@ -163,6 +167,7 @@ export function messageSlice(
   content: string,
   skills: readonly SkillReference[],
   roomId: string,
+  channelId: string,
 ) {
-  return schema.nodeFromJSON(decodeMessage(content, skills, roomId)).firstChild!.content;
+  return schema.nodeFromJSON(decodeMessage(content, skills, roomId, channelId)).firstChild!.content;
 }

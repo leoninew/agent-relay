@@ -20,8 +20,16 @@
   <RoomWorkbench v-else :details-open="drawerOpen" @collapse-details="drawerOpen = false">
     <template #sidebar>
       <aside class="room-sidebar" :aria-label="t('room.navigation')">
+        <ChannelBar
+          :channels="availableChannels"
+          :channel-id="currentChannelId"
+          :disabled="saving || sending || !currentRoomId"
+          @create="openChannelCreate"
+          @select="roomPanel.selectChannel"
+        />
         <TopicSidebar
           :snapshot="snapshot"
+          :channel-id="currentChannelId!"
           :busy="sending || saving"
           :selected-topic-id="selectedTopicId"
           @select="selectSidebar('topic', $event)"
@@ -29,6 +37,7 @@
         />
         <MemberPanel
           :snapshot="snapshot"
+          :channel-id="currentChannelId!"
           :busy="sending || saving"
           :selected-member-id="selectedMemberId"
           @select="selectSidebar('member', $event)"
@@ -45,10 +54,12 @@
             <AppButton
               variant="plain"
               class="details-toggle"
+              :aria-label="t('sidebar.openRight')"
+              :title="t('sidebar.openDetails')"
               :aria-expanded="drawerOpen"
               @click="roomPanel.openDrawer"
             >
-              {{ t("room.details") }}
+              <AppIcon name="panel-right-open" />
             </AppButton>
           </div>
           <div class="conversation-actions">
@@ -126,9 +137,10 @@
         />
       </div>
       <RoomComposer
-        :key="snapshot.room.id"
+        :key="`${snapshot.room.id}:${currentChannelId}`"
         ref="composer"
-        v-model:draft="drafts[snapshot.room.id]"
+        v-model:draft="drafts[composerScope]"
+        :channel-id="currentChannelId!"
         :room-id="snapshot.room.id"
         :topics="activeTopics"
         :members="snapshot.members"
@@ -153,6 +165,7 @@
     <template #details="{ collapse }">
       <MessageDetails
         :message="detailMessage"
+        :channel="detailChannel"
         :topic="detailTopic"
         :member="detailMember"
         :topics="snapshot.topics"
@@ -184,6 +197,12 @@
       </MessageDetails>
     </template>
   </RoomWorkbench>
+  <ChannelCreateDialog
+    :open="channelCreateOpen"
+    :room-id="currentRoomId"
+    @close="channelCreateOpen = false"
+    @created="openCreatedChannel"
+  />
   <RoomSetupDialog
     :mode="setupMode"
     :topics="activeTopics"
@@ -193,6 +212,7 @@
     :sessions-loading="sessionsLoading"
     :sessions-error="sessionsError"
     :room-id="currentRoomId"
+    :channel-id="currentChannelId"
     :topic="editingTopic"
     @close="setupMode = undefined"
     @create-member="saveNewMember"
@@ -205,6 +225,7 @@
     :linked-session="snapshot?.sessions.find((session) => session.id === editingMember?.sessionId)"
     :topics="activeTopics"
     :room-id="currentRoomId"
+    :channel-id="currentChannelId"
     :saving="saving"
     :error="setupError"
     @close="editingMember = undefined"
@@ -246,6 +267,9 @@
   import AppIcon from "@/components/AppIcon.vue";
   import AppInput from "@/components/AppInput.vue";
   import AppLoading from "@/components/AppLoading.vue";
+  import ChannelBar from "@/domains/channel/ChannelBar.vue";
+  import ChannelCreateDialog from "@/domains/channel/ChannelCreateDialog.vue";
+  import { DEFAULT_CHANNEL_ID, draftScope } from "@/domains/channel/channelRoutes";
   import MemberEditDialog from "@/domains/room/MemberEditDialog.vue";
   import MemberPanel from "@/domains/room/MemberPanel.vue";
   import MessageDetails from "@/domains/room/MessageDetails.vue";
@@ -294,22 +318,36 @@
   } from "@/services/roomApi";
   import { subscribeRoomEvents } from "@/services/roomEvents";
   import { useRoomsStore } from "@/stores/rooms";
+  import { useChannelsStore } from "@/stores/channels";
   import { useToastsStore } from "@/stores/toasts";
 
   import "./room.css";
 
   type ResourceDeleteTarget = Exclude<DeleteTarget, { kind: "room" }>;
 
-  const props = defineProps<{ roomId?: string }>();
+  const props = defineProps<{ roomId?: string; channelId?: string }>();
   const { t } = useI18n();
   const router = useRouter();
   const roomsStore = useRoomsStore();
+  const channelsStore = useChannelsStore();
   const active = ref(true);
   let activatedBefore = false;
   const toasts = useToastsStore();
   const currentRoomId = ref<string>();
+  const currentChannelId = ref<string>();
+  const channelCreateOpen = ref(false);
   const snapshot = computed(() =>
-    currentRoomId.value ? roomsStore.snapshots[currentRoomId.value] : undefined,
+    currentRoomId.value && currentChannelId.value
+      ? roomsStore.snapshots[roomsStore.snapshotKey(currentRoomId.value, currentChannelId.value)]
+      : undefined,
+  );
+  const availableChannels = computed(() =>
+    currentRoomId.value ? channelsStore.activeChannels(currentRoomId.value) : [],
+  );
+  const composerScope = computed(() =>
+    currentRoomId.value && currentChannelId.value
+      ? draftScope(currentRoomId.value, currentChannelId.value)
+      : "",
   );
   const searchText = ref("");
   const keyword = ref("");
@@ -329,9 +367,15 @@
     drawerOpen,
     queueScope,
   } = roomPanel;
+  const requestScope = computed(() =>
+    active.value && currentRoomId.value && currentChannelId.value
+      ? draftScope(currentRoomId.value, currentChannelId.value)
+      : undefined,
+  );
   const messageQueue = useMessageQueue(
     () => (active.value ? currentRoomId.value : undefined),
     () => queueScope.value,
+    () => currentChannelId.value,
   );
   const {
     messages: queueMessages,
@@ -354,6 +398,12 @@
       ? activeMembers.value.find((member) => member.id === target.id)
       : undefined;
   });
+  const detailChannel = computed(() => {
+    const target = detailTarget.value;
+    return target?.kind === "channel"
+      ? availableChannels.value.find((channel) => channel.id === target.id)
+      : undefined;
+  });
   const loading = ref(true);
   const refreshingSessions = ref(false);
   const loadingOlder = ref(false);
@@ -367,10 +417,11 @@
   const {
     drafts,
     open: openDraft,
-    remove: removeDraft,
+    finish: finishDraft,
   } = useRoomDraft(undefined, () => sending.value || Boolean(pendingPublication.value));
-  const capabilities = useRoomCapabilities(() =>
-    roomsStore.rooms.find((room) => room.id === currentRoomId.value),
+  const capabilities = useRoomCapabilities(
+    () => roomsStore.rooms.find((room) => room.id === currentRoomId.value),
+    () => currentChannelId.value,
   );
   const skillDescriptions = computed(
     () => new Map(capabilities.catalog.value.skills.map((skill) => [skill.id, skill.description])),
@@ -437,47 +488,54 @@
     return ++loadVersion;
   }
 
-  function startEvents(roomId: string, version: number): void {
-    const current = roomsStore.snapshots[roomId];
-    if (!current || version !== loadVersion) return;
-    stopEvents = subscribeRoomEvents(roomId, current.eventId, async (page: RoomEventPage) => {
-      if (version !== loadVersion) return;
-      if (page.resyncRequired) {
-        roomPanel.closeDetails();
-        replyTo.value = undefined;
-        messageQueue.reset();
-        await loadRoom();
-        return;
-      }
-      const events = page.events.filter((event) => event.eventId > current.eventId);
-      if (!events.length) return;
-      const signal = queryController?.signal;
-      const ids = [
-        ...new Set(
-          events.map((event) => event.messageId).filter((id): id is string => Boolean(id)),
-        ),
-      ];
-      const [metadata, messages] = await Promise.all([
-        fetchRoomMetadata(roomId, signal),
-        Promise.all(ids.map((id) => fetchRoomMessage(roomId, id, signal))),
-      ]);
-      if (version !== loadVersion) return;
-      roomsStore.syncMetadata(metadata);
-      if (clearDeletedFilters()) {
-        await loadRoom();
-        return;
-      }
-      const wasAtEnd = timeline.value?.isAtEnd();
-      const previousSeq = current.messages.at(-1)?.seq ?? 0;
-      roomsStore.applyMessages(roomId, messages, filters());
-      roomPanel.syncMessages(messages);
-      current.eventId = page.nextEventId;
-      const newest = current.messages.at(-1);
-      if (wasAtEnd && newest && newest.seq > previousSeq) {
-        await nextTick();
-        if (version === loadVersion) timeline.value?.scrollToEnd();
-      }
-    });
+  function startEvents(scope: string, roomId: string, version: number): void {
+    const current = roomsStore.snapshots[scope];
+    const channelId = currentChannelId.value;
+    if (!current || !channelId || version !== loadVersion) return;
+    stopEvents = subscribeRoomEvents(
+      roomId,
+      current.eventId,
+      async (page: RoomEventPage) => {
+        if (version !== loadVersion) return;
+        if (page.resyncRequired) {
+          roomPanel.closeDetails();
+          replyTo.value = undefined;
+          messageQueue.reset();
+          await loadRoom();
+          return;
+        }
+        const events = page.events.filter((event) => event.eventId > current.eventId);
+        if (!events.length) return;
+        const signal = queryController?.signal;
+        const ids = [
+          ...new Set(
+            events.map((event) => event.messageId).filter((id): id is string => Boolean(id)),
+          ),
+        ];
+        const [metadata, messages] = await Promise.all([
+          fetchRoomMetadata(roomId, signal, channelId),
+          Promise.all(ids.map((id) => fetchRoomMessage(roomId, id, signal, channelId))),
+        ]);
+        if (version !== loadVersion) return;
+        roomsStore.syncMetadata(metadata, channelId);
+        if (clearDeletedFilters()) {
+          await loadRoom();
+          return;
+        }
+        const wasAtEnd = timeline.value?.isAtEnd();
+        const previousSeq = current.messages.at(-1)?.seq ?? 0;
+        roomsStore.applyMessages(roomId, messages, filters(), channelId);
+        roomPanel.syncMessages(messages);
+        current.eventId = page.nextEventId;
+        const newest = current.messages.at(-1);
+        if (wasAtEnd && newest && newest.seq > previousSeq) {
+          await nextTick();
+          if (version === loadVersion) timeline.value?.scrollToEnd();
+        }
+      },
+      undefined,
+      channelId,
+    );
   }
 
   function clearDeletedFilters(): boolean {
@@ -510,20 +568,27 @@
 
   async function loadRoom(beforeSeq?: number): Promise<boolean> {
     const roomId = currentRoomId.value;
-    if (!roomId || !active.value) return false;
+    const channelId = currentChannelId.value;
+    if (!roomId || !channelId || !active.value) return false;
+    const scope = roomsStore.snapshotKey(roomId, channelId);
     const version = cancelQueries();
     loading.value = true;
     loadError.value = null;
     try {
-      const result = await fetchRoom(roomId, { ...filters(), beforeSeq }, queryController?.signal);
+      const result = await fetchRoom(
+        roomId,
+        { ...filters(), beforeSeq },
+        queryController?.signal,
+        channelId,
+      );
       if (version !== loadVersion) return false;
-      roomsStore.sync(result);
+      roomsStore.sync(result, channelId);
       roomPanel.syncMessages(result.messages);
       if (clearDeletedFilters()) return await loadRoom();
       await refreshDetailMessage(roomId, version);
       await refreshReplyTo(roomId, version);
       if (version !== loadVersion) return false;
-      startEvents(roomId, version);
+      startEvents(scope, roomId, version);
       return true;
     } catch (caught) {
       if (version === loadVersion) {
@@ -538,10 +603,16 @@
 
   async function refreshDetailMessage(roomId: string, version: number): Promise<void> {
     const target = detailTarget.value;
-    if (target?.kind !== "message") return;
+    const channelId = currentChannelId.value;
+    if (target?.kind !== "message" || !channelId) return;
     const selected = target.message;
     try {
-      const message = await fetchRoomMessage(roomId, selected.id, queryController?.signal);
+      const message = await fetchRoomMessage(
+        roomId,
+        selected.id,
+        queryController?.signal,
+        channelId,
+      );
       if (version === loadVersion) roomPanel.syncMessages([message]);
     } catch (caught) {
       if (version === loadVersion) toasts.error(describeApiError(caught, "errors.detailLoad"));
@@ -549,17 +620,20 @@
   }
 
   async function refreshReplyTo(roomId: string, version: number): Promise<void> {
-    const draft = drafts.value[roomId];
+    const scope = requestScope.value;
+    const channelId = currentChannelId.value;
+    const draft = scope ? drafts.value[scope] : undefined;
     const messageId = draft?.replyToMessageId;
-    if (!messageId) return;
+    if (!messageId || !channelId) return;
     const current = () =>
       version === loadVersion &&
       currentRoomId.value === roomId &&
-      drafts.value[roomId]?.replyToMessageId === messageId;
+      scope !== undefined &&
+      drafts.value[scope]?.replyToMessageId === messageId;
     try {
       const message =
         visibleMessages.value.find((message) => message.id === messageId) ??
-        (await fetchRoomMessage(roomId, messageId, queryController?.signal));
+        (await fetchRoomMessage(roomId, messageId, queryController?.signal, channelId));
       if (current()) replyTo.value = message;
     } catch (caught) {
       if (!current()) return;
@@ -578,8 +652,10 @@
 
   async function loadOlder(): Promise<void> {
     const roomId = currentRoomId.value;
+    const channelId = currentChannelId.value;
     const beforeSeq = snapshot.value?.nextBeforeSeq;
-    if (!roomId || !beforeSeq || loadingOlder.value || loading.value) return;
+    if (!roomId || !channelId || !beforeSeq || loadingOlder.value || loading.value) return;
+    const scope = roomsStore.snapshotKey(roomId, channelId);
     const version = cancelQueries();
     loadingOlder.value = true;
     try {
@@ -587,10 +663,11 @@
         roomId,
         { ...filters(), beforeSeq },
         queryController?.signal,
+        channelId,
       );
       if (version !== loadVersion) return;
       timeline.value?.rememberScroll();
-      roomsStore.prependPage(roomId, page);
+      roomsStore.prependPage(roomId, page, channelId);
       await nextTick();
       timeline.value?.restoreScroll();
     } catch (caught) {
@@ -598,7 +675,7 @@
     } finally {
       if (version === loadVersion) {
         loadingOlder.value = false;
-        startEvents(roomId, version);
+        startEvents(scope, roomId, version);
       }
     }
   }
@@ -610,9 +687,9 @@
     try {
       await roomsStore.load();
       if (!active.value || version !== initializationVersion) return;
-      if (props.roomId) await openRoom(props.roomId);
+      if (props.roomId && props.channelId) await openRoom(props.roomId, props.channelId);
       else if (roomsStore.rooms.length)
-        await router.replace({ name: "room-detail", params: { roomId: roomsStore.rooms[0].id } });
+        await router.replace(channelRoute(roomsStore.rooms[0].id, DEFAULT_CHANNEL_ID));
       else loading.value = false;
     } catch (caught) {
       if (!active.value || version !== initializationVersion) return;
@@ -622,12 +699,47 @@
     }
   }
 
-  async function openRoom(roomId: string): Promise<void> {
+  async function openRoom(roomId: string, requestedChannelId: string): Promise<void> {
     resetSearch();
+    roomPanel.reset();
     currentRoomId.value = roomId;
+    currentChannelId.value = undefined;
     roomsStore.recentRoomId = roomId;
+    channelCreateOpen.value = false;
+    try {
+      await channelsStore.load(roomId);
+    } catch {
+      if (currentRoomId.value === roomId)
+        loadError.value = channelsStore.errors[roomId] ?? { key: "errors.channelLoad" };
+      loading.value = false;
+      return;
+    }
+    if (currentRoomId.value !== roomId || !active.value) return;
+    const channelId = channelsStore.resolveChannelId(roomId, requestedChannelId);
+    if (!channelId) {
+      loadError.value = { key: "errors.channel_not_found" };
+      loading.value = false;
+      return;
+    }
+    channelsStore.remember(roomId, channelId);
+    const route = channelRoute(roomId, channelId);
+    if (requestedChannelId !== route.params.channelId) void router.replace(route);
+    await openChannel(roomId, channelId);
+  }
+
+  function channelRoute(roomId: string, channelId: string) {
+    return {
+      name: "channel",
+      params: { roomId, channelId },
+    };
+  }
+
+  async function openChannel(roomId: string, channelId: string): Promise<void> {
+    resetSearch();
+    currentChannelId.value = channelId;
     cancelQueries();
-    delete roomsStore.snapshots[roomId];
+    const scope = roomsStore.snapshotKey(roomId, channelId);
+    delete roomsStore.snapshots[scope];
     setupMode.value = undefined;
     editingMember.value = undefined;
     editingTopic.value = undefined;
@@ -639,21 +751,36 @@
     sessions.value = [];
     sessionsLoading.value = false;
     sessionsError.value = null;
-    roomPanel.reset();
+    roomPanel.changeChannel(channelId);
     messageQueue.reset();
     replyTo.value = undefined;
     sendError.value = null;
-    const saved = sessionStorage.getItem(`relay-publication:${roomId}`);
+    const saved = sessionStorage.getItem(`relay-publication:${scope}`);
     pendingPublication.value = saved ? (JSON.parse(saved) as CreateMessage) : undefined;
-    openDraft(roomId, pendingPublication.value);
+    openDraft(scope, pendingPublication.value);
     await loadRoom();
     await nextTick();
     timeline.value?.scrollToEnd();
   }
 
   async function retry(): Promise<void> {
-    if (currentRoomId.value) await loadRoom();
+    if (currentRoomId.value && props.channelId && !currentChannelId.value)
+      await openRoom(currentRoomId.value, props.channelId);
+    else if (currentRoomId.value) await loadRoom();
     else await initialize();
+  }
+
+  function openChannelCreate(): void {
+    if (!currentChannelId.value) return;
+    channelCreateOpen.value = true;
+  }
+
+  async function openCreatedChannel(channelId: string): Promise<void> {
+    channelCreateOpen.value = false;
+    toasts.success({ key: "notice.channelCreated" });
+    if (!currentRoomId.value) return;
+    await openChannel(currentRoomId.value, channelId);
+    await router.push(channelRoute(currentRoomId.value, channelId));
   }
 
   async function selectSidebar(
@@ -670,7 +797,7 @@
     const message =
       visibleMessages.value.find((message) => message.id === messageId) ??
       queueMessages.value.find((message) => message.id === messageId);
-    if (message) roomPanel.showMessage(message);
+    if (message) roomPanel.selectMessage(message);
   }
 
   function selectQueueMessage(messageId: string): void {
@@ -685,16 +812,18 @@
   }
 
   function cancelReply(): void {
-    const draft = currentRoomId.value ? drafts.value[currentRoomId.value] : undefined;
+    const scope = requestScope.value;
+    const draft = scope ? drafts.value[scope] : undefined;
     if (draft) draft.replyToMessageId = undefined;
     replyTo.value = undefined;
   }
 
   async function sendMessage(draft: MessageDraft): Promise<void> {
-    if (sending.value || clearing.value || !currentRoomId.value) return;
+    const scope = requestScope.value;
+    if (sending.value || clearing.value || !scope) return;
     if (pendingPublication.value) return;
     const request = { ...draft, publicationId: crypto.randomUUID() };
-    sessionStorage.setItem(`relay-publication:${currentRoomId.value}`, JSON.stringify(request));
+    sessionStorage.setItem(`relay-publication:${scope}`, JSON.stringify(request));
     pendingPublication.value = request;
     await publish(request);
   }
@@ -704,42 +833,44 @@
   }
 
   async function publish(request: CreateMessage, lookup = false): Promise<void> {
-    if (!currentRoomId.value) return;
+    const scope = requestScope.value;
+    if (!currentRoomId.value || !currentChannelId.value || !scope) return;
     const roomId = currentRoomId.value;
+    const channelId = currentChannelId.value;
     sending.value = true;
     sendError.value = null;
     let sentMessage: RoomMessage;
     try {
       if (lookup) {
         try {
-          sentMessage = await fetchPublication(roomId, request.publicationId);
+          sentMessage = await fetchPublication(roomId, request.publicationId, channelId);
         } catch (caught) {
           if (!(caught instanceof ApiClientError) || caught.status !== 404) throw caught;
-          sentMessage = await postRoomMessage(roomId, request);
+          sentMessage = await postRoomMessage(roomId, request, channelId);
         }
-      } else sentMessage = await postRoomMessage(roomId, request);
+      } else sentMessage = await postRoomMessage(roomId, request, channelId);
     } catch (caught) {
       if (
         caught instanceof ApiClientError &&
         caught.kind === "http_error" &&
         [404, 409, 422].includes(caught.status ?? 0)
       ) {
-        sessionStorage.removeItem(`relay-publication:${roomId}`);
-        if (roomId === currentRoomId.value) pendingPublication.value = undefined;
+        sessionStorage.removeItem(`relay-publication:${scope}`);
+        if (scope === requestScope.value) pendingPublication.value = undefined;
       }
       const message = describeApiError(caught, "errors.publish");
-      if (roomId === currentRoomId.value) sendError.value = message;
+      if (scope === requestScope.value) sendError.value = message;
       toasts.error(message);
       sending.value = false;
       return;
     }
-    sessionStorage.removeItem(`relay-publication:${roomId}`);
-    removeDraft(roomId);
-    if (roomId !== currentRoomId.value) {
+    sessionStorage.removeItem(`relay-publication:${scope}`);
+    finishDraft(scope, request);
+    if (scope !== requestScope.value) {
       sending.value = false;
       return;
     }
-    roomPanel.showMessage(sentMessage);
+    roomPanel.selectMessage(sentMessage);
     pendingPublication.value = undefined;
     composer.value?.reset();
     replyTo.value = undefined;
@@ -764,15 +895,16 @@
   }
 
   async function loadSessions(): Promise<void> {
-    if (!currentRoomId.value || !active.value) return;
+    if (!currentRoomId.value || !currentChannelId.value || !active.value) return;
     const roomId = currentRoomId.value;
+    const channelId = currentChannelId.value;
     const version = ++sessionsVersion;
     sessionsController?.abort();
     sessionsController = new AbortController();
     sessionsLoading.value = true;
     sessionsError.value = null;
     try {
-      const result = await fetchRoomSessions(roomId, sessionsController.signal);
+      const result = await fetchRoomSessions(roomId, sessionsController.signal, channelId);
       if (version === sessionsVersion) sessions.value = result;
     } catch (caught) {
       if (version === sessionsVersion) {
@@ -785,13 +917,21 @@
   }
 
   async function refreshRoom(): Promise<void> {
-    if (!currentRoomId.value || refreshingSessions.value || sending.value || clearing.value) return;
+    if (
+      !currentRoomId.value ||
+      !currentChannelId.value ||
+      refreshingSessions.value ||
+      sending.value ||
+      clearing.value
+    )
+      return;
     const roomId = currentRoomId.value;
+    const channelId = currentChannelId.value;
     const version = initializationVersion;
     refreshController = new AbortController();
     refreshingSessions.value = true;
     try {
-      await fetchRoomSessions(roomId, refreshController.signal);
+      await fetchRoomSessions(roomId, refreshController.signal, channelId);
     } catch (caught) {
       if (active.value && version === initializationVersion)
         toasts.error(describeApiError(caught, "errors.sessionRefresh"));
@@ -839,7 +979,15 @@
 
   async function clearCurrentRoom(): Promise<void> {
     const roomId = currentRoomId.value;
-    if (!roomId || !clearOpen.value || saving.value || sending.value || pendingPublication.value)
+    const channelId = currentChannelId.value;
+    if (
+      !roomId ||
+      !channelId ||
+      !clearOpen.value ||
+      saving.value ||
+      sending.value ||
+      pendingPublication.value
+    )
       return;
     clearing.value = true;
     saving.value = true;
@@ -847,12 +995,12 @@
     const version = cancelQueries();
     messageQueue.cancel();
     try {
-      const result = await roomsStore.clear(roomId);
+      const result = await roomsStore.clear(roomId, channelId);
       toasts.success({
         key: "notice.cleared",
         params: { messages: result.removedMessages, members: result.removedMembers },
       });
-      if (currentRoomId.value !== roomId) return;
+      if (currentRoomId.value !== roomId || currentChannelId.value !== channelId) return;
       clearOpen.value = false;
       roomPanel.reset();
       messageQueue.reset();
@@ -861,9 +1009,9 @@
       await loadLatest();
     } catch (caught) {
       const message = describeApiError(caught, "errors.clear");
-      if (currentRoomId.value === roomId) {
+      if (currentRoomId.value === roomId && currentChannelId.value === channelId) {
         clearError.value = message;
-        startEvents(roomId, version);
+        startEvents(roomsStore.snapshotKey(roomId, channelId), roomId, version);
         void messageQueue.refresh();
       }
       toasts.error(message);
@@ -894,59 +1042,70 @@
     }
   }
 
-  function applyResourceChange(metadata: RoomMetadata): void {
-    roomsStore.syncMetadata(metadata);
-    if (metadata.room.id === currentRoomId.value && clearDeletedFilters()) void loadRoom();
+  function applyResourceChange(metadata: RoomMetadata, channelId: string): void {
+    roomsStore.syncMetadata(metadata, channelId);
+    if (
+      metadata.room.id === currentRoomId.value &&
+      channelId === currentChannelId.value &&
+      clearDeletedFilters()
+    )
+      void loadRoom();
   }
 
   async function saveNewMember(request: CreateMember): Promise<void> {
-    if (!currentRoomId.value) return;
+    if (!currentRoomId.value || !currentChannelId.value) return;
     const roomId = currentRoomId.value;
+    const channelId = currentChannelId.value;
     await saveSetup(async () => {
-      const result = await addRoomMember(roomId, request);
-      applyResourceChange(result.metadata);
+      const result = await addRoomMember(roomId, request, channelId);
+      applyResourceChange(result.metadata, channelId);
     }, "notice.memberAdded");
   }
 
   async function saveMember(memberId: string, request: UpdateMember): Promise<void> {
-    if (!currentRoomId.value) return;
+    if (!currentRoomId.value || !currentChannelId.value) return;
     const roomId = currentRoomId.value;
+    const channelId = currentChannelId.value;
     await saveSetup(async () => {
-      const result = await updateRoomMember(roomId, memberId, request);
-      applyResourceChange(result.metadata);
+      const result = await updateRoomMember(roomId, memberId, request, channelId);
+      applyResourceChange(result.metadata, channelId);
     }, "notice.memberSaved");
   }
 
   async function saveNewTopic(request: CreateTopic): Promise<void> {
-    if (!currentRoomId.value) return;
+    if (!currentRoomId.value || !currentChannelId.value) return;
     const roomId = currentRoomId.value;
+    const channelId = currentChannelId.value;
     await saveSetup(async () => {
-      const result = await addRoomTopic(roomId, request);
-      applyResourceChange(result.metadata);
+      const result = await addRoomTopic(roomId, request, channelId);
+      applyResourceChange(result.metadata, channelId);
     }, "notice.topicCreated");
   }
 
   async function saveTopic(topicId: string, request: CreateTopic): Promise<void> {
-    if (!currentRoomId.value) return;
+    if (!currentRoomId.value || !currentChannelId.value) return;
     const roomId = currentRoomId.value;
+    const channelId = currentChannelId.value;
     await saveSetup(async () => {
-      const result = await updateRoomTopic(roomId, topicId, request);
-      applyResourceChange(result.metadata);
+      const result = await updateRoomTopic(roomId, topicId, request, channelId);
+      applyResourceChange(result.metadata, channelId);
     }, "notice.topicSaved");
   }
 
   async function deleteNode(): Promise<void> {
-    if (saving.value || !currentRoomId.value || !deleteTarget.value) return;
+    if (saving.value || !currentRoomId.value || !currentChannelId.value || !deleteTarget.value)
+      return;
     const roomId = currentRoomId.value;
+    const channelId = currentChannelId.value;
     const target = deleteTarget.value;
     saving.value = true;
     setupError.value = null;
     try {
       const result =
         target.kind === "topic"
-          ? await deleteRoomTopic(roomId, target.node.id)
-          : await deleteRoomMember(roomId, target.node.id);
-      applyResourceChange(result.metadata);
+          ? await deleteRoomTopic(roomId, target.node.id, channelId)
+          : await deleteRoomMember(roomId, target.node.id, channelId);
+      applyResourceChange(result.metadata, channelId);
       toasts.success({
         key: target.kind === "topic" ? "notice.topicDeleted" : "notice.memberDeleted",
       });
@@ -962,11 +1121,17 @@
 
   async function showReference(messageId: string): Promise<void> {
     const roomId = currentRoomId.value;
-    if (!roomId) return;
+    const channelId = currentChannelId.value;
+    if (!roomId || !channelId) return;
     if (!visibleMessages.value.some((message) => message.id === messageId)) {
       const version = loadVersion;
       try {
-        const message = await fetchRoomMessage(roomId, messageId, queryController?.signal);
+        const message = await fetchRoomMessage(
+          roomId,
+          messageId,
+          queryController?.signal,
+          channelId,
+        );
         if (version !== loadVersion) return;
         selectedTopicId.value = undefined;
         selectedMemberId.value = undefined;
@@ -1006,7 +1171,7 @@
     }
     active.value = true;
     capabilities.resume();
-    if (currentRoomId.value) {
+    if (currentRoomId.value && currentChannelId.value) {
       keyword.value = searchText.value.trim();
       void loadRoom();
       void messageQueue.refresh();
@@ -1024,31 +1189,63 @@
   watch(
     [
       currentRoomId,
+      currentChannelId,
       () => queueScope.value.topicId,
       () => queueScope.value.memberId,
       () => snapshot.value?.eventId,
     ],
-    ([roomId, topicId, memberId], [previousRoomId, previousTopicId, previousMemberId]) => {
-      if (roomId !== previousRoomId || topicId !== previousTopicId || memberId !== previousMemberId)
+    (
+      [roomId, channelId, topicId, memberId],
+      [previousRoomId, previousChannelId, previousTopicId, previousMemberId],
+    ) => {
+      if (
+        roomId !== previousRoomId ||
+        channelId !== previousChannelId ||
+        topicId !== previousTopicId ||
+        memberId !== previousMemberId
+      )
         messageQueue.reset();
-      if (active.value && roomId && snapshot.value) void messageQueue.refresh();
+      if (active.value && roomId && channelId && snapshot.value) void messageQueue.refresh();
     },
   );
 
   watch(
     () => props.roomId,
     (roomId) => {
-      if (roomId) {
-        void openRoom(roomId);
+      if (roomId && props.channelId) {
+        void openRoom(roomId, props.channelId);
       } else {
         cancelQueries();
         messageQueue.reset();
         roomPanel.reset();
         sessionsVersion++;
         currentRoomId.value = undefined;
+        currentChannelId.value = undefined;
         pendingPublication.value = undefined;
         void initialize();
       }
+    },
+  );
+
+  watch(
+    () => props.channelId,
+    (channelId) => {
+      const roomId = props.roomId;
+      if (!roomId || !channelId || currentRoomId.value !== roomId) return;
+      if (!channelsStore.loadedRooms[roomId]) return;
+      if (
+        channelId &&
+        !channelsStore.activeChannels(roomId).some((channel) => channel.id === channelId)
+      ) {
+        cancelQueries();
+        messageQueue.reset();
+        roomPanel.reset();
+        currentChannelId.value = undefined;
+        loadError.value = { key: "errors.channel_not_found" };
+        loading.value = false;
+        return;
+      }
+      if (channelId !== currentChannelId.value) void openChannel(roomId, channelId);
     },
   );
 

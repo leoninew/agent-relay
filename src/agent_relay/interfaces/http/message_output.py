@@ -14,7 +14,8 @@ def get_message_output(
     ] = "url",
 ) -> ImageMessageText:
     images = get_http_dependencies(connection).image_store if image_paths == "local" else None
-    return ImageMessageText(images)
+    channel_id = connection.path_params["channel_id"]
+    return ImageMessageText(images.for_channel(channel_id) if images else None, channel_id)
 
 
 MessageOutputDependency = Annotated[ImageMessageText, Depends(get_message_output)]

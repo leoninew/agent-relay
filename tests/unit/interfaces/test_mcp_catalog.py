@@ -37,9 +37,27 @@ def test_tool_catalog_exposes_typed_collaboration_and_management() -> None:
         "publication_get",
         "delivery_list",
         "delivery_get",
+        "channel_list",
+        "channel_get",
+        "channel_create",
+        "channel_archive",
     }
     publish = tools["message_publish"]
-    assert set(publish.input_schema["required"]) == {"room_id", "publication_id", "content"}
+    assert set(publish.input_schema["required"]) == {
+        "room_id",
+        "channel_id",
+        "publication_id",
+        "content",
+    }
+    for name in set(tools) - {
+        "room_list",
+        "room_create",
+        "channel_list",
+        "channel_get",
+        "channel_create",
+        "channel_archive",
+    }:
+        assert "channel_id" in tools[name].input_schema["required"]
     assert {"topic_ids", "mentioned_member_ids"} <= set(publish.input_schema["properties"])
     assert "to_console" not in publish.input_schema["properties"]
     assert "as_member" not in publish.input_schema["properties"]

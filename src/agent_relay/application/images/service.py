@@ -4,14 +4,16 @@ from agent_relay.application.rooms.ports import RoomQueries
 
 
 class ImageService:
-    def __init__(self, queries: RoomQueries, images: ImageStore) -> None:
+    def __init__(self, queries: RoomQueries, images: ImageStore, channel_id: str) -> None:
         self.queries = queries
         self.images = images
+        self.channel_id = channel_id
 
     def upload(self, room_id: str, content: bytes) -> UploadedImage:
         self.queries.metadata(room_id)
         image = self.images.save(room_id, content)
-        url = f"/api/room/{room_id}/image/{image.id}"
+        prefix = f"/api/room/{room_id}/channel/{self.channel_id}"
+        url = f"{prefix}/image/{image.id}"
         return UploadedImage(
             id=image.id,
             url=url,

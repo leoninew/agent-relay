@@ -31,6 +31,7 @@ def test_app_settings_use_user_override_and_separate_path_roots(
     monkeypatch.setenv("AGENT_RELAY_URL", "http://configured-relay")
     monkeypatch.setenv("AGENT_RELAY_HTTP_TIMEOUT", "3.5")
     monkeypatch.setenv("AGENT_RELAY_SESSION_ID", "session-from-cli")
+    monkeypatch.setenv("AGENT_RELAY_CHANNEL_ID", "channel-from-cli")
     settings = paths.load_app_settings(user_root=user_root, resources=resources)
 
     assert settings.profile == "app"

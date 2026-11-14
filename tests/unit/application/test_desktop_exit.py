@@ -15,10 +15,13 @@ from agent_relay.application.messages.service import MessageService
 def test_exit_notifications_build_direct_requests_with_stable_publication_ids() -> None:
     queries = Mock(spec=DesktopExitNotificationQueries)
     queries.notification_targets.return_value = [
-        ShutdownNotificationTarget("agent-relay", ("coordinator", "test-worker")),
-        ShutdownNotificationTarget("empty-room", ()),
+        ShutdownNotificationTarget(
+            "agent-relay", ("coordinator", "test-worker"), "channel-default"
+        ),
+        ShutdownNotificationTarget("empty-room", (), "channel-default"),
     ]
     messages = Mock(spec=MessageService)
+    messages.for_channel.return_value = messages
     service = DesktopExitNotificationService(queries, messages, getLogger("tests.desktop-exit"))
     started_at = datetime(2026, 11, 12, tzinfo=UTC)
 
@@ -33,7 +36,8 @@ def test_exit_notifications_build_direct_requests_with_stable_publication_ids() 
     assert published[0][1] is messages.post_message.return_value
     assert request.content == OFFLINE_MESSAGE and request.topic_ids == []
     assert request.mentioned_member_ids == ["coordinator", "test-worker"]
-    room_key = hashlib.sha256(b"agent-relay").hexdigest()[:12]
+    messages.for_channel.assert_called_once_with("channel-default")
+    room_key = hashlib.sha256(b"agent-relay:channel-default").hexdigest()[:12]
     assert request.publication_id == f"desktop-offline-run-2026-11-12-{room_key}"
     service.publish(started_at=started_at, run_id="run-2026-11-12")
     assert messages.post_message.call_args.args[1].publication_id == request.publication_id
@@ -42,10 +46,11 @@ def test_exit_notifications_build_direct_requests_with_stable_publication_ids() 
 def test_exit_notification_failure_does_not_skip_other_rooms() -> None:
     queries = Mock(spec=DesktopExitNotificationQueries)
     queries.notification_targets.return_value = [
-        ShutdownNotificationTarget("first-room", ("agent-one",)),
-        ShutdownNotificationTarget("second-room", ("agent-two",)),
+        ShutdownNotificationTarget("first-room", ("agent-one",), "channel-default"),
+        ShutdownNotificationTarget("second-room", ("agent-two",), "channel-api"),
     ]
     messages = Mock(spec=MessageService)
+    messages.for_channel.return_value = messages
     messages.post_message.side_effect = [RuntimeError("temporary failure"), Mock()]
     service = DesktopExitNotificationService(
         queries,
@@ -66,9 +71,10 @@ def test_exit_notification_failure_does_not_skip_other_rooms() -> None:
 def test_exit_notification_accepts_localized_content() -> None:
     queries = Mock(spec=DesktopExitNotificationQueries)
     queries.notification_targets.return_value = [
-        ShutdownNotificationTarget("agent-relay", ("coordinator",)),
+        ShutdownNotificationTarget("agent-relay", ("coordinator",), "channel-default"),
     ]
     messages = Mock(spec=MessageService)
+    messages.for_channel.return_value = messages
     service = DesktopExitNotificationService(queries, messages, getLogger("tests.desktop-exit"))
 
     service.publish(

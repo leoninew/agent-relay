@@ -1,6 +1,14 @@
+from collections.abc import Iterator
+from contextlib import contextmanager
+
+from sqlalchemy import select
+
 from agent_relay.application.dto.delivery import ClaimedDelivery, QueueHead, ReceivedInput
+from agent_relay.domain.rooms.errors import RoomConflictError
 from agent_relay.domain.rooms.models import Delivery
+from agent_relay.infrastructure.persistence.channel_guard import room_operation
 from agent_relay.infrastructure.persistence.database import Database
+from agent_relay.infrastructure.persistence.models import ChannelRecord, DeliveryRecord, RoomRecord
 from agent_relay.infrastructure.persistence.repositories.deliveries import (
     SQLAlchemyDeliveryRepository,
 )
@@ -9,6 +17,36 @@ from agent_relay.infrastructure.persistence.repositories.deliveries import (
 class SQLAlchemyDeliveryStore:
     def __init__(self, database: Database) -> None:
         self.database = database
+
+    @contextmanager
+    def operation(self, work: ClaimedDelivery) -> Iterator[None]:
+        with room_operation(self.database.path, work.room_id):
+            with self.database.read() as session:
+                channel = session.get(ChannelRecord, (work.room_id, work.channel_id))
+                room = session.get(RoomRecord, work.room_id)
+                if (
+                    room is None
+                    or room.archived_at is not None
+                    or channel is None
+                    or channel.archived_at is not None
+                ):
+                    raise RoomConflictError("频道当前不可用", code="channel_unavailable")
+            yield
+
+    @contextmanager
+    def activation_operation(self, session_id: str, head: QueueHead) -> Iterator[None]:
+        with self.database.read() as session:
+            record = session.scalar(
+                select(DeliveryRecord).where(
+                    DeliveryRecord.target_session_id == session_id,
+                    DeliveryRecord.client_message_id == head.client_message_id,
+                )
+            )
+            room_id = record.room_id if record is not None else None
+        if room_id is None:
+            raise RoomConflictError("队列首项不属于 Relay", code="queue_head_not_found")
+        with room_operation(self.database.path, room_id):
+            yield
 
     def interrupt_submissions(self) -> None:
         with self.database.write() as session:

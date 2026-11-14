@@ -1,6 +1,11 @@
 from dataclasses import dataclass
 
-from agent_relay.domain.rooms.models import CapabilityReference, Delivery, Message, Room
+from agent_relay.domain.rooms.models import (
+    CapabilityReference,
+    Delivery,
+    Message,
+    Room,
+)
 
 
 @dataclass(frozen=True)
@@ -47,3 +52,5 @@ class ClaimedDelivery:
     room: Room
     message: Message
     delivery: Delivery
+    channel_id: str
+    working_path: str

@@ -32,14 +32,16 @@ class DesktopExitNotificationService:
         for target in self.queries.notification_targets(started_at):
             if not target.agent_member_ids:
                 continue
-            room_key = hashlib.sha256(target.room_id.encode("utf-8")).hexdigest()[:12]
+            scope = f"{target.room_id}:{target.channel_id}"
+            room_key = hashlib.sha256(scope.encode("utf-8")).hexdigest()[:12]
             request = CreateMessage(
                 publication_id=f"desktop-offline-{run_id}-{room_key}",
                 content=content,
                 mentioned_member_ids=list(target.agent_member_ids),
             )
             try:
-                message = self.messages.post_message(target.room_id, request)
+                service = self.messages.for_channel(target.channel_id)
+                message = service.post_message(target.room_id, request)
             except Exception:
                 self.logger.exception(
                     "Unable to publish desktop offline notification room=%s", target.room_id

@@ -23,6 +23,8 @@ from agent_relay.domain.rooms.rules import (
 def room_state() -> RoomState:
     return RoomState(
         room=Room(id="room", name="Room", project_path="d:/project", description=""),
+        channel_id="channel-default",
+        working_path="d:/project",
         topics=[Topic(id="work", name="Work", description="")],
         members=[
             Member(

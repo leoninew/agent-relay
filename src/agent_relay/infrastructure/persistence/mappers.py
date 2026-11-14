@@ -24,6 +24,7 @@ def room_from_model(record: RoomRecord) -> Room:
         name=record.name,
         project_path=record.project_path,
         description=record.description,
+        archived_at=record.archived_at,
     )
 
 

@@ -16,7 +16,10 @@ function harness() {
   let capabilities!: ReturnType<typeof useRoomCapabilities>;
   const scope = effectScope();
   scope.run(() => {
-    capabilities = useRoomCapabilities(() => room.value);
+    capabilities = useRoomCapabilities(
+      () => room.value,
+      () => "channel-default",
+    );
   });
   return { scope, room, capabilities };
 }
@@ -37,18 +40,18 @@ describe("room skill loading", () => {
     return result;
   }
 
-  it("preloads skills, reuses the project catalog and refreshes explicitly", async () => {
+  it("preloads skills, isolates the room catalog and refreshes explicitly", async () => {
     const { room, capabilities } = setup();
     await setImmediate();
     expect(fetchRoomSkills).toHaveBeenCalledTimes(1);
     room.value = { ...room.value, id: "same-project" };
     await setImmediate();
-    expect(fetchRoomSkills).toHaveBeenCalledTimes(1);
+    expect(fetchRoomSkills).toHaveBeenCalledTimes(2);
     expect(capabilities.catalog.value.skills).toHaveLength(3);
     capabilities.refresh();
     await setImmediate();
-    expect(fetchRoomSkills).toHaveBeenCalledTimes(2);
-    expect(vi.mocked(fetchRoomSkills).mock.calls[1].slice(0, 2)).toEqual(["same-project", true]);
+    expect(fetchRoomSkills).toHaveBeenCalledTimes(3);
+    expect(vi.mocked(fetchRoomSkills).mock.calls[2].slice(0, 2)).toEqual(["same-project", true]);
   });
 
   it("loads the current project catalog when the room changes", async () => {

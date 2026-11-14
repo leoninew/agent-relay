@@ -21,6 +21,9 @@ class MessageService:
     def __init__(self, store: RoomStore) -> None:
         self.store = store
 
+    def for_channel(self, channel_id: str) -> "MessageService":
+        return MessageService(self.store.for_channel(channel_id))
+
     def post_message(
         self, room_id: str, request: CreateMessage, *, member_id: str | None = None
     ) -> Message:

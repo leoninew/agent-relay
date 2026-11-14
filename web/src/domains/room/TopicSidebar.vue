@@ -73,6 +73,7 @@
   const { t } = useI18n();
   const props = defineProps<{
     snapshot: RoomSnapshot;
+    channelId: string;
     busy: boolean;
     selectedTopicId?: string;
   }>();
@@ -82,6 +83,7 @@
   }>();
   const { orderedItems: topics, moveItem: moveTopic } = useSidebarOrder(
     () => props.snapshot.room.id,
+    () => props.channelId,
     "topics",
     () => props.snapshot.topics.filter((topic) => !topic.deletedAt),
   );

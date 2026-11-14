@@ -11,7 +11,9 @@ from agent_relay.interfaces.http.persistence import (
 )
 from agent_relay.interfaces.http.rooms.dependencies import MessageServiceDependency
 
-router = APIRouter(prefix="/room/{room_id}/member/{member_id}", tags=["member"])
+router = APIRouter(
+    prefix="/room/{room_id}/channel/{channel_id}/member/{member_id}", tags=["member"]
+)
 
 
 @router.get("/catalog")

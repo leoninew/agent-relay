@@ -24,6 +24,7 @@ type UploadMeta = { add?: Decoration[]; remove?: object[]; clear?: boolean };
 
 export function createImageUploads(options: {
   roomId: string;
+  channelId: string;
   editor: () => Editor | undefined;
   disabled: () => boolean;
   composing: () => boolean;
@@ -80,7 +81,7 @@ export function createImageUploads(options: {
           remove(active.view, task.id);
           continue;
         }
-        const image = imageReferences(task.result!.markdown, options.roomId)[0];
+        const image = imageReferences(task.result!.markdown, options.roomId, options.channelId)[0];
         if (
           !image ||
           image.start !== 0 ||
@@ -170,7 +171,7 @@ export function createImageUploads(options: {
     view.dispatch(tr.setMeta(uploadsKey, { add: widgets } satisfies UploadMeta));
     report();
     for (const task of added) {
-      void uploadRoomImage(options.roomId, task.file, task.controller.signal)
+      void uploadRoomImage(options.roomId, task.file, task.controller.signal, options.channelId)
         .then((result) => {
           if (disposed || !tasks.includes(task)) return;
           task.result = result;

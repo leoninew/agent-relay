@@ -63,7 +63,7 @@ def test_invalid_member_scope_never_queries_codex(
 
 def test_missing_room_does_not_query_codex(room_store: MagicMock, room_repository: Mock) -> None:
     driver = Mock(spec=CapabilityDriver)
-    room_repository.room.side_effect = RoomNotFoundError("聊天室不存在")
+    room_repository.working_path.side_effect = RoomNotFoundError("聊天室不存在")
     with pytest.raises(RoomNotFoundError):
         CapabilityService(room_store, driver).skills("another-room")
     driver.list_skills.assert_not_called()

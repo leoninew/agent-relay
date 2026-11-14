@@ -128,7 +128,7 @@ describe("room draft editing", () => {
     expect(restored.drafts.value.room.content).toBe("corrected text");
   });
 
-  it("clears the sent room without reset restoring its content or deleting another draft", () => {
+  it("clears sent content while retaining routing for the next message", () => {
     let locked = false;
     const editing = editor(() => locked);
     editing.open("other");
@@ -137,19 +137,26 @@ describe("room draft editing", () => {
     editing.drafts.value.sent = {
       content: "sent text",
       topicIds: ["topic"],
-      mentionedMemberIds: [],
+      mentionedMemberIds: ["member"],
+      capabilities: [{ type: "skill", id: "skill", name: "example" }],
       replyToMessageId: "quote",
     };
     locked = true;
-    editing.remove("sent");
-    editing.drafts.value.sent = { content: "", topicIds: ["topic"], mentionedMemberIds: [] };
+    editing.finish("sent", editing.drafts.value.sent);
     locked = false;
 
-    expect(storage.load("sent")).toBeUndefined();
+    expect(storage.load("sent")).toEqual({
+      content: "",
+      topicIds: ["topic"],
+      mentionedMemberIds: ["member"],
+    });
     expect(storage.load("other")?.content).toBe("other draft");
     const restored = editor();
     restored.open("sent");
     expect(restored.drafts.value.sent.content).toBe("");
+    expect(restored.drafts.value.sent.topicIds).toEqual(["topic"]);
+    expect(restored.drafts.value.sent.mentionedMemberIds).toEqual(["member"]);
+    expect(restored.drafts.value.sent.capabilities).toBeUndefined();
     expect(restored.drafts.value.sent.replyToMessageId).toBeUndefined();
   });
 });

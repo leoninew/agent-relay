@@ -79,7 +79,7 @@
     const roomId = rooms.recentRoomId;
     void router.push(
       roomId && rooms.rooms.some((room) => room.id === roomId)
-        ? { name: "room-detail", params: { roomId } }
+        ? { name: "channel", params: { roomId, channelId: "channel-default" } }
         : { name: "room" },
     );
   }

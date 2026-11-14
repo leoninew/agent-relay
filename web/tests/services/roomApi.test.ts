@@ -51,9 +51,9 @@ describe("room API", () => {
 
   it("requests room skills with an escaped identity and explicit reload", async () => {
     const signal = new AbortController().signal;
-    await fetchRoomSkills("room/a", true, signal);
+    await fetchRoomSkills("room/a", true, signal, "channel-default");
     expect(adapterMock.mock.calls[0][0]).toMatchObject({
-      url: "/api/room/room%2Fa/skills",
+      url: "/api/room/room%2Fa/channel/channel-default/skills",
       params: { force_reload: true },
       signal,
     });
@@ -61,18 +61,25 @@ describe("room API", () => {
 
   it("loads a room and sends combined filters and a pagination cursor", async () => {
     await expect(fetchRooms()).resolves.toEqual([roomFixture().room]);
-    await expect(fetchRoom("agent-relay")).resolves.toEqual(roomFixture());
-    await fetchRoom("agent-relay", {
-      topicId: "frontend",
-      memberId: "frontend-worker",
-      keyword: "接口%_",
-      beforeSeq: 80,
-      limit: 25,
-    });
+    await expect(fetchRoom("agent-relay", {}, undefined, "channel-default")).resolves.toEqual(
+      roomFixture(),
+    );
+    await fetchRoom(
+      "agent-relay",
+      {
+        topicId: "frontend",
+        memberId: "frontend-worker",
+        keyword: "接口%_",
+        beforeSeq: 80,
+        limit: 25,
+      },
+      undefined,
+      "channel-default",
+    );
     expect(adapterMock).toHaveBeenLastCalledWith(
       expect.objectContaining({
         method: "get",
-        url: "/api/room/agent-relay",
+        url: "/api/room/agent-relay/channel/channel-default/snapshot",
         params: {
           topic_id: "frontend",
           member_id: "frontend-worker",
@@ -86,32 +93,37 @@ describe("room API", () => {
 
   it("loads history, exact references, metadata and event catchup independently", async () => {
     const signal = new AbortController().signal;
-    await fetchRoomMessages("room/one", { keyword: "接口", beforeSeq: 50 }, signal);
+    await fetchRoomMessages(
+      "room/one",
+      { keyword: "接口", beforeSeq: 50 },
+      signal,
+      "channel-default",
+    );
     expect(adapterMock).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        url: "/api/room/room%2Fone/message",
+        url: "/api/room/room%2Fone/channel/channel-default/message",
         params: expect.objectContaining({ keyword: "接口", before_seq: 50 }),
         signal,
       }),
     );
-    await fetchRoomMessage("room/one", "message/one", signal);
+    await fetchRoomMessage("room/one", "message/one", signal, "channel-default");
     expect(adapterMock).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        url: "/api/room/room%2Fone/message/message%2Fone",
+        url: "/api/room/room%2Fone/channel/channel-default/message/message%2Fone",
         signal,
       }),
     );
-    await fetchRoomMetadata("room/one", signal);
+    await fetchRoomMetadata("room/one", signal, "channel-default");
     expect(adapterMock).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        url: "/api/room/room%2Fone/metadata",
+        url: "/api/room/room%2Fone/channel/channel-default/metadata",
         signal,
       }),
     );
-    await fetchRoomEvents("room/one", 123, signal);
+    await fetchRoomEvents("room/one", 123, signal, "channel-default");
     expect(adapterMock).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        url: "/api/room/room%2Fone/event",
+        url: "/api/room/room%2Fone/channel/channel-default/event",
         params: { after_event_id: 123 },
         signal,
       }),
@@ -130,13 +142,13 @@ describe("room API", () => {
         { type: "mcp_server", id: "example", name: "Example MCP" },
       ],
     };
-    await expect(postRoomMessage("agent-relay", request)).resolves.toEqual(
+    await expect(postRoomMessage("agent-relay", request, "channel-default")).resolves.toEqual(
       roomFixture().messages[0],
     );
     expect(adapterMock).toHaveBeenCalledWith(
       expect.objectContaining({
         method: "post",
-        url: "/api/room/agent-relay/message",
+        url: "/api/room/agent-relay/channel/channel-default/message",
         data: JSON.stringify(request),
       }),
     );
@@ -148,11 +160,12 @@ describe("room API", () => {
       "room/one",
       { topicId: "frontend", memberId: "test-worker", beforeSeq: 50, limit: 25 },
       signal,
+      "channel-default",
     );
     expect(adapterMock).toHaveBeenLastCalledWith(
       expect.objectContaining({
         method: "get",
-        url: "/api/room/room%2Fone/queue",
+        url: "/api/room/room%2Fone/channel/channel-default/queue",
         params: {
           topic_id: "frontend",
           member_id: "test-worker",
@@ -162,7 +175,7 @@ describe("room API", () => {
         signal,
       }),
     );
-    await fetchMessageQueue("room/one");
+    await fetchMessageQueue("room/one", {}, undefined, "channel-default");
     expect(adapterMock).toHaveBeenLastCalledWith(
       expect.objectContaining({
         params: { topic_id: undefined, member_id: undefined, before_seq: undefined, limit: 50 },
@@ -178,24 +191,26 @@ describe("room API", () => {
       status: 200,
       statusText: "",
     }));
-    await expect(deleteQueueMessage("room/one", "message/one")).resolves.toEqual({
-      removedMessages: 1,
-    });
+    await expect(deleteQueueMessage("room/one", "message/one", "channel-default")).resolves.toEqual(
+      {
+        removedMessages: 1,
+      },
+    );
     expect(adapterMock).toHaveBeenLastCalledWith(
       expect.objectContaining({
         method: "delete",
-        url: "/api/room/room%2Fone/queue/message%2Fone",
+        url: "/api/room/room%2Fone/channel/channel-default/queue/message%2Fone",
       }),
     );
   });
 
   it("loads project sessions and joins the selected session without creation fields", async () => {
     const signal = new AbortController().signal;
-    await fetchRoomSessions("room/one", signal);
+    await fetchRoomSessions("room/one", signal, "channel-default");
     expect(adapterMock).toHaveBeenLastCalledWith(
       expect.objectContaining({
         method: "get",
-        url: "/api/room/room%2Fone/session",
+        url: "/api/room/room%2Fone/channel/channel-default/session",
         signal,
       }),
     );
@@ -204,11 +219,11 @@ describe("room API", () => {
       name: "Worker",
       topicIds: ["frontend"],
     };
-    await addRoomMember("room/one", request);
+    await addRoomMember("room/one", request, "channel-default");
     expect(adapterMock).toHaveBeenLastCalledWith(
       expect.objectContaining({
         method: "post",
-        url: "/api/room/room%2Fone/member",
+        url: "/api/room/room%2Fone/channel/channel-default/member",
         data: JSON.stringify(request),
       }),
     );
@@ -217,11 +232,15 @@ describe("room API", () => {
   it("does not automatically retry a failed join request", async () => {
     adapterMock.mockRejectedValueOnce(new Error("connection lost"));
     await expect(
-      addRoomMember("room", {
-        sessionId: "existing",
-        name: "Worker",
-        topicIds: ["frontend"],
-      }),
+      addRoomMember(
+        "room",
+        {
+          sessionId: "existing",
+          name: "Worker",
+          topicIds: ["frontend"],
+        },
+        "channel-default",
+      ),
     ).rejects.toThrow();
     expect(adapterMock).toHaveBeenCalledTimes(1);
   });
@@ -251,10 +270,13 @@ describe("room API", () => {
       statusText: "OK",
     }));
 
-    await expect(clearRoom("room/one")).resolves.toEqual(result);
+    await expect(clearRoom("room/one", "channel-default")).resolves.toEqual(result);
     expect(adapterMock).toHaveBeenCalledOnce();
     expect(adapterMock).toHaveBeenLastCalledWith(
-      expect.objectContaining({ method: "post", url: "/api/room/room%2Fone/clear" }),
+      expect.objectContaining({
+        method: "post",
+        url: "/api/room/room%2Fone/channel/channel-default/clear",
+      }),
     );
     expect(adapterMock.mock.calls[0][0].params).toBeUndefined();
   });

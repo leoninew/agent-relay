@@ -40,6 +40,8 @@ def room_state() -> RoomState:
     ]
     return RoomState(
         room=Room(id="agent-relay", name="Room", project_path="d:/project", description=""),
+        channel_id="channel-default",
+        working_path="d:/project",
         topics=[Topic(id=topic, name=topic, description="") for topic in ["frontend", "backend"]],
         members=members,
         sessions=[
@@ -60,6 +62,7 @@ def room_state() -> RoomState:
 def room_repository(room_state: RoomState) -> Mock:
     repository = Mock(spec=RoomData)
     repository.room.return_value = room_state.room
+    repository.working_path.side_effect = lambda room_id: room_state.working_path
     repository.resources.return_value = room_state
     repository.project_exists.return_value = False
     repository.publication.return_value = None
@@ -71,7 +74,7 @@ def room_repository(room_state: RoomState) -> Mock:
         member.session_id: member.id for member in room_state.members if member.session_id
     }
     repository.bindings.return_value = [
-        (room_state.room.id, member.session_id)
+        (room_state.room.id, room_state.channel_id, member.session_id)
         for member in room_state.members
         if member.session_id
     ]
@@ -96,4 +99,5 @@ def room_store(room_repository: Mock) -> MagicMock:
     store = MagicMock(spec=RoomStore)
     store.read.return_value.__enter__.return_value = room_repository
     store.write.return_value.__enter__.return_value = room_repository
+    store.for_channel.return_value = store
     return store

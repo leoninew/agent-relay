@@ -7,7 +7,8 @@ import type { MessageQueuePage, MessageQueueScope, RoomMessage } from "@/service
 
 export function useMessageQueue(
   roomId: () => string | undefined,
-  scope: () => MessageQueueScope = () => ({}),
+  scope: () => MessageQueueScope,
+  channelId: () => string | undefined,
 ) {
   const messages = ref<RoomMessage[]>([]);
   const hasMore = ref(false);
@@ -45,6 +46,8 @@ export function useMessageQueue(
   async function refresh(): Promise<void> {
     const currentRoom = roomId();
     if (!currentRoom) return;
+    const currentChannel = channelId();
+    if (!currentChannel) return;
     cancel();
     const requestVersion = version;
     controller = new AbortController();
@@ -58,16 +61,18 @@ export function useMessageQueue(
       let cursor: number | undefined;
       let page: MessageQueuePage;
       do {
-        page = await fetchMessageQueue(
-          currentRoom,
-          {
-            ...currentScope,
-            beforeSeq: cursor,
-            limit: Math.min(200, desiredCount - loaded.length),
-          },
-          signal,
-        );
-        if (requestVersion !== version || currentRoom !== roomId()) return;
+        const query = {
+          ...currentScope,
+          beforeSeq: cursor,
+          limit: Math.min(200, desiredCount - loaded.length),
+        };
+        page = await fetchMessageQueue(currentRoom, query, signal, currentChannel);
+        if (
+          requestVersion !== version ||
+          currentRoom !== roomId() ||
+          currentChannel !== channelId()
+        )
+          return;
         loaded.push(...page.messages);
         cursor = page.nextBeforeSeq ?? undefined;
       } while (page.hasMore && loaded.length < desiredCount);
@@ -89,17 +94,17 @@ export function useMessageQueue(
       loadingMore.value
     )
       return;
+    const currentChannel = channelId();
+    if (!currentChannel) return;
     const requestVersion = version;
     controller = new AbortController();
     loadingMore.value = true;
     error.value = null;
     try {
-      const page = await fetchMessageQueue(
-        currentRoom,
-        { ...scope(), beforeSeq: nextBeforeSeq, limit: 50 },
-        controller.signal,
-      );
-      if (requestVersion !== version || currentRoom !== roomId()) return;
+      const query = { ...scope(), beforeSeq: nextBeforeSeq, limit: 50 };
+      const page = await fetchMessageQueue(currentRoom, query, controller.signal, currentChannel);
+      if (requestVersion !== version || currentRoom !== roomId() || currentChannel !== channelId())
+        return;
       const combined = new Map(messages.value.map((message) => [message.id, message]));
       for (const message of page.messages) combined.set(message.id, message);
       apply(page, [...combined.values()]);
@@ -113,16 +118,19 @@ export function useMessageQueue(
   async function remove(messageId: string): Promise<void> {
     const currentRoom = roomId();
     if (!currentRoom || removingId.value !== null) return;
+    const currentChannel = channelId();
+    if (!currentChannel) return;
     const currentScope = { ...scope() };
     removingId.value = messageId;
     removeError.value = null;
     try {
-      await deleteQueueMessage(currentRoom, messageId);
-      if (currentRoom === roomId()) await refresh();
+      await deleteQueueMessage(currentRoom, messageId, currentChannel);
+      if (currentRoom === roomId() && currentChannel === channelId()) await refresh();
     } catch (caught) {
       const selectedScope = scope();
       if (
         currentRoom === roomId() &&
+        currentChannel === channelId() &&
         currentScope.topicId === selectedScope.topicId &&
         currentScope.memberId === selectedScope.memberId
       )

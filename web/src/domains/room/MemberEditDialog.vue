@@ -49,6 +49,7 @@
           id-prefix="edit-member"
           :topics="topics"
           :room-id="roomId"
+          :channel-id="channelId"
           :disabled="saving"
         />
         <p v-if="error" class="field-error" role="alert">{{ translateMessage(error) }}</p>
@@ -90,6 +91,7 @@
     linkedSession?: Pick<Session, "id" | "name">;
     topics: Topic[];
     roomId?: string;
+    channelId?: string;
     saving: boolean;
     error: MessageDescriptor | null;
   }>();

@@ -21,6 +21,7 @@ def _validate_keyword(
 
 
 @click.group(context_settings={"help_option_names": ["-h", "--help"]}, no_args_is_help=False)
+@click.option("--channel-id", envvar="AGENT_RELAY_CHANNEL_ID", help="频道 ID；频道资源操作必须指定")
 @click.option(
     "--session-id",
     envvar="AGENT_RELAY_SESSION_ID",
@@ -45,12 +46,22 @@ def _validate_keyword(
     help="单次 HTTP 请求超时秒数",
 )
 @click.pass_context
-def cli(context: click.Context, base_url: str, timeout: float, session_id: str | None) -> None:
+def cli(
+    context: click.Context,
+    base_url: str,
+    timeout: float,
+    session_id: str | None,
+    channel_id: str | None,
+) -> None:
     """通过 HTTP 管理本机 Relay 聊天室。"""
     if session_id is None and context.invoked_subcommand != "mcp":
         session_id = os.environ.get("CODEX_THREAD_ID")
     context.obj = RelayClient(
-        base_url, timeout, opener=cast(RequestOpener | None, context.obj), session_id=session_id
+        base_url,
+        timeout,
+        opener=cast(RequestOpener | None, context.obj),
+        session_id=session_id,
+        channel_id=channel_id,
     )
 
 
@@ -71,6 +82,46 @@ def mcp_server(client: RelayClient) -> None:
 @cli.group("room", no_args_is_help=False)
 def room_commands() -> None:
     """聊天室。"""
+
+
+@cli.group("channel", no_args_is_help=False)
+def channel_commands() -> None:
+    """频道与工作目录。"""
+
+
+@channel_commands.command("list")
+@click.argument("room_id")
+@click.pass_obj
+def channel_list(client: RelayClient, room_id: str) -> ApiResult:
+    return client.channel_list(room_id)
+
+
+@channel_commands.command("create")
+@click.argument("room_id")
+@click.option("--name", required=True)
+@click.option("--description", default="")
+@click.option("--worktree/--no-worktree", default=False)
+@click.pass_obj
+def channel_create(
+    client: RelayClient, room_id: str, name: str, description: str, worktree: bool
+) -> ApiResult:
+    return client.channel_create(room_id, name, worktree, description)
+
+
+@channel_commands.command("get")
+@click.argument("room_id")
+@click.argument("channel_id")
+@click.pass_obj
+def channel_get(client: RelayClient, room_id: str, channel_id: str) -> ApiResult:
+    return client.channel_get(room_id, channel_id)
+
+
+@channel_commands.command("archive")
+@click.argument("room_id")
+@click.argument("channel_id")
+@click.pass_obj
+def channel_archive(client: RelayClient, room_id: str, channel_id: str) -> ApiResult:
+    return client.channel_archive(room_id, channel_id)
 
 
 @room_commands.command("list", help="列出聊天室")

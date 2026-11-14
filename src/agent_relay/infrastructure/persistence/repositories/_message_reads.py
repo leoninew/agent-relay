@@ -22,14 +22,16 @@ from agent_relay.infrastructure.persistence.sqlite import insertion_order, liter
 
 
 class SQLAlchemyMessageReads:
-    def __init__(self, session: Session) -> None:
+    def __init__(self, session: Session, channel_id: str) -> None:
         self.session = session
+        self.channel_id = channel_id
 
     @staticmethod
     def statement(*, include_deleted: bool = False) -> Select[tuple[MessageRecord, str]]:
         statement = select(MessageRecord, MemberRecord.name).join(
             MemberRecord,
             (MemberRecord.room_id == MessageRecord.room_id)
+            & (MemberRecord.channel_id == MessageRecord.channel_id)
             & (MemberRecord.id == MessageRecord.publisher_id),
         )
         return statement if include_deleted else statement.where(MessageRecord.deleted_at.is_(None))
@@ -39,15 +41,22 @@ class SQLAlchemyMessageReads:
     ) -> ColumnElement[bool]:
         criteria: list[ColumnElement[bool]] = [
             MessageRecord.room_id == room_id,
+            MessageRecord.channel_id == self.channel_id,
             MessageRecord.deleted_at.is_(None),
         ]
         if topic_id is not None:
-            if self.session.get(TopicRecord, (room_id, topic_id)) is None:
+            if (
+                self.session.get(
+                    TopicRecord, {"room_id": room_id, "channel_id": self.channel_id, "id": topic_id}
+                )
+                is None
+            ):
                 raise RoomNotFoundError("话题不存在", code="topic_not_found")
             criteria.append(
                 select(MessageTopicRecord.message_id)
                 .where(
                     MessageTopicRecord.room_id == MessageRecord.room_id,
+                    MessageTopicRecord.channel_id == MessageRecord.channel_id,
                     MessageTopicRecord.message_id == MessageRecord.id,
                     MessageTopicRecord.topic_id == topic_id,
                 )
@@ -55,7 +64,13 @@ class SQLAlchemyMessageReads:
                 .exists()
             )
         if member_id is not None:
-            if self.session.get(MemberRecord, (room_id, member_id)) is None:
+            if (
+                self.session.get(
+                    MemberRecord,
+                    {"room_id": room_id, "channel_id": self.channel_id, "id": member_id},
+                )
+                is None
+            ):
                 raise RoomNotFoundError("成员不存在", code="member_not_found")
             criteria.append(
                 or_(
@@ -63,6 +78,7 @@ class SQLAlchemyMessageReads:
                     select(MessageRecipientRecord.message_id)
                     .where(
                         MessageRecipientRecord.room_id == MessageRecord.room_id,
+                        MessageRecipientRecord.channel_id == MessageRecord.channel_id,
                         MessageRecipientRecord.message_id == MessageRecord.id,
                         MessageRecipientRecord.member_id == member_id,
                     )
@@ -92,6 +108,7 @@ class SQLAlchemyMessageReads:
             select(MessageTopicRecord.message_id, MessageTopicRecord.topic_id)
             .where(
                 MessageTopicRecord.room_id == room_id,
+                MessageTopicRecord.channel_id == self.channel_id,
                 MessageTopicRecord.message_id.in_(message_ids),
             )
             .order_by(MessageTopicRecord.position)
@@ -100,6 +117,7 @@ class SQLAlchemyMessageReads:
             select(MessageMentionRecord.message_id, MessageMentionRecord.member_id)
             .where(
                 MessageMentionRecord.room_id == room_id,
+                MessageMentionRecord.channel_id == self.channel_id,
                 MessageMentionRecord.message_id.in_(message_ids),
             )
             .order_by(MessageMentionRecord.position)
@@ -108,6 +126,7 @@ class SQLAlchemyMessageReads:
             select(MessageRecipientRecord.message_id, MessageRecipientRecord.member_id)
             .where(
                 MessageRecipientRecord.room_id == room_id,
+                MessageRecipientRecord.channel_id == self.channel_id,
                 MessageRecipientRecord.message_id.in_(message_ids),
             )
             .order_by(MessageRecipientRecord.position)
@@ -118,6 +137,7 @@ class SQLAlchemyMessageReads:
                 select(DeliveryRecord)
                 .where(
                     DeliveryRecord.room_id == room_id,
+                    DeliveryRecord.channel_id == self.channel_id,
                     DeliveryRecord.message_id.in_(message_ids),
                 )
                 .order_by(insertion_order("deliveries"))
@@ -152,7 +172,9 @@ class SQLAlchemyMessageReads:
         messages = self.read(
             room_id,
             self.statement().where(
-                MessageRecord.room_id == room_id, MessageRecord.id == message_id
+                MessageRecord.room_id == room_id,
+                MessageRecord.channel_id == self.channel_id,
+                MessageRecord.id == message_id,
             ),
         )
         if not messages:
@@ -164,6 +186,7 @@ class SQLAlchemyMessageReads:
             room_id,
             self.statement(include_deleted=True).where(
                 MessageRecord.room_id == room_id,
+                MessageRecord.channel_id == self.channel_id,
                 MessageRecord.publisher_id == publisher_id,
                 MessageRecord.publication_id == publication_id,
             ),
@@ -175,6 +198,7 @@ class SQLAlchemyMessageReads:
             self.session.scalar(
                 select(MessageRecord.id).where(
                     MessageRecord.room_id == room_id,
+                    MessageRecord.channel_id == self.channel_id,
                     MessageRecord.id == message_id,
                     MessageRecord.deleted_at.is_(None),
                 )
@@ -245,6 +269,7 @@ class SQLAlchemyMessageReads:
             select(DeliveryRecord.id)
             .where(
                 DeliveryRecord.room_id == MessageRecord.room_id,
+                DeliveryRecord.channel_id == MessageRecord.channel_id,
                 DeliveryRecord.message_id == MessageRecord.id,
                 DeliveryRecord.deleted_at.is_(None),
                 DeliveryRecord.status.in_(ACTIVE_DELIVERY_STATUSES),

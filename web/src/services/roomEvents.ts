@@ -1,5 +1,6 @@
 import { fetchRoomEvents } from "@/services/roomApi";
 import type { RoomEventPage } from "@/services/roomApi";
+import { roomResourcePath } from "@/domains/channel/channelRoutes";
 
 export type SyncState = "connecting" | "connected" | "reconnecting";
 
@@ -7,7 +8,8 @@ export function subscribeRoomEvents(
   roomId: string,
   afterEventId: number,
   apply: (page: RoomEventPage) => Promise<void>,
-  status?: (state: SyncState) => void,
+  status: ((state: SyncState) => void) | undefined,
+  channelId: string,
 ): () => void {
   let stopped = false;
   let socket: WebSocket | undefined;
@@ -37,13 +39,13 @@ export function subscribeRoomEvents(
       await chain;
       let page: RoomEventPage;
       do {
-        page = await fetchRoomEvents(roomId, afterEventId, controller.signal);
+        page = await fetchRoomEvents(roomId, afterEventId, controller.signal, channelId);
         if (stopped) return;
         await consume(page);
       } while (!stopped && page.hasMore && !page.resyncRequired);
       if (stopped) return;
       const url = new URL(
-        `/api/room/${encodeURIComponent(roomId)}/event/stream`,
+        roomResourcePath(roomId, channelId, "/event/stream"),
         window.location.href,
       );
       url.protocol = url.protocol === "https:" ? "wss:" : "ws:";

@@ -68,7 +68,8 @@ def get_image_service(connection: HTTPConnection, queries: RoomQueriesDependency
     images = get_http_dependencies(connection).image_store
     if images is None:
         raise RuntimeError("Image storage is not configured")
-    return ImageService(queries, images)
+    channel_id = connection.path_params["channel_id"]
+    return ImageService(queries, images.for_channel(channel_id), channel_id)
 
 
 ImageServiceDependency = Annotated[ImageService, Depends(get_image_service)]

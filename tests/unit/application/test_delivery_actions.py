@@ -1,4 +1,5 @@
 import logging
+from contextlib import nullcontext
 from dataclasses import replace
 from datetime import UTC, datetime
 from unittest.mock import Mock, call
@@ -49,7 +50,7 @@ def work() -> ClaimedDelivery:
         deliveries=[delivery],
     )
     room = Room(id="room", name="Room", project_path="d:/project", description="")
-    return ClaimedDelivery(room.id, room, message, delivery)
+    return ClaimedDelivery(room.id, room, message, delivery, "channel-default", room.project_path)
 
 
 @pytest.fixture
@@ -57,6 +58,8 @@ def delivery_store() -> Mock:
     store = Mock(spec=DeliveryRepository)
     store.finish_delivery.return_value = True
     store.claim_activation.return_value = True
+    store.operation.side_effect = lambda work: nullcontext()
+    store.activation_operation.side_effect = lambda session_id, head: nullcontext()
     return store
 
 
@@ -126,6 +129,7 @@ def test_submission_includes_stable_message_lookup_facts_and_capabilities(
     created_at = work.message.model_dump(mode="json", by_alias=True)["createdAt"]
     assert request.text == (
         f"roomId: {work.room_id}\n"
+        f"channelId: {work.channel_id}\n"
         f"messageId: {work.message.id}\n"
         f"seq: {work.message.seq}\n"
         f"createdAt: {created_at}\n"
@@ -166,6 +170,7 @@ def test_submission_adds_reference_line_when_message_replies_to_another(
     created_at = work.message.model_dump(mode="json", by_alias=True)["createdAt"]
     assert request.text == (
         f"roomId: {work.room_id}\n"
+        f"channelId: {work.channel_id}\n"
         f"messageId: {work.message.id}\n"
         f"seq: {work.message.seq}\n"
         f"createdAt: {created_at}\n"
