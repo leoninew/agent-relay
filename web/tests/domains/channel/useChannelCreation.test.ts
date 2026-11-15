@@ -8,6 +8,7 @@ import { createChannel, fetchChannel } from "@/services/channelApi";
 
 vi.mock("@/services/channelApi", () => ({
   createChannel: vi.fn(),
+  deleteChannel: vi.fn(),
   fetchChannel: vi.fn(),
   fetchChannels: vi.fn(),
 }));

@@ -35,7 +35,7 @@ class ChannelService(ChannelQueries):
                     raise
             else:
                 if existing.archived_at is not None:
-                    raise RoomConflictError("频道已归档", code="channel_unavailable")
+                    raise RoomConflictError("频道已删除", code="channel_unavailable")
                 if (
                     existing.name != request.name
                     or existing.description != request.description
@@ -75,6 +75,6 @@ class ChannelService(ChannelQueries):
                 self.git.verify(source, path, branch, commit)
             return channel
 
-    def archive(self, room_id: str, channel_id: str) -> None:
+    def delete(self, room_id: str, channel_id: str) -> None:
         with self.store.guard(room_id), self.store.write() as channels:
-            channels.archive(room_id, channel_id)
+            channels.delete(room_id, channel_id)

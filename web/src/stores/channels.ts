@@ -5,6 +5,7 @@ import { describeApiError } from "@/services/api";
 import type { MessageDescriptor } from "@/i18n";
 import {
   createChannel as createChannelRequest,
+  deleteChannel,
   fetchChannel,
   fetchChannels,
 } from "@/services/channelApi";
@@ -91,6 +92,12 @@ export const useChannelsStore = defineStore("channels", () => {
     return channel;
   }
 
+  async function remove(roomId: string, channelId: string): Promise<void> {
+    await deleteChannel(roomId, channelId);
+    byRoom.value[roomId] = channels(roomId).filter((candidate) => candidate.id !== channelId);
+    if (recent.value[roomId] === channelId) delete recent.value[roomId];
+  }
+
   function reset(roomId?: string): void {
     if (roomId) {
       controllers.get(roomId)?.abort();
@@ -127,6 +134,7 @@ export const useChannelsStore = defineStore("channels", () => {
     remember,
     create,
     lookup,
+    remove,
     reset,
   };
 });

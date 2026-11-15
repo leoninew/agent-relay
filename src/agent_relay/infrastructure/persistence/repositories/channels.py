@@ -70,13 +70,15 @@ class SQLAlchemyChannelRepository(SQLAlchemyRoomRepository):
         )
         scoped._event(room.id, "room", channel.id)
 
-    def archive(self, room_id: str, channel_id: str) -> None:
+    def delete(self, room_id: str, channel_id: str) -> None:
         self.room(room_id)
         record = self.session.get(ChannelRecord, (room_id, channel_id))
         if record is None:
             raise RoomNotFoundError("频道不存在", code="channel_not_found")
         if record.is_default:
-            raise RoomConflictError("默认频道不能单独归档", code="default_channel_required")
+            raise RoomConflictError("默认频道不能单独删除", code="default_channel_required")
+        if record.archived_at is not None:
+            return
         if (
             self.session.scalar(
                 select(DeliveryRecord.id)

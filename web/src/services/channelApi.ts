@@ -57,6 +57,6 @@ export async function fetchChannel(
   return data;
 }
 
-export async function archiveChannel(roomId: string, channelId: string): Promise<void> {
+export async function deleteChannel(roomId: string, channelId: string): Promise<void> {
   await apiClient.delete(channelPath(roomId, channelId));
 }

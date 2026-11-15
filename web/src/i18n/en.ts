@@ -5,6 +5,7 @@ export default {
     member: "Member details",
     message: "Message details",
     close: "Close {details}",
+    deleteChannel: "Delete channel: {name}",
     editTopic: "Edit topic: {name}",
     deleteTopic: "Delete topic: {name}",
     editMember: "Edit member: {name}",
@@ -154,10 +155,13 @@ export default {
     deleting: "Deleting...",
     confirmDelete: "Confirm delete",
     kindRoom: "room",
+    kindChannel: "channel",
     kindTopic: "topic",
     kindMember: "member",
     removeRoom:
       "This permanently removes this room's topics, members, messages and delivery records. Linked Codex sessions are unaffected.",
+    removeChannel:
+      "This removes the channel from the list. Existing messages and delivery records remain; its working directory and linked Codex sessions are unaffected.",
     removeTopic:
       "This removes member subscriptions to the topic. Existing messages and delivery records remain.",
     removeMember:
@@ -213,7 +217,7 @@ export default {
     roomRenamed: "Room name updated.",
     roomDeleted: "Room deleted.",
     channelCreated: "Channel created.",
-    channelArchived: "Channel archived.",
+    channelDeleted: "Channel deleted.",
     topicCreated: "Topic created.",
     topicSaved: "Topic saved.",
     topicDeleted: "Topic deleted.",
@@ -259,6 +263,7 @@ export default {
     channel_directory_missing: "The channel working directory is missing.",
     channel_required: "Specify the channel this session belongs to.",
     channel_operation_busy: "A channel operation is in progress. Try again later.",
+    default_channel_required: "The default channel cannot be deleted separately.",
     worktree_git_failed: "Git operation failed. Check the repository.",
     worktree_git_unavailable: "Unable to complete the Git operation.",
     worktree_path_exists: "The worktree directory already exists.",

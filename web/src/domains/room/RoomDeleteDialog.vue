@@ -6,8 +6,8 @@
     @close="$emit('close')"
   >
     <div class="setup-form">
-      <p>{{ t("forms.removeConfirm", { kind, name: target?.node.name ?? "" }) }}</p>
-      <p class="delete-description">
+      <p>
+        {{ t("forms.removeConfirm", { kind, name: target?.node.name ?? "" }) }}
         {{ target ? t(`forms.remove${target.kind[0].toUpperCase()}${target.kind.slice(1)}`) : "" }}
       </p>
       <p v-if="error" class="field-error" role="alert">{{ translateMessage(error) }}</p>
@@ -36,10 +36,12 @@
 
   import AppButton from "@/components/AppButton.vue";
   import AppDialog from "@/components/AppDialog.vue";
+  import type { Channel } from "@/services/channelApi";
   import type { Member, Room, Topic } from "@/services/roomApi";
 
   export type DeleteTarget =
     | { kind: "room"; node: Room }
+    | { kind: "channel"; node: Channel }
     | { kind: "topic"; node: Topic }
     | { kind: "member"; node: Member };
 

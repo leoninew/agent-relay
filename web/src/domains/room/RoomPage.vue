@@ -171,9 +171,10 @@
         :topics="snapshot.topics"
         :members="snapshot.members"
         :sessions="snapshot.sessions"
-        :busy="sending || saving"
+        :busy="sending || saving || clearing || Boolean(pendingPublication)"
         @close="roomPanel.closeDetails"
         @collapse="collapse"
+        @delete-channel="openDelete({ kind: 'channel', node: $event })"
         @edit-topic="editTopic"
         @delete-topic="openDelete({ kind: 'topic', node: $event })"
         @edit-member="editMember"
@@ -1093,14 +1094,40 @@
   }
 
   async function deleteNode(): Promise<void> {
-    if (saving.value || !currentRoomId.value || !currentChannelId.value || !deleteTarget.value)
+    if (
+      saving.value ||
+      sending.value ||
+      clearing.value ||
+      !currentRoomId.value ||
+      !currentChannelId.value ||
+      !deleteTarget.value
+    )
       return;
     const roomId = currentRoomId.value;
     const channelId = currentChannelId.value;
     const target = deleteTarget.value;
+    if (target.kind === "channel" && (target.node.isDefault || pendingPublication.value)) return;
     saving.value = true;
     setupError.value = null;
     try {
+      if (target.kind === "channel") {
+        await channelsStore.remove(roomId, target.node.id);
+        delete roomsStore.snapshots[roomsStore.snapshotKey(roomId, target.node.id)];
+        if (currentRoomId.value === roomId) {
+          deleteTarget.value = undefined;
+          if (currentChannelId.value === target.node.id) {
+            await openChannel(roomId, DEFAULT_CHANNEL_ID);
+            await router.replace(channelRoute(roomId, DEFAULT_CHANNEL_ID));
+          } else if (
+            detailTarget.value?.kind === "channel" &&
+            detailTarget.value.id === target.node.id
+          ) {
+            roomPanel.closeDetails();
+          }
+        }
+        toasts.success({ key: "notice.channelDeleted" });
+        return;
+      }
       const result =
         target.kind === "topic"
           ? await deleteRoomTopic(roomId, target.node.id, channelId)

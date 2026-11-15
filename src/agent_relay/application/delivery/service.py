@@ -178,7 +178,13 @@ class DeliveryService:
                     "Input receipt observation unavailable session=%s reason=%s", session_id, exc
                 )
                 self.unavailable_history_sessions.add(session_id)
-        except Exception:
+        except Exception as exc:
             # A missing or unreadable history page never proves rejection or
             # receipt and never causes a new queue/add or queue/start.
-            self.logger.exception("Input receipt observation unavailable session=%s", session_id)
+            if session_id not in self.unavailable_history_sessions:
+                self.logger.warning(
+                    "Input receipt observation unavailable session=%s reason=%s",
+                    session_id,
+                    exc,
+                )
+                self.unavailable_history_sessions.add(session_id)

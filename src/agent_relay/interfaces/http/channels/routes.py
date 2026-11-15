@@ -67,5 +67,5 @@ def create_channel(
 
 
 @router.delete("/{channel_id}", status_code=204)
-def archive_channel(room_id: str, channel_id: str, service: ChannelServiceDependency) -> None:
-    service.archive(room_id, channel_id)
+def delete_channel(room_id: str, channel_id: str, service: ChannelServiceDependency) -> None:
+    service.delete(room_id, channel_id)

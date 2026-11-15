@@ -256,14 +256,23 @@ def test_queue_fallback_reason_survives_activation_note(
 def test_observation_failure_or_unrelated_input_never_confirms_or_resends(
     delivery_store: Mock, queue_driver: Mock
 ) -> None:
+    first_error = TimeoutError("Unavailable")
     queue_driver.read_input_page.side_effect = [
-        TimeoutError("Unavailable"),
+        first_error,
+        TimeoutError("Still unavailable"),
         InputPage((ReceivedInput("other-client", "item", "turn"),), None),
     ]
-    service = DeliveryService(delivery_store, queue_driver, logging.getLogger("tests.delivery"))
-    service.observe("original-session", {"client"})
-    service.observe("original-session", {"client"})
+    logger = Mock(spec=logging.Logger)
+    service = DeliveryService(delivery_store, queue_driver, logger)
+    for _ in range(3):
+        service.observe("original-session", {"client"})
     delivery_store.confirm_input.assert_not_called()
+    logger.warning.assert_called_once_with(
+        "Input receipt observation unavailable session=%s reason=%s",
+        "original-session",
+        first_error,
+    )
+    logger.exception.assert_not_called()
     queue_driver.submit.assert_not_called()
     queue_driver.activate.assert_not_called()
 

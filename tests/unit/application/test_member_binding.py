@@ -170,6 +170,35 @@ def test_presence_failure_records_unknown_and_continues_other_members(
     session_driver.list_sessions.assert_not_called()
 
 
+def test_presence_failure_logs_once_until_the_session_recovers(
+    room_store: MagicMock,
+    room_repository: Mock,
+    session_driver: Mock,
+) -> None:
+    room_repository.bindings.return_value = [
+        ("agent-relay", "channel-default", "frontend-worker-session")
+    ]
+    first_error = TimeoutError("upstream unavailable")
+    session_driver.inspect.side_effect = [
+        first_error,
+        TimeoutError("still unavailable"),
+        SessionInfo("frontend-worker-session", "D:/project", "codex", "Original", "idle"),
+    ]
+    logger = Mock(spec=logging.Logger)
+    service = MemberService(room_store, session_driver)
+
+    for _ in range(3):
+        service.refresh_presence(logger, lambda: False)
+
+    logger.warning.assert_called_once_with(
+        "Member presence unavailable session=%s reason=%s",
+        "frontend-worker-session",
+        first_error,
+    )
+    logger.exception.assert_not_called()
+    assert "frontend-worker-session" not in service.unavailable_presence_sessions
+
+
 @pytest.mark.parametrize("status", ["unavailable", "idle"])
 def test_candidates_explain_unavailable_sessions_and_record_presence(
     status: str,

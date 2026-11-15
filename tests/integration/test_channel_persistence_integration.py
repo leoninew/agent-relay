@@ -36,7 +36,13 @@ from agent_relay.infrastructure.persistence.migrations import (
     _configuration,
     run_migrations,
 )
-from agent_relay.infrastructure.persistence.models import MessageRecord
+from agent_relay.infrastructure.persistence.models import (
+    ChannelRecord,
+    DeliveryRecord,
+    MemberRecord,
+    MessageRecord,
+    TopicRecord,
+)
 from agent_relay.infrastructure.persistence.room_store import SQLAlchemyRoomStore
 from agent_relay.infrastructure.persistence.sqlite import create_sqlite_engine
 
@@ -192,13 +198,13 @@ def test_real_worktree_uses_current_commit_and_preserves_dirty_source(
     work = SQLAlchemyDeliveryStore(database).claim_delivery()
     assert work is not None and work.working_path == channel.working_path
     with pytest.raises(RoomConflictError):
-        channels.archive(room.id, channel.id)
+        channels.delete(room.id, channel.id)
     with database.write() as session:
         session.connection().exec_driver_sql(
             "UPDATE deliveries SET status='unknown' WHERE room_id=? AND channel_id=?",
             (room.id, channel.id),
         )
-    channels.archive(room.id, channel.id)
+    channels.delete(room.id, channel.id)
     assert Path(channel.working_path).is_dir()
     assert channel.id not in {item.id for item in channels.channels(room.id)}
     with pytest.raises(RoomConflictError):
@@ -307,9 +313,68 @@ def test_http_creates_channel_and_reads_and_writes_its_resources(
             )
             assert context.status_code == 200, context.text
             assert [item["content"] for item in context.json()["messages"]] == ["API"]
+            message_id = message.json()["id"]
+            removed_queue = await client.delete(prefix + f"/queue/{message_id}")
+            assert removed_queue.status_code == 200, removed_queue.text
+            assert len((await client.get(prefix + "/message")).json()["messages"]) == 1
+            removed_topic = await client.delete(prefix + f"/topic/{topic_id}")
+            assert removed_topic.status_code == 200, removed_topic.text
+            assert removed_topic.json()["deletedAt"] is not None
+            member_id = member.json()["id"]
+            removed_member = await client.delete(prefix + f"/member/{member_id}")
+            assert removed_member.status_code == 200, removed_member.text
+            assert removed_member.json()["deletedAt"] is not None
             clear = await client.post(prefix + "/clear")
             assert clear.status_code in {200, 204}, clear.text
             assert (await client.get(prefix + "/message")).json()["messages"] == []
+            with database.read() as session:
+                key = {"room_id": room_id, "channel_id": channel_id}
+                saved_topic = session.get(TopicRecord, {**key, "id": topic_id})
+                saved_member = session.get(MemberRecord, {**key, "id": member_id})
+                saved_message = session.get(MessageRecord, {**key, "id": message_id})
+                saved_delivery = session.scalar(
+                    select(DeliveryRecord).where(
+                        DeliveryRecord.room_id == room_id,
+                        DeliveryRecord.channel_id == channel_id,
+                        DeliveryRecord.message_id == message_id,
+                    )
+                )
+                assert saved_topic is not None and saved_topic.deleted_at is not None
+                assert saved_member is not None and saved_member.deleted_at is not None
+                assert saved_message is not None and saved_message.deleted_at is not None
+                assert saved_delivery is not None and saved_delivery.deleted_at is not None
+                assert saved_message.content == "API"
+            for suffix, code, status in (
+                (DEFAULT_CHANNEL_ID, "default_channel_required", 409),
+                ("missing", "channel_not_found", 404),
+            ):
+                rejected = await client.delete(
+                    f"/api/room/{room_id}/channel/{suffix}", headers={"X-Request-Id": "delete-test"}
+                )
+                assert rejected.status_code == status, rejected.text
+                assert rejected.json()["code"] == code
+                assert (
+                    rejected.json()["requestId"]
+                    == rejected.headers["X-Request-Id"]
+                    == "delete-test"
+                )
+            deleted = await client.delete(prefix)
+            assert deleted.status_code == 204 and deleted.content == b""
+            listed = await client.get(f"/api/room/{room_id}/channel")
+            assert [item["id"] for item in listed.json()] == [DEFAULT_CHANNEL_ID]
+            unavailable = await client.get(prefix + "/snapshot")
+            assert unavailable.status_code == 409
+            assert unavailable.json()["code"] == "channel_unavailable"
+            with database.read() as session:
+                saved_channel = session.get(ChannelRecord, (room_id, channel_id))
+                assert saved_channel is not None and saved_channel.archived_at is not None
+                deleted_at = saved_channel.archived_at
+                assert session.get(MessageRecord, {**key, "id": message_id}) is not None
+            assert (await client.delete(prefix)).status_code == 204
+            with database.read() as session:
+                saved_channel = session.get(ChannelRecord, (room_id, channel_id))
+                assert saved_channel is not None and saved_channel.archived_at == deleted_at
+            assert (await client.get(default_prefix + "/snapshot")).status_code == 200
 
     asyncio.run(exercise())
 

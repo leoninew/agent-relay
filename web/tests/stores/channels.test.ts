@@ -3,11 +3,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DEFAULT_CHANNEL_ID } from "@/domains/channel/channelRoutes";
 import type { Channel } from "@/services/channelApi";
-import { createChannel, fetchChannel, fetchChannels } from "@/services/channelApi";
+import { createChannel, deleteChannel, fetchChannel, fetchChannels } from "@/services/channelApi";
 import { useChannelsStore } from "@/stores/channels";
 
 vi.mock("@/services/channelApi", () => ({
   createChannel: vi.fn(),
+  deleteChannel: vi.fn(),
   fetchChannel: vi.fn(),
   fetchChannels: vi.fn(),
 }));
@@ -79,5 +80,36 @@ describe("channel state", () => {
     expect(fetchChannel).toHaveBeenCalledWith("room-1", "channel-new");
     expect(store.channel("room-1", "channel-new")?.name).toBe("API");
     expect(createChannel).not.toHaveBeenCalled();
+  });
+
+  it("removes the deleted channel from selection while preserving other channels and rooms", async () => {
+    const store = useChannelsStore();
+    store.byRoom["room-1"] = [channel(), channel({ id: "channel-api", isDefault: false })];
+    store.byRoom["room-2"] = [channel({ roomId: "room-2" })];
+    store.remember("room-1", "channel-api");
+    store.remember("room-2", DEFAULT_CHANNEL_ID);
+    vi.mocked(deleteChannel).mockResolvedValue();
+
+    await store.remove("room-1", "channel-api");
+
+    expect(deleteChannel).toHaveBeenCalledWith("room-1", "channel-api");
+    expect(store.activeChannels("room-1").map((item) => item.id)).toEqual([DEFAULT_CHANNEL_ID]);
+    expect(store.resolveChannelId("room-1", "channel-api")).toBeUndefined();
+    expect(store.recent["room-1"]).toBeUndefined();
+    expect(store.channel("room-2", DEFAULT_CHANNEL_ID)?.roomId).toBe("room-2");
+    expect(store.recent["room-2"]).toBe(DEFAULT_CHANNEL_ID);
+  });
+
+  it("retains the channel and selection when deletion is rejected", async () => {
+    const store = useChannelsStore();
+    const target = channel({ id: "channel-api", isDefault: false });
+    store.byRoom["room-1"] = [channel(), target];
+    store.remember("room-1", target.id);
+    vi.mocked(deleteChannel).mockRejectedValue(new Error("Channel is busy"));
+
+    await expect(store.remove("room-1", target.id)).rejects.toThrow("Channel is busy");
+
+    expect(store.channel("room-1", target.id)).toEqual(target);
+    expect(store.recent["room-1"]).toBe(target.id);
   });
 });

@@ -35,6 +35,7 @@ class MemberService:
     def __init__(self, store: RoomStore, driver: SessionDriver) -> None:
         self.store = store
         self.driver = driver
+        self.unavailable_presence_sessions: set[str] = set()
 
     @staticmethod
     def _metadata(read: Callable[[], T]) -> T:
@@ -204,8 +205,13 @@ class MemberService:
                         "Codex 返回的会话身份不匹配", code="session_identity_mismatch"
                     )
                 sessions.append(info)
-            except Exception:
-                logger.exception("Member presence unavailable session=%s", session_id)
+                self.unavailable_presence_sessions.discard(session_id)
+            except Exception as exc:
+                if session_id not in self.unavailable_presence_sessions:
+                    logger.warning(
+                        "Member presence unavailable session=%s reason=%s", session_id, exc
+                    )
+                    self.unavailable_presence_sessions.add(session_id)
         observed_at = datetime.now(UTC)
         for room_id, channel_id in dict.fromkeys(
             (room_id, channel_id) for room_id, channel_id, _ in bindings

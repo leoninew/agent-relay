@@ -3,7 +3,21 @@
     <header class="room-panel-heading message-details-heading">
       <div class="detail-heading-title">
         <h2 class="room-panel-title">{{ detailLabel }}</h2>
-        <div v-if="topic && !topic.deletedAt" class="detail-heading-actions">
+        <div
+          v-if="channel && !channel.isDefault && !channel.archivedAt"
+          class="detail-heading-actions"
+        >
+          <button
+            type="button"
+            class="detail-action-link detail-delete-link"
+            :disabled="busy"
+            :aria-label="t('details.deleteChannel', { name: channel.name })"
+            @click="$emit('deleteChannel', channel)"
+          >
+            {{ t("common.delete") }}
+          </button>
+        </div>
+        <div v-else-if="topic && !topic.deletedAt" class="detail-heading-actions">
           <button
             type="button"
             class="detail-action-link"
@@ -246,6 +260,7 @@
   defineEmits<{
     close: [];
     collapse: [];
+    deleteChannel: [channel: Channel];
     editTopic: [topic: Topic];
     deleteTopic: [topic: Topic];
     editMember: [member: Member];
