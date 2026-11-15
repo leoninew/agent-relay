@@ -72,6 +72,15 @@ export default {
     sending: "Sending...",
     send: "Send",
   },
+  models: {
+    label: "Model",
+    unknown: "Unknown",
+    loading: "Loading models...",
+    choices: "Session models for {name}",
+    all: "All models",
+    empty: "No models available for this session",
+    updating: "Switching model...",
+  },
   setup: {
     selectSession: "Choose a session",
     refreshing: "Refreshing...",
@@ -242,6 +251,18 @@ export default {
     cleared: "Cleared {messages} messages and removed {members} members.",
   },
   errors: {
+    memberModels: "Unable to read session models. Refresh to try again.",
+    memberModelRejected: "The model switch was not accepted. Refresh before trying again.",
+    member_model_unsupported: "This member has no session with selectable models.",
+    session_binding_changed: "The member's session changed. Select the member again.",
+    session_model_target_unavailable:
+      "The session is unavailable or outside this channel's directory.",
+    session_model_unavailable: "Unable to read session models. Refresh to try again.",
+    session_model_not_available: "This model is no longer available. Refresh the list.",
+    session_model_update_rejected:
+      "The model switch was not accepted. Refresh before trying again.",
+    session_model_update_unknown:
+      "The model switch is unconfirmed. Refresh to check the actual settings before acting again.",
     image_too_large: "Each image must be no larger than 10 MiB.",
     image_invalid: "Use a valid, still PNG, JPEG or WebP image.",
     image_not_found: "Image not found.",

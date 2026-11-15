@@ -31,14 +31,17 @@ from agent_relay.application.dto.delivery import (
     SteerReceipt,
 )
 from agent_relay.application.dto.members import MemberInterruptResult, SessionInfo, SessionStatus
+from agent_relay.application.dto.session_models import SessionModelCatalog, UpdateSessionModel
 from agent_relay.application.members.sessions import (
     SessionInterruptRejected,
+    SessionModelRejected,
     SessionUnavailableError,
 )
 from agent_relay.domain.rooms.models import SubmissionMethod
 from agent_relay.domain.rooms.rules import normalize_project_path
 from agent_relay.infrastructure.codex.catalog import decode_skills, server_option
 from agent_relay.infrastructure.codex.models import McpPage, SkillBinding, SkillDiscovery
+from agent_relay.infrastructure.codex.session_models import public_catalog, read_models
 
 SOURCE_KINDS = [
     "cli",
@@ -260,6 +263,10 @@ class CodexDriver:
         preview = thread.get("preview")
         if not name and isinstance(preview, str):
             name = " ".join(preview.split())
+        for key in ("model", "reasoningEffort"):
+            value = thread.get(key)
+            if value is not None and (not isinstance(value, str) or not value.strip()):
+                raise RpcDisconnected("Invalid Codex model settings")
         return SessionInfo(
             id=cast(str, values[0]),
             cwd=cast(str, values[1]),
@@ -275,6 +282,8 @@ class CodexDriver:
                 }[status],
             ),
             archived=archived,
+            model=thread.get("model"),
+            reasoning_effort=thread.get("reasoningEffort"),
         )
 
     def list_sessions(self) -> list[SessionInfo]:
@@ -339,6 +348,77 @@ class CodexDriver:
         with ProxyRpc(self.command, self.timeout) as rpc:
             result = rpc.call("thread/read", {"threadId": thread_id, "includeTurns": False})
             return self._session(result.get("thread"))
+
+    def model_catalog(self, thread_id: str, project_path: str) -> SessionModelCatalog:
+        try:
+            with ProxyRpc(self.command, self.timeout) as rpc:
+                session = self._model_session(rpc, thread_id, project_path)
+                return public_catalog(session, read_models(rpc, session.provider))
+        except (SessionModelRejected, SessionUnavailableError):
+            raise
+        except Exception as exc:
+            raise SessionUnavailableError(
+                "无法读取会话模型", code="session_model_unavailable"
+            ) from exc
+
+    def _model_session(self, rpc: ProxyRpc, thread_id: str, project_path: str) -> SessionInfo:
+        try:
+            return self._target_session(rpc, thread_id, project_path)
+        except QueueRejected as exc:
+            raise SessionModelRejected(
+                "会话不可用或不属于当前目录", code="session_model_target_unavailable"
+            ) from exc
+
+    def update_model(
+        self, thread_id: str, project_path: str, request: UpdateSessionModel
+    ) -> SessionModelCatalog:
+        attempted = False
+        try:
+            with ProxyRpc(self.command, self.timeout) as rpc:
+                if request.session_id != thread_id:
+                    raise SessionModelRejected("成员会话已变化", code="session_binding_changed")
+                session = self._model_session(rpc, thread_id, project_path)
+                models = read_models(rpc, session.provider)
+                selected = next((model for model in models if model.model == request.model), None)
+                if selected is None:
+                    raise SessionModelRejected(
+                        "模型已不可用，请刷新列表", code="session_model_not_available"
+                    )
+                if session.model == request.model:
+                    return public_catalog(session, models)
+                efforts = {
+                    option.reasoning_effort for option in selected.supported_reasoning_efforts
+                }
+                effort = (
+                    session.reasoning_effort
+                    if session.reasoning_effort in efforts
+                    else selected.default_reasoning_effort
+                )
+                attempted = True
+                try:
+                    rpc.call(
+                        "thread/settings/update",
+                        {"threadId": thread_id, "model": request.model, "effort": effort},
+                    )
+                except RpcRejected as exc:
+                    raise SessionModelRejected(
+                        "模型切换请求未被接受", code="session_model_update_rejected"
+                    ) from exc
+                confirmed = self._target_session(rpc, thread_id, project_path)
+                if (
+                    confirmed.provider != session.provider
+                    or confirmed.model != request.model
+                    or confirmed.reasoning_effort != effort
+                ):
+                    raise RpcDisconnected("Codex model settings are not confirmed")
+                return public_catalog(confirmed, models)
+        except (SessionModelRejected, SessionUnavailableError):
+            raise
+        except Exception as exc:
+            raise SessionUnavailableError(
+                "模型切换结果待确认" if attempted else "无法读取会话模型",
+                code="session_model_update_unknown" if attempted else "session_model_unavailable",
+            ) from exc
 
     def interrupt(self, thread_id: str, project_path: str) -> MemberInterruptResult:
         try:

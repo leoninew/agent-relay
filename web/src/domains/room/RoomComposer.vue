@@ -77,6 +77,12 @@
             </AppCheckbox>
           </AppCheckboxGroup>
         </div>
+        <RoomModelPicker
+          :room-id="roomId"
+          :channel-id="channelId"
+          :member="ready && !locked ? modelTarget(members, mentionedMemberIds) : undefined"
+          :disabled="Boolean(sending || locked)"
+        />
         <p
           v-if="showRecipientError"
           id="routing-error"
@@ -216,6 +222,8 @@
   import MemberIdentity from "@/domains/room/MemberIdentity.vue";
   import CapabilityTags from "@/domains/room/CapabilityTags.vue";
   import SkillMessageEditor from "@/domains/room/SkillMessageEditor.vue";
+  import RoomModelPicker from "@/domains/room/RoomModelPicker.vue";
+  import { modelTarget } from "@/domains/room/useSessionModels";
   import type { ComposerCatalog } from "@/domains/room/useRoomCapabilities";
   import { memberSessionName } from "@/domains/room/memberSessionName";
   import {

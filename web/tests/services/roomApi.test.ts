@@ -17,6 +17,8 @@ import {
   fetchRoomSessions,
   fetchRooms,
   fetchRoomSkills,
+  fetchMemberModels,
+  updateMemberModel,
   interruptRoomMember,
   postRoomMessage,
   updateRoom,
@@ -57,6 +59,26 @@ describe("room API", () => {
       url: "/api/room/room%2Fa/channel/channel%2Fc/member/member%2Fb/interrupt",
     });
     expect(adapterMock.mock.calls[0][0].data).toBeUndefined();
+  });
+
+  it("reads and updates the selected member model with escaped scope and the original binding", async () => {
+    await fetchMemberModels("room/a", "member/b", "channel/c");
+    expect(adapterMock.mock.calls[0][0]).toMatchObject({
+      method: "get",
+      url: "/api/room/room%2Fa/channel/channel%2Fc/member/member%2Fb/model",
+    });
+    await updateMemberModel("room/a", "member/b", "channel/c", {
+      sessionId: "thread",
+      model: "provider/model",
+    });
+    expect(adapterMock.mock.calls[1][0]).toMatchObject({
+      method: "patch",
+      url: "/api/room/room%2Fa/channel/channel%2Fc/member/member%2Fb/model",
+    });
+    expect(JSON.parse(adapterMock.mock.calls[1][0].data)).toEqual({
+      sessionId: "thread",
+      model: "provider/model",
+    });
   });
 
   it("requests room skills with an escaped identity and explicit reload", async () => {

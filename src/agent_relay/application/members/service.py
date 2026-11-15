@@ -14,9 +14,11 @@ from agent_relay.application.dto.members import (
     SessionInfo,
     UpdateMember,
 )
+from agent_relay.application.dto.session_models import SessionModelCatalog, UpdateSessionModel
 from agent_relay.application.members.sessions import (
     SessionDriver,
     SessionInterruptRejected,
+    SessionModelRejected,
     SessionUnavailableError,
 )
 from agent_relay.application.rooms.ports import RoomStore
@@ -157,6 +159,41 @@ class MemberService:
         try:
             return self.driver.interrupt(session_id, project_path)
         except SessionInterruptRejected as exc:
+            raise RoomConflictError(str(exc), code=exc.code) from exc
+
+    def _model_target(self, room_id: str, member_id: str) -> tuple[str, str]:
+        with self.store.read() as rooms:
+            state = rooms.resources(room_id)
+            member = next(
+                (
+                    member
+                    for member in state.members
+                    if member.id == member_id and member.deleted_at is None
+                ),
+                None,
+            )
+            if member is None:
+                raise RoomNotFoundError("成员不存在", code="member_not_found")
+            if member.kind != "agent" or not member.session_id:
+                raise RoomConflictError("该成员不支持模型切换", code="member_model_unsupported")
+            return member.session_id, state.working_path
+
+    def model_catalog(self, room_id: str, member_id: str) -> SessionModelCatalog:
+        session_id, project_path = self._model_target(room_id, member_id)
+        try:
+            return self.driver.model_catalog(session_id, project_path)
+        except SessionModelRejected as exc:
+            raise RoomConflictError(str(exc), code=exc.code) from exc
+
+    def update_model(
+        self, room_id: str, member_id: str, request: UpdateSessionModel
+    ) -> SessionModelCatalog:
+        session_id, project_path = self._model_target(room_id, member_id)
+        if session_id != request.session_id:
+            raise RoomConflictError("成员会话已变化，请重新选择", code="session_binding_changed")
+        try:
+            return self.driver.update_model(session_id, project_path, request)
+        except SessionModelRejected as exc:
             raise RoomConflictError(str(exc), code=exc.code) from exc
 
     def add(self, room_id: str, request: CreateMember) -> CreatedMember:

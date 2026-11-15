@@ -28,6 +28,7 @@ from agent_relay.application.dto.rooms import (
     RoomMetadata,
     UpdateRoom,
 )
+from agent_relay.application.dto.session_models import SessionModelCatalog, UpdateSessionModel
 from agent_relay.application.images.ports import MAX_IMAGE_BYTES
 from agent_relay.domain.rooms.models import Member, Message, Room
 from agent_relay.interfaces.http.members.dependencies import (
@@ -236,6 +237,20 @@ def interrupt_member(
     room_id: str, member_id: str, service: MemberServiceDependency
 ) -> MemberInterruptResult:
     return service.interrupt(room_id, member_id)
+
+
+@channel_router.get("/member/{member_id}/model")
+def get_member_models(
+    room_id: str, member_id: str, service: MemberServiceDependency
+) -> SessionModelCatalog:
+    return service.model_catalog(room_id, member_id)
+
+
+@channel_router.patch("/member/{member_id}/model")
+def update_member_model(
+    room_id: str, member_id: str, request: UpdateSessionModel, service: MemberServiceDependency
+) -> SessionModelCatalog:
+    return service.update_model(room_id, member_id, request)
 
 
 @channel_router.post("/topic", status_code=201)

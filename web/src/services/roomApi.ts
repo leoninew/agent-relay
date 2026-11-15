@@ -28,6 +28,37 @@ export type MemberInterruptResult = {
   turnId: string | null;
 };
 
+export type SessionModelCatalog = {
+  sessionId: string;
+  provider: string;
+  currentModel: string | null;
+  models: { id: string; model: string; displayName: string; description: string }[];
+};
+
+export async function fetchMemberModels(
+  roomId: string,
+  memberId: string,
+  channelId: string,
+): Promise<SessionModelCatalog> {
+  const { data } = await apiClient.get<SessionModelCatalog>(
+    roomResourcePath(roomId, channelId, `/member/${encodeURIComponent(memberId)}/model`),
+  );
+  return data;
+}
+
+export async function updateMemberModel(
+  roomId: string,
+  memberId: string,
+  channelId: string,
+  request: { sessionId: string; model: string },
+): Promise<SessionModelCatalog> {
+  const { data } = await apiClient.patch<SessionModelCatalog>(
+    roomResourcePath(roomId, channelId, `/member/${encodeURIComponent(memberId)}/model`),
+    request,
+  );
+  return data;
+}
+
 export type Delivery = {
   id: string;
   targetMemberId: string;
