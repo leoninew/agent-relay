@@ -3,7 +3,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from agent_relay.application.channels.ports import ChannelQueries, ChannelStore, WorktreeDriver
-from agent_relay.application.dto.channels import CreateChannel
+from agent_relay.application.dto.channels import CreateChannel, UpdateChannel
 from agent_relay.domain.rooms.errors import RoomConflictError, RoomNotFoundError
 from agent_relay.domain.rooms.models import Channel
 from agent_relay.domain.rooms.resources import new_room_state
@@ -74,6 +74,10 @@ class ChannelService(ChannelQueries):
                 self.git.create(source, path, branch, commit)
                 self.git.verify(source, path, branch, commit)
             return channel
+
+    def update(self, room_id: str, channel_id: str, request: UpdateChannel) -> Channel:
+        with self.store.guard(room_id), self.store.write() as channels:
+            return channels.update(room_id, channel_id, request.name, request.description)
 
     def delete(self, room_id: str, channel_id: str) -> None:
         with self.store.guard(room_id), self.store.write() as channels:

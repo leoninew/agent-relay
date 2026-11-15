@@ -98,28 +98,23 @@
   import MemberIdentity from "@/domains/room/MemberIdentity.vue";
   import RoomSidebarSection from "@/domains/room/RoomSidebarSection.vue";
   import { memberSessionName } from "@/domains/room/memberSessionName";
-  import { useSidebarOrder } from "@/domains/room/useSidebarOrder";
-  import type { RoomSnapshot } from "@/services/roomApi";
+  import type { Member, RoomSnapshot } from "@/services/roomApi";
 
   const { t } = useI18n();
   const props = defineProps<{
     snapshot: RoomSnapshot;
-    channelId: string;
     busy: boolean;
     selectedMemberId?: string;
   }>();
-  defineEmits<{
+  const emit = defineEmits<{
     addMember: [];
     select: [memberId: string | undefined];
+    move: [memberId: string, offset: number];
   }>();
 
   const humanMember = computed(() =>
     props.snapshot.members.find((member) => member.kind === "human" && !member.deletedAt),
   );
-  const { orderedItems: members, moveItem: moveMember } = useSidebarOrder(
-    () => props.snapshot.room.id,
-    () => props.channelId,
-    "members",
-    () => props.snapshot.members.filter((member) => member.kind === "agent" && !member.deletedAt),
-  );
+  const members = defineModel<Member[]>("members", { required: true });
+  const moveMember = (memberId: string, offset: number) => emit("move", memberId, offset);
 </script>

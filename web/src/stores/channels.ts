@@ -8,8 +8,9 @@ import {
   deleteChannel,
   fetchChannel,
   fetchChannels,
+  updateChannel,
 } from "@/services/channelApi";
-import type { Channel, CreateChannel } from "@/services/channelApi";
+import type { Channel, CreateChannel, UpdateChannel } from "@/services/channelApi";
 
 export const useChannelsStore = defineStore("channels", () => {
   const byRoom = ref<Record<string, Channel[]>>({});
@@ -92,6 +93,13 @@ export const useChannelsStore = defineStore("channels", () => {
     return channel;
   }
 
+  async function update(roomId: string, channelId: string, request: UpdateChannel): Promise<void> {
+    const updated = await updateChannel(roomId, channelId, request);
+    byRoom.value[roomId] = channels(roomId).map((candidate) =>
+      candidate.id === channelId ? updated : candidate,
+    );
+  }
+
   async function remove(roomId: string, channelId: string): Promise<void> {
     await deleteChannel(roomId, channelId);
     byRoom.value[roomId] = channels(roomId).filter((candidate) => candidate.id !== channelId);
@@ -134,6 +142,7 @@ export const useChannelsStore = defineStore("channels", () => {
     remember,
     create,
     lookup,
+    update,
     remove,
     reset,
   };

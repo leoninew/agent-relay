@@ -70,6 +70,34 @@ class SQLAlchemyChannelRepository(SQLAlchemyRoomRepository):
         )
         scoped._event(room.id, "room", channel.id)
 
+    def update(self, room_id: str, channel_id: str, name: str, description: str) -> Channel:
+        self.room(room_id)
+        record = self.session.get(ChannelRecord, (room_id, channel_id))
+        if record is None:
+            raise RoomNotFoundError("频道不存在", code="channel_not_found")
+        if record.archived_at is not None:
+            raise RoomConflictError("频道已删除", code="channel_unavailable")
+        if record.is_default and name != record.name:
+            raise RoomConflictError("默认频道名称不能修改", code="default_channel_name_fixed")
+        if (
+            self.session.scalar(
+                select(ChannelRecord.id).where(
+                    ChannelRecord.room_id == room_id,
+                    ChannelRecord.id != channel_id,
+                    ChannelRecord.name == name,
+                    ChannelRecord.archived_at.is_(None),
+                )
+            )
+            is not None
+        ):
+            raise RoomConflictError("频道名称已存在", code="channel_name_conflict")
+        record.name = name
+        record.description = description
+        self.session.flush()
+        scoped = SQLAlchemyRoomRepository(self.session, channel_id)
+        scoped._event(room_id, "room", channel_id)
+        return channel_from_record(record)
+
     def delete(self, room_id: str, channel_id: str) -> None:
         self.room(room_id)
         record = self.session.get(ChannelRecord, (room_id, channel_id))

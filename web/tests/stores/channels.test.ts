@@ -3,7 +3,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DEFAULT_CHANNEL_ID } from "@/domains/channel/channelRoutes";
 import type { Channel } from "@/services/channelApi";
-import { createChannel, deleteChannel, fetchChannel, fetchChannels } from "@/services/channelApi";
+import {
+  createChannel,
+  deleteChannel,
+  fetchChannel,
+  fetchChannels,
+  updateChannel,
+} from "@/services/channelApi";
 import { useChannelsStore } from "@/stores/channels";
 
 vi.mock("@/services/channelApi", () => ({
@@ -11,6 +17,7 @@ vi.mock("@/services/channelApi", () => ({
   deleteChannel: vi.fn(),
   fetchChannel: vi.fn(),
   fetchChannels: vi.fn(),
+  updateChannel: vi.fn(),
 }));
 
 function channel(overrides: Partial<Channel> = {}): Channel {
@@ -67,6 +74,30 @@ describe("channel state", () => {
     expect(createChannel).toHaveBeenCalledWith("room-1", request);
     expect(store.channel("room-1", "channel-new")?.description).toBe("Backend work");
     expect(store.recent["room-1"]).toBe("channel-new");
+  });
+
+  it("updates channel details without changing channel order or current selection", async () => {
+    const store = useChannelsStore();
+    const target = channel({ id: "channel-api", isDefault: false });
+    store.byRoom["room-1"] = [channel(), target];
+    store.remember("room-1", target.id);
+    const request = { name: "Backend", description: "API changes" };
+    vi.mocked(updateChannel).mockResolvedValue({ ...target, ...request });
+
+    await store.update("room-1", target.id, request);
+
+    expect(updateChannel).toHaveBeenCalledWith("room-1", target.id, request);
+    expect(store.channels("room-1").map((item) => item.id)).toEqual([
+      DEFAULT_CHANNEL_ID,
+      target.id,
+    ]);
+    expect(store.channel("room-1", target.id)).toEqual({ ...target, ...request });
+    expect(store.recent["room-1"]).toBe(target.id);
+    vi.mocked(updateChannel).mockRejectedValue(new Error("Name conflict"));
+    await expect(
+      store.update("room-1", target.id, { name: "Duplicate", description: "" }),
+    ).rejects.toThrow("Name conflict");
+    expect(store.channel("room-1", target.id)?.name).toBe("Backend");
   });
 
   it("looks up an unconfirmed channel without creating another one", async () => {

@@ -393,14 +393,16 @@
   const contentError = computed(() => {
     if (insertionTooLong.value || content.value.length > 6000)
       return t("validation.contentTooLong");
-    if (!withoutInlineSkills(content.value).trim()) return t("validation.content");
     const skills = new Set(
       draft.value.capabilities
         ?.filter((reference) => reference.type === "skill")
         .map((item) => item.id),
     );
-    if (inlineSkills(content.value).some((reference) => !skills.has(reference.id)))
+    const inline = inlineSkills(content.value);
+    if (inline.some((reference) => !skills.has(reference.id)))
       return t("validation.skillReference");
+    if (!withoutInlineSkills(content.value).trim() && !inline.length)
+      return t("validation.content");
     return undefined;
   });
   const showContentError = computed(

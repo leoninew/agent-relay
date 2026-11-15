@@ -26,8 +26,9 @@ def test_inline_skill_format_matches_frontend_contract(case: dict[str, object]) 
     assert message_text(content, [CHECK, FIX]) == case["text"]
 
 
-def test_skill_only_body_is_empty_but_literal_examples_remain_content() -> None:
+def test_skill_markers_are_removed_but_literal_examples_remain_content() -> None:
     assert not without_inline_skills(" [check](skill:skill-check)\n").strip()
+    assert len(inline_skills(" [check](skill:skill-check)\n")) == 1
     assert without_inline_skills("`[check](skill:skill-check)`").strip()
 
 

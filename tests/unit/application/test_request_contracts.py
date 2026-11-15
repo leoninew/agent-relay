@@ -53,5 +53,7 @@ def test_inline_skill_requires_a_selected_identity_and_nonempty_body() -> None:
     assert CreateMessage.model_validate(payload).content == payload["content"]
     with pytest.raises(ValidationError, match="matching capability"):
         CreateMessage.model_validate({**payload, "capabilities": []})
+    skill_only = CreateMessage.model_validate({**payload, "content": "[check](skill:skill-check)"})
+    assert skill_only.capabilities[0].id == "skill-check"
     with pytest.raises(ValidationError, match="content cannot be blank"):
-        CreateMessage.model_validate({**payload, "content": "[check](skill:skill-check)"})
+        CreateMessage.model_validate({**payload, "content": "   "})

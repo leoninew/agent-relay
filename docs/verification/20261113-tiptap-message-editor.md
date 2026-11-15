@@ -14,7 +14,7 @@
 
 - Tiptap core、vue-3、pm、mention、suggestion、extensions 均锁定为 `3.33.1`。实际核对安装源码的 Mention 原子节点、删除行为、Suggestion 默认插件键与 ProseMirror Decoration 映射；Mention 使用显式共用键。删除 Tagify 及其类型依赖、packageExtensions、DOM Range adapter 和自建历史，移除失效实现对应的旧测试部分，保留既有文本识别与剪贴板用例。
 - 编辑器只装配单一正文块、Text、保留原始换行的 HardBreak、Skill Mention、图片引用和 UndoRedo；不启用 StarterKit、Markdown input rules 或富文本粘贴。普通输入交给 ProseMirror；源文适配只替换需要转换的引用跨度，不通过 HTML 构造用户正文，也不在普通父模型回写时重建文档。
-- Composer 使用 query、insertSkill、dismissQuery、focus 等业务接口。保留 content/capabilities、已绑定 ID、原始 marker、重复引用、身份去重、6000 序列化字符限制、仅 Skill 禁发、输入法与 ready/locked/sending、回复和草稿契约。内部剪贴板按当前目录/已绑定 ID 校验，外部 HTML 的属性不能建立身份，外部复制为可读文本与图片 Markdown。
+- Composer 使用 query、insertSkill、dismissQuery、focus 等业务接口。保留 content/capabilities、已绑定 ID、原始 marker、重复引用、身份去重、6000 序列化字符限制、仅有 Skill 时允许发送，无 Skill 且无正文时禁发、输入法与 ready/locked/sending、回复和草稿契约。内部剪贴板按当前目录/已绑定 ID 校验，外部 HTML 的属性不能建立身份，外部复制为可读文本与图片 Markdown。
 - 按用户 `0172`，共享查询与 Tiptap matcher 统一复用 `isSkillTriggerPrefix`：`$` 前必须为开头、空白或 Unicode 标点/符号（P/S），普通中英文和数字后不触发。Unicode 正则按码点识别前置符号，包括 emoji；代码/转义排除与词中间查询完整后缀替换保留。仅调整既有断言，没有新增或运行测试。
 - 图片使用一个 paste/drop 入口识别实际 image files；普通文字与内部 Skill 剪贴板走正文事务。同批文件并发上传、按添加顺序完成插入，位置来自 `DecorationSet.map`，没有保存上传前的裸字符下标。上传锚点与任务不保存到 content/草稿；取消、清空、删除覆盖锚点、外部正文恢复、冻结或销毁会失效任务。输入法组合期间保留上传结果，结束后重新核对锚点；完成时不聚焦编辑器。
 - 上传中禁发，失败在输入处说明，可重新粘贴/拖入。上传完成用 API 返回的 Markdown 作为图片引用标签；标准消息 Markdown 在原位置显示图片，并限制宽高，加载失败显示本地化反馈。没有增加有序附件字段或保存 Tiptap JSON。

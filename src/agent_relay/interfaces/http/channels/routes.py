@@ -6,6 +6,7 @@ from agent_relay.application.dto.channels import (
     Channel,
     ChannelSnapshot,
     CreateChannel,
+    UpdateChannel,
 )
 from agent_relay.interfaces.http.channels.dependencies import (
     ChannelQueriesDependency,
@@ -64,6 +65,13 @@ def create_channel(
     room_id: str, request: CreateChannel, service: ChannelServiceDependency
 ) -> Channel:
     return service.create(room_id, request)
+
+
+@router.patch("/{channel_id}")
+def update_channel(
+    room_id: str, channel_id: str, request: UpdateChannel, service: ChannelServiceDependency
+) -> Channel:
+    return service.update(room_id, channel_id, request)
 
 
 @router.delete("/{channel_id}", status_code=204)

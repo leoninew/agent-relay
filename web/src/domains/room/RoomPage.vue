@@ -34,10 +34,10 @@
           "
         />
         <TopicSidebar
-          :snapshot="snapshot"
-          :channel-id="currentChannelId!"
+          v-model:topics="activeTopics"
           :busy="sending || saving"
           :selected-topic-id="selectedTopicId"
+          @move="moveTopic"
           @select="
             selectSidebar('topic', $event);
             closeNavigation();
@@ -48,10 +48,11 @@
           "
         />
         <MemberPanel
+          v-model:members="activeAgents"
           :snapshot="snapshot"
-          :channel-id="currentChannelId!"
           :busy="sending || saving"
           :selected-member-id="selectedMemberId"
+          @move="moveMember"
           @select="
             selectSidebar('member', $event);
             closeNavigation();
@@ -162,7 +163,7 @@
         :channel-id="currentChannelId!"
         :room-id="snapshot.room.id"
         :topics="activeTopics"
-        :members="snapshot.members"
+        :members="orderedMembers"
         :sessions="snapshot.sessions"
         :reply-to="replyTo"
         :sending="sending || clearing"
@@ -187,12 +188,13 @@
         :channel="detailChannel"
         :topic="detailTopic"
         :member="detailMember"
-        :topics="snapshot.topics"
-        :members="snapshot.members"
+        :topics="orderedTopics"
+        :members="orderedMembers"
         :sessions="snapshot.sessions"
         :busy="sending || saving || clearing || Boolean(pendingPublication)"
         @close="roomPanel.closeDetails"
         @collapse="collapse"
+        @edit-channel="editChannel"
         @delete-channel="openDelete({ kind: 'channel', node: $event })"
         @edit-topic="editTopic"
         @delete-topic="openDelete({ kind: 'topic', node: $event })"
@@ -222,6 +224,13 @@
     :room-id="currentRoomId"
     @close="channelCreateOpen = false"
     @created="openCreatedChannel"
+  />
+  <ChannelEditDialog
+    :channel="editingChannel"
+    :saving="saving"
+    :error="setupError"
+    @close="editingChannel = undefined"
+    @save="saveChannel"
   />
   <RoomSetupDialog
     :mode="setupMode"
@@ -289,6 +298,7 @@
   import AppLoading from "@/components/AppLoading.vue";
   import ChannelBar from "@/domains/channel/ChannelBar.vue";
   import ChannelCreateDialog from "@/domains/channel/ChannelCreateDialog.vue";
+  import ChannelEditDialog from "@/domains/channel/ChannelEditDialog.vue";
   import { DEFAULT_CHANNEL_ID, draftScope } from "@/domains/channel/channelRoutes";
   import MemberEditDialog from "@/domains/room/MemberEditDialog.vue";
   import MemberPanel from "@/domains/room/MemberPanel.vue";
@@ -306,6 +316,7 @@
   import { useRoomPanel } from "@/domains/room/useRoomPanel";
   import { useRoomCapabilities } from "@/domains/room/useRoomCapabilities";
   import { useRoomDraft } from "@/domains/room/useRoomDraft";
+  import { useRoomResourceOrder } from "@/domains/room/useRoomResourceOrder";
   import { ApiClientError, describeApiError } from "@/services/api";
   import {
     addRoomMember,
@@ -337,6 +348,7 @@
     UpdateMember,
   } from "@/services/roomApi";
   import { subscribeRoomEvents } from "@/services/roomEvents";
+  import type { Channel, UpdateChannel } from "@/services/channelApi";
   import { useRoomsStore } from "@/stores/rooms";
   import { useChannelsStore } from "@/stores/channels";
   import { useToastsStore } from "@/stores/toasts";
@@ -371,8 +383,16 @@
   );
   const searchText = ref("");
   const keyword = ref("");
-  const activeTopics = computed(
-    () => snapshot.value?.topics.filter((topic) => !topic.deletedAt) ?? [],
+  const {
+    topics: orderedTopics,
+    members: orderedMembers,
+    activeTopics,
+    activeAgents,
+    moveTopic,
+    moveMember,
+  } = useRoomResourceOrder(
+    () => snapshot.value,
+    () => currentChannelId.value,
   );
   const activeMembers = computed(
     () => snapshot.value?.members.filter((member) => !member.deletedAt) ?? [],
@@ -449,6 +469,7 @@
   const setupMode = ref<"member" | "topic">();
   const editingMember = ref<Member>();
   const editingTopic = ref<Topic>();
+  const editingChannel = ref<Channel>();
   const deleteTarget = ref<ResourceDeleteTarget>();
   const saving = ref(false);
   const clearOpen = ref(false);
@@ -526,6 +547,10 @@
         }
         const events = page.events.filter((event) => event.eventId > current.eventId);
         if (!events.length) return;
+        if (events.some((event) => event.kind === "room" && event.entityId === channelId)) {
+          await channelsStore.load(roomId, true);
+          if (version !== loadVersion) return;
+        }
         const signal = queryController?.signal;
         const ids = [
           ...new Set(
@@ -763,6 +788,7 @@
     setupMode.value = undefined;
     editingMember.value = undefined;
     editingTopic.value = undefined;
+    editingChannel.value = undefined;
     deleteTarget.value = undefined;
     clearOpen.value = false;
     clearError.value = null;
@@ -974,6 +1000,19 @@
     if (roomId === currentRoomId.value) timeline.value?.scrollToEnd();
   }
 
+  function editChannel(channel: Channel): void {
+    setupError.value = null;
+    editingChannel.value = channel;
+  }
+
+  async function saveChannel(channelId: string, request: UpdateChannel): Promise<void> {
+    if (!currentRoomId.value) return;
+    const roomId = currentRoomId.value;
+    await saveSetup(async () => {
+      await channelsStore.update(roomId, channelId, request);
+    }, "notice.channelSaved");
+  }
+
   function editMember(member: Member): void {
     setupError.value = null;
     editingTopic.value = undefined;
@@ -1051,16 +1090,19 @@
     saving.value = true;
     setupError.value = null;
     const roomId = currentRoomId.value;
+    const channelId = currentChannelId.value;
     try {
       await action();
       toasts.success({ key: successMessage });
-      if (roomId === currentRoomId.value) {
+      if (roomId === currentRoomId.value && channelId === currentChannelId.value) {
         setupMode.value = undefined;
         editingMember.value = undefined;
+        editingChannel.value = undefined;
       }
     } catch (caught) {
       const message = describeApiError(caught, "errors.save");
-      if (roomId === currentRoomId.value) setupError.value = message;
+      if (roomId === currentRoomId.value && channelId === currentChannelId.value)
+        setupError.value = message;
       toasts.error(message);
     } finally {
       saving.value = false;

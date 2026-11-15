@@ -13,7 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from agent_relay.application.channels.service import ChannelService
-from agent_relay.application.dto.channels import CreateChannel
+from agent_relay.application.dto.channels import CreateChannel, UpdateChannel
 from agent_relay.application.dto.delivery import QueueHead
 from agent_relay.application.dto.members import CreatedMember, CreateMember, SessionInfo
 from agent_relay.application.dto.messages import CreateMessage
@@ -83,6 +83,65 @@ def join(
     return MemberService(store, driver).add(
         room_id, CreateMember(name="Agent", session_id=session_id, topic_ids=[topic_id])
     )
+
+
+def test_channel_update_preserves_workspace_and_rejects_conflicts(
+    database: Database, tmp_path: Path
+) -> None:
+    room, store, channels = setup(database, tmp_path)
+    channel = channels.create(room.id, CreateChannel(name="API"))
+    updated = channels.update(room.id, channel.id, UpdateChannel(name="Backend", description="New"))
+    assert updated.model_dump(exclude={"name", "description"}) == channel.model_dump(
+        exclude={"name", "description"}
+    )
+    assert channels.channel(room.id, channel.id).description == "New"
+    assert (
+        store.for_channel(channel.id).queries.events(room.id, 0).events[-1].entity_id == channel.id
+    )
+    other = channels.create(room.id, CreateChannel(name="Other"))
+    with pytest.raises(RoomConflictError, match="名称"):
+        channels.update(room.id, other.id, UpdateChannel(name="Backend"))
+    assert channels.channel(room.id, other.id).name == "Other"
+    default = channels.channel(room.id, DEFAULT_CHANNEL_ID)
+    channels.update(room.id, default.id, UpdateChannel(name=default.name, description="Default"))
+    with pytest.raises(RoomConflictError, match="默认"):
+        channels.update(room.id, default.id, UpdateChannel(name="Renamed"))
+    channels.delete(room.id, channel.id)
+    with pytest.raises(RoomConflictError):
+        channels.update(room.id, channel.id, UpdateChannel(name="Deleted"))
+    with pytest.raises(RoomNotFoundError):
+        channels.update(room.id, "missing", UpdateChannel(name="Missing"))
+
+
+def test_channel_edit_http_contract_and_conflict_rollback(
+    database: Database, tmp_path: Path
+) -> None:
+    room, _, channels = setup(database, tmp_path)
+    channel = channels.create(room.id, CreateChannel(name="API"))
+    channels.create(room.id, CreateChannel(name="Taken"))
+    app = build_app(
+        database=database, session_driver=Mock(), queue_driver=Mock(), capability_driver=Mock()
+    )
+
+    async def exercise() -> None:
+        async with httpx2.AsyncClient(
+            transport=httpx2.ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            path = f"/api/room/{room.id}/channel/{channel.id}"
+            response = await client.patch(path, json={"name": " Backend ", "description": "New"})
+            assert response.status_code == 200, response.text
+            assert response.json()["name"] == "Backend"
+            assert response.json()["workingPath"] == channel.working_path
+            response = await client.patch(path, json={"name": "Taken", "description": "Wrong"})
+            assert response.status_code == 409, response.text
+            assert response.json()["code"] == "channel_name_conflict"
+            response = await client.patch(path, json={"name": " ", "useWorktree": True})
+            assert response.status_code == 422, response.text
+            response = await client.get(path)
+            assert response.json()["name"] == "Backend"
+            assert response.json()["description"] == "New"
+
+    asyncio.run(exercise())
 
 
 def test_existing_directory_channels_are_isolated_and_replay_is_idempotent(

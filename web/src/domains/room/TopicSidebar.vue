@@ -67,24 +67,18 @@
   import AppIcon from "@/components/AppIcon.vue";
   import RoomSidebarSection from "@/domains/room/RoomSidebarSection.vue";
   import TopicIdentity from "@/domains/room/TopicIdentity.vue";
-  import { useSidebarOrder } from "@/domains/room/useSidebarOrder";
-  import type { RoomSnapshot } from "@/services/roomApi";
+  import type { Topic } from "@/services/roomApi";
 
   const { t } = useI18n();
-  const props = defineProps<{
-    snapshot: RoomSnapshot;
-    channelId: string;
+  defineProps<{
     busy: boolean;
     selectedTopicId?: string;
   }>();
-  defineEmits<{
+  const emit = defineEmits<{
     select: [topicId: string | undefined];
     createTopic: [];
+    move: [topicId: string, offset: number];
   }>();
-  const { orderedItems: topics, moveItem: moveTopic } = useSidebarOrder(
-    () => props.snapshot.room.id,
-    () => props.channelId,
-    "topics",
-    () => props.snapshot.topics.filter((topic) => !topic.deletedAt),
-  );
+  const topics = defineModel<Topic[]>("topics", { required: true });
+  const moveTopic = (topicId: string, offset: number) => emit("move", topicId, offset);
 </script>

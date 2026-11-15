@@ -25,6 +25,8 @@ export type CreateChannel = {
   useWorktree: boolean;
 };
 
+export type UpdateChannel = Pick<Channel, "name" | "description">;
+
 export type ChannelSnapshot = RoomSnapshot & {
   channelId: string;
   workingPath: string;
@@ -59,4 +61,13 @@ export async function fetchChannel(
 
 export async function deleteChannel(roomId: string, channelId: string): Promise<void> {
   await apiClient.delete(channelPath(roomId, channelId));
+}
+
+export async function updateChannel(
+  roomId: string,
+  channelId: string,
+  request: UpdateChannel,
+): Promise<Channel> {
+  const { data } = await apiClient.patch<Channel>(channelPath(roomId, channelId), request);
+  return data;
 }

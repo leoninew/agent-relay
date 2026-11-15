@@ -3,8 +3,8 @@ from unittest.mock import Mock
 import pytest
 from pydantic import ValidationError
 
-from agent_relay.application.dto.channels import CreateChannel
-from agent_relay.interfaces.http.channels.routes import create_channel
+from agent_relay.application.dto.channels import CreateChannel, UpdateChannel
+from agent_relay.interfaces.http.channels.routes import create_channel, update_channel
 
 
 def test_channel_routes_delegate_to_creation_service() -> None:
@@ -26,6 +26,17 @@ def test_channel_creation_defaults_to_existing_directory() -> None:
     assert CreateChannel(name="API").description == ""
     with pytest.raises(ValidationError):
         CreateChannel(name=" ")
+
+
+def test_channel_update_accepts_metadata_only() -> None:
+    request = UpdateChannel(name=" API ", description="Backend")
+    service = Mock()
+    assert update_channel("room", "channel", request, service) is service.update.return_value
+    service.update.assert_called_once_with("room", "channel", request)
+    assert request.name == "API"
+    for payload in ({"name": " "}, {"name": "API", "useWorktree": True}):
+        with pytest.raises(ValidationError):
+            UpdateChannel.model_validate(payload)
 
 
 @pytest.mark.parametrize("channel_id", ["../outside", "D:/outside", "nested/channel"])

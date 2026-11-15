@@ -11,6 +11,7 @@
     --popover-foreground: 222 47% 11%;
     --primary: 221.2 83.2% 53.3%;
     --primary-foreground: 210 40% 98%;
+    --selection-background: color-mix(in srgb, hsl(var(--primary)) 12%, hsl(var(--card)));
     --secondary: 210 40% 96.1%;
     --secondary-foreground: 222.2 47.4% 11.2%;
     --muted: 210 40% 96.1%;
@@ -51,6 +52,7 @@
     --popover-foreground: 210 40% 96%;
     --primary: 217.2 91.2% 59.8%;
     --primary-foreground: 222.2 47.4% 11.2%;
+    --selection-background: color-mix(in srgb, hsl(var(--primary)) 20%, hsl(var(--card)));
     --secondary: 220 14% 17%;
     --secondary-foreground: 210 40% 96%;
     --muted: 220 14% 17%;
@@ -204,7 +206,7 @@
   padding-right: 5px;
 }
 .room-tab-row.is-current {
-  background: hsl(var(--primary) / 0.07);
+  background: var(--selection-background);
   border-bottom-color: hsl(var(--primary));
 }
 .room-tab-add {

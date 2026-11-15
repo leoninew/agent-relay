@@ -61,9 +61,10 @@ class CreateMessage(RoomModel):
     @model_validator(mode="after")
     def require_targets(self) -> Self:
         skills = {reference.id for reference in self.capabilities if reference.type == "skill"}
-        if any(reference.id not in skills for reference in inline_skills(self.content)):
+        inline = inline_skills(self.content)
+        if any(reference.id not in skills for reference in inline):
             raise ValueError("Inline skill requires a matching capability reference")
-        if not without_inline_skills(self.content).strip():
+        if not without_inline_skills(self.content).strip() and not inline:
             raise ValueError("Message content cannot be blank")
         if not self.topic_ids and not self.mentioned_member_ids:
             raise ValueError("Message requires a topic or a directly mentioned member")

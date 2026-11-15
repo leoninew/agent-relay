@@ -3,11 +3,18 @@
     <header class="room-panel-heading message-details-heading">
       <div class="detail-heading-title">
         <h2 class="room-panel-title">{{ detailLabel }}</h2>
-        <div
-          v-if="channel && !channel.isDefault && !channel.archivedAt"
-          class="detail-heading-actions"
-        >
+        <div v-if="channel && !channel.archivedAt" class="detail-heading-actions">
           <button
+            type="button"
+            class="detail-action-link"
+            :disabled="busy"
+            :aria-label="t('details.editChannel', { name: channel.name })"
+            @click="$emit('editChannel', channel)"
+          >
+            {{ t("common.edit") }}
+          </button>
+          <button
+            v-if="!channel.isDefault"
             type="button"
             class="detail-action-link detail-delete-link"
             :disabled="busy"
@@ -186,7 +193,7 @@
         <section class="message-detail-section">
           <h3>{{ t("sidebar.topics") }}</h3>
           <div v-if="message.topicIds.length" class="detail-topics">
-            <span v-for="topicId in message.topicIds" :key="topicId" class="detail-topic">
+            <span v-for="topicId in messageTopicIds" :key="topicId" class="detail-topic">
               # {{ topics.find((topic) => topic.id === topicId)?.name ?? topicId }}
             </span>
           </div>
@@ -237,6 +244,7 @@
   import { deliveryStage } from "@/domains/room/deliveryStage";
   import { useI18n } from "vue-i18n";
   import { memberSessionName } from "@/domains/room/memberSessionName";
+  import { orderResourceIds } from "@/domains/room/orderResourceIds";
   import type { Channel } from "@/services/channelApi";
   import type { Member, RoomMessage, Session, Topic } from "@/services/roomApi";
   import { useToastsStore } from "@/stores/toasts";
@@ -261,6 +269,7 @@
     close: [];
     collapse: [];
     deleteChannel: [channel: Channel];
+    editChannel: [channel: Channel];
     editTopic: [topic: Topic];
     deleteTopic: [topic: Topic];
     editMember: [member: Member];
@@ -314,11 +323,12 @@
   const memberTopics = computed(() => {
     const member = props.member;
     return member
-      ? member.topicIds
-          .map((topicId) => props.topics.find((topic) => topic.id === topicId && !topic.deletedAt))
-          .filter((topic): topic is Topic => Boolean(topic))
+      ? props.topics.filter((topic) => !topic.deletedAt && member.topicIds.includes(topic.id))
       : [];
   });
+  const messageTopicIds = computed(() =>
+    orderResourceIds(props.message?.topicIds ?? [], props.topics),
+  );
 
   function resolveMember(memberId: string): Pick<Member, "id" | "name"> {
     return (
@@ -326,13 +336,10 @@
     );
   }
 
-  const recipients = computed(
-    () =>
-      props.message?.recipientIds
-        .filter(
-          (id) => !props.members.some((member) => member.id === id && member.kind === "human"),
-        )
-        .map(resolveMember) ?? [],
+  const recipients = computed(() =>
+    orderResourceIds(props.message?.recipientIds ?? [], props.members)
+      .filter((id) => !props.members.some((member) => member.id === id && member.kind === "human"))
+      .map(resolveMember),
   );
   const dispatchRows = computed(() =>
     recipients.value.map((member) => {
