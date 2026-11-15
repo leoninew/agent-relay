@@ -27,7 +27,7 @@
       <fieldset class="composer-routing" :disabled="sending || locked">
         <legend class="sr-only">{{ t("composer.routing") }}</legend>
         <div class="routing-row">
-          <span class="routing-label"> <AppIcon name="hash" />{{ t("sidebar.topics") }} </span>
+          <span class="routing-label">{{ t("sidebar.topics") }}</span>
           <AppCheckboxGroup
             v-model="topicIds"
             class="routing-options"
@@ -51,7 +51,7 @@
           </AppCheckboxGroup>
         </div>
         <div class="routing-row">
-          <span class="routing-label"><AppIcon name="at" />{{ t("sidebar.members") }}</span>
+          <span class="routing-label">{{ t("sidebar.members") }}</span>
           <AppCheckboxGroup
             v-model="mentionedMemberIds"
             class="routing-options"
@@ -189,7 +189,7 @@
               :loading-label="t('composer.sending')"
             >
               <template #icon><AppIcon name="enter" /></template>
-              {{ t("composer.send") }}
+              <span class="composer-send-label">{{ t("composer.send") }}</span>
             </AppButton>
           </span>
         </AppTooltip>
@@ -580,7 +580,7 @@
     bottom: calc(100% + 8px);
     left: 0;
     width: 100%;
-    min-width: 260px;
+    min-width: min(260px, calc(100cqw - 64px));
     max-height: 320px;
     overflow-y: auto;
     border: 1px solid hsl(var(--border));
@@ -626,5 +626,11 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     color: hsl(var(--muted-foreground));
+  }
+
+  @container conversation (max-width: 600px) {
+    .capability-picker {
+      max-height: min(320px, 50dvh);
+    }
   }
 </style>

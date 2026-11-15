@@ -1,5 +1,5 @@
 <template>
-  <div class="room-navigation">
+  <div ref="roomNavigation" class="room-navigation">
     <div class="room-navigation-projects">
       <NavigationMenuRoot
         v-if="!loading && !loadError && roomsStore.rooms.length"
@@ -165,6 +165,7 @@
   const { t } = useI18n();
   const route = useRoute();
   const router = useRouter();
+  const roomNavigation = ref<HTMLElement>();
   const roomsStore = useRoomsStore();
   const { orderedItems: rooms, moveItem: moveRoom } = useStoredOrder(
     () => "relay-room-order",
@@ -290,6 +291,16 @@
   onMounted(() => {
     if (!roomsStore.loaded) void load();
   });
+  watch(
+    [() => route.params.roomId, () => rooms.value.map((room) => room.id).join(",")],
+    async () => {
+      await nextTick();
+      roomNavigation.value
+        ?.querySelector(".room-tab-row.is-current")
+        ?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    },
+    { immediate: true },
+  );
   watch(
     () => roomsStore.createOpen,
     (open) => {

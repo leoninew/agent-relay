@@ -13,7 +13,7 @@
         class="room-sidebar-panel"
         size-unit="px"
         :order="0"
-        :default-size="panelPreferences.collapsed.navigation ? 40 : initialPanelWidth"
+        :default-size="panelPreferences.collapsed.navigation ? 40 : initialNavigationWidth"
         :min-size="160"
         :max-size="400"
         :collapsed-size="40"
@@ -34,7 +34,7 @@
           </AppTooltip>
         </div>
         <template v-else>
-          <slot name="sidebar" />
+          <slot name="sidebar" :close-navigation="closeNavigation" />
           <div class="room-panel-footer">
             <AppTooltip :text="t('sidebar.collapseLeft')">
               <button
@@ -75,7 +75,7 @@
         class="room-details-panel"
         size-unit="px"
         :order="2"
-        :default-size="panelPreferences.collapsed.details ? 40 : initialPanelWidth"
+        :default-size="panelPreferences.collapsed.details ? 40 : initialDetailsWidth"
         :min-size="160"
         :max-size="400"
         :collapsed-size="40"
@@ -119,34 +119,57 @@
       </SplitterPanel>
     </SplitterGroup>
     <template v-else>
-      <CollapsibleRoot v-model:open="mobileNavigationOpen" class="room-mobile-navigation">
-        <CollapsibleTrigger class="room-mobile-navigation-toggle">
+      <DialogRoot v-model:open="mobileNavigationOpen">
+        <DialogTrigger class="room-mobile-navigation-toggle">
           <AppIcon name="panel-left-open" />
           <span>{{ t("room.navigation") }}</span>
-          <AppIcon name="chevron-down" class="room-mobile-navigation-chevron" />
-        </CollapsibleTrigger>
-        <CollapsibleContent class="room-mobile-navigation-content">
-          <slot name="sidebar" />
-        </CollapsibleContent>
-      </CollapsibleRoot>
+          <AppIcon name="chevron" class="room-mobile-navigation-chevron" />
+        </DialogTrigger>
+        <DialogPortal>
+          <DialogOverlay class="room-drawer-overlay" />
+          <DialogContent class="room-navigation-drawer" :aria-describedby="undefined">
+            <header class="room-panel-heading room-navigation-heading">
+              <DialogTitle class="room-panel-title">{{ t("room.navigation") }}</DialogTitle>
+              <DialogClose class="icon-button" :aria-label="t('sidebar.collapseLeft')">
+                <AppIcon name="close" />
+              </DialogClose>
+            </header>
+            <slot name="sidebar" :close-navigation="closeNavigation" />
+          </DialogContent>
+        </DialogPortal>
+      </DialogRoot>
       <slot />
     </template>
-    <div v-if="compact" class="room-context-panel" :class="{ 'is-open': detailsOpen }">
-      <slot name="details" :collapse="collapseDetails" />
-    </div>
+    <DialogRoot v-if="compact" :open="detailsOpen" @update:open="updateDetailsOpen">
+      <DialogPortal>
+        <DialogOverlay class="room-drawer-overlay" />
+        <DialogContent
+          class="room-context-panel room-details-drawer"
+          :aria-describedby="undefined"
+          @close-auto-focus="restoreDetailsFocus"
+        >
+          <DialogTitle class="sr-only">{{ t("sidebar.details") }}</DialogTitle>
+          <slot name="details" :collapse="collapseDetails" />
+        </DialogContent>
+      </DialogPortal>
+    </DialogRoot>
   </div>
 </template>
 
 <script setup lang="ts">
   import {
-    CollapsibleContent,
-    CollapsibleRoot,
-    CollapsibleTrigger,
+    DialogClose,
+    DialogContent,
+    DialogOverlay,
+    DialogPortal,
+    DialogRoot,
+    DialogTitle,
+    DialogTrigger,
     SplitterGroup,
     SplitterPanel,
     SplitterResizeHandle,
   } from "reka-ui";
-  import { nextTick, onBeforeUnmount, ref, watch } from "vue";
+  import { nextTick, onBeforeUnmount, onDeactivated, ref, watch } from "vue";
   import { useI18n } from "vue-i18n";
 
   import AppIcon from "@/components/AppIcon.vue";
@@ -154,9 +177,10 @@
   import { usePanelPreferencesStore } from "@/stores/panelPreferences";
 
   const { t } = useI18n();
-  defineProps<{ detailsOpen: boolean }>();
+  const props = defineProps<{ detailsOpen: boolean }>();
   const emit = defineEmits<{ collapseDetails: [] }>();
-  const initialPanelWidth = 240;
+  const initialNavigationWidth = 240;
+  const initialDetailsWidth = 300;
   const panelPreferences = usePanelPreferencesStore();
   const navigationPanel = ref<InstanceType<typeof SplitterPanel>>();
   const detailsPanel = ref<InstanceType<typeof SplitterPanel>>();
@@ -165,6 +189,7 @@
   const compactQuery = window.matchMedia("(max-width: 1150px)");
   const mobile = ref(mobileQuery.matches);
   const compact = ref(compactQuery.matches);
+  let previousDetailsFocus: HTMLElement | null = null;
   let changingViewport = false;
 
   function syncViewport(): void {
@@ -172,6 +197,7 @@
     changingViewport = true;
     mobile.value = mobileQuery.matches;
     compact.value = compactQuery.matches;
+    closeNavigation();
     void nextTick(() => {
       changingViewport = false;
     });
@@ -186,6 +212,21 @@
     else emit("collapseDetails");
   }
 
+  function closeNavigation(): void {
+    mobileNavigationOpen.value = false;
+  }
+
+  function updateDetailsOpen(open: boolean): void {
+    if (!open) emit("collapseDetails");
+  }
+
+  function restoreDetailsFocus(event: Event): void {
+    if (previousDetailsFocus?.isConnected) {
+      event.preventDefault();
+      previousDetailsFocus.focus({ preventScroll: true });
+    }
+  }
+
   function guardCollapsedResize(event: KeyboardEvent, collapsed: boolean | undefined): void {
     if (
       event.key === "Enter" ||
@@ -197,12 +238,23 @@
   }
 
   function restoreNavigation(): void {
-    navigationPanel.value?.resize(initialPanelWidth);
+    navigationPanel.value?.resize(initialNavigationWidth);
   }
 
   function restoreDetails(): void {
-    detailsPanel.value?.resize(initialPanelWidth);
+    detailsPanel.value?.resize(initialDetailsWidth);
   }
+
+  watch(
+    () => props.detailsOpen,
+    (open) => {
+      if (open) {
+        previousDetailsFocus =
+          document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      }
+      if (open && !compact.value && detailsPanel.value?.isCollapsed) restoreDetails();
+    },
+  );
 
   watch(
     () => navigationPanel.value?.isCollapsed,
@@ -233,6 +285,10 @@
 
   mobileQuery.addEventListener("change", syncViewport);
   compactQuery.addEventListener("change", syncViewport);
+  onDeactivated(() => {
+    closeNavigation();
+    emit("collapseDetails");
+  });
   onBeforeUnmount(() => {
     mobileQuery.removeEventListener("change", syncViewport);
     compactQuery.removeEventListener("change", syncViewport);

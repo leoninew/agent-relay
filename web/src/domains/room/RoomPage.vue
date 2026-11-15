@@ -18,30 +18,48 @@
     </template>
   </div>
   <RoomWorkbench v-else :details-open="drawerOpen" @collapse-details="drawerOpen = false">
-    <template #sidebar>
+    <template #sidebar="{ closeNavigation }">
       <aside class="room-sidebar" :aria-label="t('room.navigation')">
         <ChannelBar
           :channels="availableChannels"
           :channel-id="currentChannelId"
           :disabled="saving || sending || !currentRoomId"
-          @create="openChannelCreate"
-          @select="roomPanel.selectChannel"
+          @create="
+            closeNavigation();
+            openChannelCreate();
+          "
+          @select="
+            roomPanel.selectChannel($event);
+            closeNavigation();
+          "
         />
         <TopicSidebar
           :snapshot="snapshot"
           :channel-id="currentChannelId!"
           :busy="sending || saving"
           :selected-topic-id="selectedTopicId"
-          @select="selectSidebar('topic', $event)"
-          @create-topic="openSetup('topic')"
+          @select="
+            selectSidebar('topic', $event);
+            closeNavigation();
+          "
+          @create-topic="
+            closeNavigation();
+            openSetup('topic');
+          "
         />
         <MemberPanel
           :snapshot="snapshot"
           :channel-id="currentChannelId!"
           :busy="sending || saving"
           :selected-member-id="selectedMemberId"
-          @select="selectSidebar('member', $event)"
-          @add-member="openSetup('member')"
+          @select="
+            selectSidebar('member', $event);
+            closeNavigation();
+          "
+          @add-member="
+            closeNavigation();
+            openSetup('member');
+          "
         />
       </aside>
     </template>
@@ -124,7 +142,7 @@
           :topics="snapshot.topics"
           :skill-descriptions="skillDescriptions"
           :selected-message-id="detailMessage?.id"
-          details-open
+          :details-open="drawerOpen"
           :loading="loading"
           :searching="Boolean(keyword)"
           @load-older="loadOlder"
@@ -132,6 +150,7 @@
           @reply="quoteMessage"
           @reference="showReference"
           @select="selectMessage"
+          @view-details="viewMessageDetails"
           @add-topic="composer?.addTopic($event)"
           @add-member="composer?.addMember($event)"
         />
@@ -799,6 +818,11 @@
       visibleMessages.value.find((message) => message.id === messageId) ??
       queueMessages.value.find((message) => message.id === messageId);
     if (message) roomPanel.selectMessage(message);
+  }
+
+  function viewMessageDetails(messageId: string): void {
+    selectMessage(messageId);
+    roomPanel.openDrawer();
   }
 
   function selectQueueMessage(messageId: string): void {

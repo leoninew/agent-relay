@@ -157,7 +157,7 @@
                 :aria-label="t('queue.viewMessage', { seq: message.seq })"
                 :aria-expanded="message.id === selectedMessageId && detailsOpen"
                 :title="t('timeline.view')"
-                @click.stop="$emit('select', message.id)"
+                @click.stop="$emit('viewDetails', message.id)"
               >
                 <AppIcon name="info" />
               </button>
@@ -215,6 +215,7 @@
     reply: [message: RoomMessage];
     reference: [messageId: string];
     select: [messageId: string];
+    viewDetails: [messageId: string];
     addTopic: [topicId: string];
     addMember: [memberId: string];
     loadOlder: [];

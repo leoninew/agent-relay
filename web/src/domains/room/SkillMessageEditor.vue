@@ -666,4 +666,10 @@
     top: 0;
     right: 0;
   }
+
+  @container conversation (max-width: 600px) {
+    .skill-message-editor :deep(.tiptap) {
+      max-height: min(6lh, 20dvh);
+    }
+  }
 </style>

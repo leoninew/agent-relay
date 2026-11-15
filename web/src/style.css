@@ -886,10 +886,21 @@
 
 @media (max-width: 720px) {
   .app-header {
-    gap: 12px;
-    padding: 0 16px;
+    gap: 8px;
+    padding: 0 max(8px, env(safe-area-inset-right)) 0 max(12px, env(safe-area-inset-left));
+  }
+  .app-brand {
+    flex-shrink: 0;
+  }
+  .app-brand > span {
+    display: none;
   }
   .room-tab {
-    max-width: 140px;
+    max-width: 160px;
+    padding-left: 10px;
+  }
+  .room-tab-menu-button {
+    width: 28px;
+    opacity: 1;
   }
 }
