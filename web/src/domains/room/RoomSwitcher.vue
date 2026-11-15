@@ -32,7 +32,7 @@
                 <RouterLink
                   :to="{
                     name: 'channel',
-                    params: { roomId: room.id, channelId: DEFAULT_CHANNEL_ID },
+                    params: { roomId: room.id, channelId: channelForRoom(room.id) },
                   }"
                   class="room-tab"
                   :aria-label="t('navigation.switchProject', { name: room.name })"
@@ -159,6 +159,7 @@
   import RoomSetupDialog from "@/domains/room/RoomSetupDialog.vue";
   import { describeApiError } from "@/services/api";
   import type { CreateRoom, Room, UpdateRoom } from "@/services/roomApi";
+  import { useChannelsStore } from "@/stores/channels";
   import { useRoomsStore } from "@/stores/rooms";
   import { useToastsStore } from "@/stores/toasts";
 
@@ -167,6 +168,7 @@
   const router = useRouter();
   const roomNavigation = ref<HTMLElement>();
   const roomsStore = useRoomsStore();
+  const channelsStore = useChannelsStore();
   const { orderedItems: rooms, moveItem: moveRoom } = useStoredOrder(
     () => "relay-room-order",
     () => roomsStore.rooms,
@@ -187,6 +189,10 @@
   const roomDialogError = computed(() =>
     editingRoom.value ? renameError.value : createError.value,
   );
+
+  function channelForRoom(roomId: string): string {
+    return channelsStore.preferredChannel(roomId) ?? DEFAULT_CHANNEL_ID;
+  }
 
   async function load(): Promise<void> {
     loading.value = true;
@@ -282,7 +288,10 @@
       const nextRoom = rooms.value[0];
       await router.replace(
         nextRoom
-          ? { name: "channel", params: { roomId: nextRoom.id, channelId: DEFAULT_CHANNEL_ID } }
+          ? {
+              name: "channel",
+              params: { roomId: nextRoom.id, channelId: channelForRoom(nextRoom.id) },
+            }
           : { name: "room" },
       );
     }

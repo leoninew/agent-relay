@@ -1,5 +1,5 @@
 import { createPinia, setActivePinia } from "pinia";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DEFAULT_CHANNEL_ID } from "@/domains/channel/channelRoutes";
 import type { Channel } from "@/services/channelApi";
@@ -40,6 +40,10 @@ describe("channel state", () => {
     setActivePinia(createPinia());
   });
 
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("loads channels once and excludes archived channels from selection", async () => {
     vi.mocked(fetchChannels).mockResolvedValue([
       channel(),
@@ -55,6 +59,26 @@ describe("channel state", () => {
     expect(store.resolveChannelId("room-1", DEFAULT_CHANNEL_ID)).toBe(DEFAULT_CHANNEL_ID);
     expect(store.resolveChannelId("room-1", "archived")).toBeUndefined();
     expect(store.resolveChannelId("room-1", "missing")).toBeUndefined();
+  });
+
+  it("restores the selected channel per room after the store is recreated", () => {
+    const values = new Map<string, string>();
+    vi.stubGlobal("window", {
+      localStorage: {
+        getItem: (key: string) => values.get(key) ?? null,
+        setItem: (key: string, value: string) => values.set(key, value),
+        removeItem: (key: string) => void values.delete(key),
+      },
+    });
+    const firstStore = useChannelsStore();
+    firstStore.remember("room-1", "channel-api");
+    firstStore.remember("room-2", "channel-design");
+
+    setActivePinia(createPinia());
+    const restoredStore = useChannelsStore();
+
+    expect(restoredStore.preferredChannel("room-1")).toBe("channel-api");
+    expect(restoredStore.preferredChannel("room-2")).toBe("channel-design");
   });
 
   it("stores the created channel and its description", async () => {

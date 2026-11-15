@@ -1,6 +1,7 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
 
+import { createChannelSelectionStorage } from "@/domains/channel/channelSelection";
 import { describeApiError } from "@/services/api";
 import type { MessageDescriptor } from "@/i18n";
 import {
@@ -13,6 +14,7 @@ import {
 import type { Channel, CreateChannel, UpdateChannel } from "@/services/channelApi";
 
 export const useChannelsStore = defineStore("channels", () => {
+  const selectionStorage = createChannelSelectionStorage();
   const byRoom = ref<Record<string, Channel[]>>({});
   const loadedRooms = ref<Record<string, boolean>>({});
   const loading = ref<Record<string, boolean>>({});
@@ -51,10 +53,13 @@ export const useChannelsStore = defineStore("channels", () => {
       .then((result) => {
         byRoom.value[roomId] = result;
         loadedRooms.value[roomId] = true;
-        const stored = recent.value[roomId];
+        const stored = recent.value[roomId] ?? selectionStorage.load(roomId);
         const selected = stored ? resolveChannelId(roomId, stored) : undefined;
         if (selected) recent.value[roomId] = selected;
-        else delete recent.value[roomId];
+        else {
+          delete recent.value[roomId];
+          if (stored) selectionStorage.remove(roomId);
+        }
         return result;
       })
       .catch((caught: unknown) => {
@@ -72,6 +77,11 @@ export const useChannelsStore = defineStore("channels", () => {
 
   function remember(roomId: string, channelId: string): void {
     recent.value[roomId] = channelId;
+    selectionStorage.save(roomId, channelId);
+  }
+
+  function preferredChannel(roomId: string): string | undefined {
+    return recent.value[roomId] ?? selectionStorage.load(roomId);
   }
 
   async function create(roomId: string, request: CreateChannel): Promise<Channel> {
@@ -80,7 +90,7 @@ export const useChannelsStore = defineStore("channels", () => {
       ...channels(roomId).filter((candidate) => candidate.id !== channel.id),
       channel,
     ];
-    recent.value[roomId] = channel.id;
+    remember(roomId, channel.id);
     return channel;
   }
 
@@ -101,9 +111,13 @@ export const useChannelsStore = defineStore("channels", () => {
   }
 
   async function remove(roomId: string, channelId: string): Promise<void> {
+    const wasSelected = preferredChannel(roomId) === channelId;
     await deleteChannel(roomId, channelId);
     byRoom.value[roomId] = channels(roomId).filter((candidate) => candidate.id !== channelId);
-    if (recent.value[roomId] === channelId) delete recent.value[roomId];
+    if (wasSelected) {
+      delete recent.value[roomId];
+      selectionStorage.remove(roomId);
+    }
   }
 
   function reset(roomId?: string): void {
@@ -138,6 +152,7 @@ export const useChannelsStore = defineStore("channels", () => {
     activeChannels,
     channel,
     resolveChannelId,
+    preferredChannel,
     load,
     remember,
     create,

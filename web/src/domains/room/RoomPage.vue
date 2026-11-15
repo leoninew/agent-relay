@@ -52,7 +52,9 @@
           :snapshot="snapshot"
           :busy="sending || saving"
           :selected-member-id="selectedMemberId"
+          :interrupting-member-ids="interruptingMemberIds"
           @move="moveMember"
+          @interrupt="interruptMember"
           @select="
             selectSidebar('member', $event);
             closeNavigation();
@@ -313,6 +315,7 @@
   import RoomWorkbench from "@/domains/room/RoomWorkbench.vue";
   import TopicSidebar from "@/domains/room/TopicSidebar.vue";
   import { useMessageQueue } from "@/domains/room/useMessageQueue";
+  import { useMemberInterrupt } from "@/domains/room/useMemberInterrupt";
   import { useRoomPanel } from "@/domains/room/useRoomPanel";
   import { useRoomCapabilities } from "@/domains/room/useRoomCapabilities";
   import { useRoomDraft } from "@/domains/room/useRoomDraft";
@@ -411,6 +414,15 @@
     active.value && currentRoomId.value && currentChannelId.value
       ? draftScope(currentRoomId.value, currentChannelId.value)
       : undefined,
+  );
+  const { interruptingMemberIds, interruptMember } = useMemberInterrupt(
+    () => (active.value ? currentRoomId.value : undefined),
+    () => currentChannelId.value,
+    async (roomId, channelId) => {
+      await fetchRoomSessions(roomId, undefined, channelId);
+      const metadata = await fetchRoomMetadata(roomId, undefined, channelId);
+      roomsStore.syncMetadata(metadata, channelId);
+    },
   );
   const messageQueue = useMessageQueue(
     () => (active.value ? currentRoomId.value : undefined),
@@ -734,7 +746,12 @@
       if (!active.value || version !== initializationVersion) return;
       if (props.roomId && props.channelId) await openRoom(props.roomId, props.channelId);
       else if (roomsStore.rooms.length)
-        await router.replace(channelRoute(roomsStore.rooms[0].id, DEFAULT_CHANNEL_ID));
+        await router.replace(
+          channelRoute(
+            roomsStore.rooms[0].id,
+            channelsStore.preferredChannel(roomsStore.rooms[0].id) ?? DEFAULT_CHANNEL_ID,
+          ),
+        );
       else loading.value = false;
     } catch (caught) {
       if (!active.value || version !== initializationVersion) return;
@@ -745,6 +762,7 @@
   }
 
   async function openRoom(roomId: string, requestedChannelId: string): Promise<void> {
+    const previouslySelectedChannel = channelsStore.preferredChannel(roomId);
     resetSearch();
     roomPanel.reset();
     currentRoomId.value = roomId;
@@ -760,13 +778,17 @@
       return;
     }
     if (currentRoomId.value !== roomId || !active.value) return;
-    const channelId = channelsStore.resolveChannelId(roomId, requestedChannelId);
+    const requested = channelsStore.resolveChannelId(roomId, requestedChannelId);
+    const cachedFallback =
+      requestedChannelId === previouslySelectedChannel
+        ? channelsStore.resolveChannelId(roomId, DEFAULT_CHANNEL_ID)
+        : undefined;
+    const channelId = requested ?? cachedFallback;
     if (!channelId) {
       loadError.value = { key: "errors.channel_not_found" };
       loading.value = false;
       return;
     }
-    channelsStore.remember(roomId, channelId);
     const route = channelRoute(roomId, channelId);
     if (requestedChannelId !== route.params.channelId) void router.replace(route);
     await openChannel(roomId, channelId);
@@ -782,6 +804,7 @@
   async function openChannel(roomId: string, channelId: string): Promise<void> {
     resetSearch();
     currentChannelId.value = channelId;
+    channelsStore.remember(roomId, channelId);
     cancelQueries();
     const scope = roomsStore.snapshotKey(roomId, channelId);
     delete roomsStore.snapshots[scope];
