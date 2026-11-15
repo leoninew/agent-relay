@@ -9,7 +9,7 @@ from contextlib import ExitStack, suppress
 from dataclasses import replace
 from pathlib import Path
 from threading import Thread
-from time import monotonic
+from time import monotonic, sleep
 from typing import Any, cast
 
 from websockets.sync.client import ClientConnection, connect
@@ -30,7 +30,11 @@ from agent_relay.application.dto.delivery import (
     ReceivedInput,
     SteerReceipt,
 )
-from agent_relay.application.dto.members import SessionInfo, SessionStatus
+from agent_relay.application.dto.members import MemberInterruptResult, SessionInfo, SessionStatus
+from agent_relay.application.members.sessions import (
+    SessionInterruptRejected,
+    SessionUnavailableError,
+)
 from agent_relay.domain.rooms.models import SubmissionMethod
 from agent_relay.domain.rooms.rules import normalize_project_path
 from agent_relay.infrastructure.codex.catalog import decode_skills, server_option
@@ -335,6 +339,85 @@ class CodexDriver:
         with ProxyRpc(self.command, self.timeout) as rpc:
             result = rpc.call("thread/read", {"threadId": thread_id, "includeTurns": False})
             return self._session(result.get("thread"))
+
+    def interrupt(self, thread_id: str, project_path: str) -> MemberInterruptResult:
+        try:
+            with ProxyRpc(self.command, self.timeout) as rpc:
+                try:
+                    session = self._target_session(rpc, thread_id, project_path)
+                except QueueRejected as exc:
+                    raise SessionInterruptRejected(
+                        "目标会话不可用或不属于当前频道", code="session_unavailable"
+                    ) from exc
+                if session.status == "idle":
+                    return MemberInterruptResult(status="not_running")
+                turn_id = self._active_turn(rpc, thread_id)
+                if turn_id is None:
+                    raise SessionInterruptRejected(
+                        "无法定位正在运行的轮次，请刷新会话状态",
+                        code="session_interrupt_turn_unavailable",
+                    )
+                try:
+                    rpc.call("turn/interrupt", {"threadId": thread_id, "turnId": turn_id})
+                except RpcRejected as exc:
+                    raise SessionInterruptRejected(
+                        "当前会话不支持打断" if exc.code == -32601 else "打断请求未被接受",
+                        code="session_interrupt_unsupported"
+                        if exc.code == -32601
+                        else "session_interrupt_rejected",
+                    ) from exc
+                except Exception as exc:
+                    raise SessionUnavailableError(
+                        "打断结果待确认，请先检查会话状态", code="session_interrupt_unknown"
+                    ) from exc
+                return self._confirm_interrupt(rpc, thread_id, turn_id)
+        except (SessionInterruptRejected, SessionUnavailableError):
+            raise
+        except Exception as exc:
+            raise SessionUnavailableError(
+                "无法读取 Codex 会话", code="session_metadata_unavailable"
+            ) from exc
+
+    def _confirm_interrupt(
+        self, rpc: ProxyRpc, thread_id: str, turn_id: str
+    ) -> MemberInterruptResult:
+        deadline = monotonic() + min(self.timeout, 5)
+        while (remaining := deadline - monotonic()) > 0:
+            rpc.timeout = min(remaining, 1)
+            try:
+                page = rpc.call(
+                    "thread/turns/list",
+                    {
+                        "threadId": thread_id,
+                        "limit": 20,
+                        "sortDirection": "desc",
+                        "itemsView": "notLoaded",
+                    },
+                )
+                turns = page.get("data")
+                if not isinstance(turns, list):
+                    break
+                target = next(
+                    (
+                        turn
+                        for turn in turns
+                        if isinstance(turn, dict) and turn.get("id") == turn_id
+                    ),
+                    None,
+                )
+                if target is not None:
+                    if target.get("status") == "interrupted":
+                        return MemberInterruptResult(status="interrupted", turn_id=turn_id)
+                    if target.get("status") in {"completed", "failed"}:
+                        return MemberInterruptResult(status="not_running", turn_id=turn_id)
+            except Exception as exc:
+                raise SessionUnavailableError(
+                    "无法确认目标轮次已打断，请检查会话状态", code="session_interrupt_unknown"
+                ) from exc
+            sleep(min(0.1, max(0, deadline - monotonic())))
+        raise SessionUnavailableError(
+            "无法确认目标轮次已打断，请检查会话状态", code="session_interrupt_unknown"
+        )
 
     def discover_skills(self, project_path: str, *, force_reload: bool = False) -> SkillDiscovery:
         with ProxyRpc(self.command, self.timeout) as rpc:

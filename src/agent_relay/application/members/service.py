@@ -9,16 +9,18 @@ from agent_relay.application.dto.members import (
     ChangedMember,
     CreatedMember,
     CreateMember,
+    MemberInterruptResult,
     SessionCandidate,
     SessionInfo,
     UpdateMember,
 )
 from agent_relay.application.members.sessions import (
     SessionDriver,
+    SessionInterruptRejected,
     SessionUnavailableError,
 )
 from agent_relay.application.rooms.ports import RoomStore
-from agent_relay.domain.rooms.errors import RoomConflictError, RoomInputError
+from agent_relay.domain.rooms.errors import RoomConflictError, RoomInputError, RoomNotFoundError
 from agent_relay.domain.rooms.members import (
     observation_cutoff,
     rename_member,
@@ -135,6 +137,27 @@ class MemberService:
             member = retire_member(state, member_id, datetime.now(UTC))
             rooms.save_resources(state, original)
             return ChangedMember(**member.model_dump(), metadata=rooms.metadata(room_id))
+
+    def interrupt(self, room_id: str, member_id: str) -> MemberInterruptResult:
+        with self.store.read() as rooms:
+            state = rooms.resources(room_id)
+            member = next(
+                (
+                    member
+                    for member in state.members
+                    if member.id == member_id and member.deleted_at is None
+                ),
+                None,
+            )
+            if member is None:
+                raise RoomNotFoundError("成员不存在", code="member_not_found")
+            if member.kind != "agent" or not member.session_id:
+                raise RoomConflictError("该成员不支持打断", code="member_interrupt_unsupported")
+            session_id, project_path = member.session_id, state.working_path
+        try:
+            return self.driver.interrupt(session_id, project_path)
+        except SessionInterruptRejected as exc:
+            raise RoomConflictError(str(exc), code=exc.code) from exc
 
     def add(self, room_id: str, request: CreateMember) -> CreatedMember:
         with self.store.read() as rooms:

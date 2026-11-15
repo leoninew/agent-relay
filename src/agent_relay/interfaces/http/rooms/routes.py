@@ -9,6 +9,7 @@ from agent_relay.application.dto.members import (
     ChangedMember,
     CreatedMember,
     CreateMember,
+    MemberInterruptResult,
     SessionCandidate,
     UpdateMember,
 )
@@ -228,6 +229,13 @@ def update_member(
     room_id: str, member_id: str, request: UpdateMember, service: MemberServiceDependency
 ) -> ChangedMember:
     return service.update_member(room_id, member_id, request)
+
+
+@channel_router.post("/member/{member_id}/interrupt")
+def interrupt_member(
+    room_id: str, member_id: str, service: MemberServiceDependency
+) -> MemberInterruptResult:
+    return service.interrupt(room_id, member_id)
 
 
 @channel_router.post("/topic", status_code=201)

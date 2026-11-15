@@ -48,7 +48,7 @@
         :animation="150"
         :disabled="busy"
       >
-        <div v-for="member in members" :key="member.id" class="sidebar-node">
+        <div v-for="member in members" :key="member.id" class="sidebar-node sidebar-member-node">
           <button
             type="button"
             class="sidebar-drag-handle"
@@ -75,10 +75,22 @@
             <span
               v-if="member.kind === 'agent'"
               class="sidebar-item-meta sidebar-member-status"
+              :class="{ 'is-interruptible': interruptible(member) }"
               :data-presence="member.presence"
             >
               {{ t(`sidebar.${member.presence}`) }}
             </span>
+          </button>
+          <button
+            v-if="interruptible(member)"
+            type="button"
+            class="sidebar-interrupt-button"
+            :disabled="busy || interruptingMemberIds.includes(member.id)"
+            :aria-label="t('sidebar.interruptMember', { name: member.name })"
+            :title="t('sidebar.interruptMember', { name: member.name })"
+            @click.stop="$emit('interrupt', member)"
+          >
+            {{ t("sidebar.interrupt") }}
           </button>
         </div>
       </VueDraggable>
@@ -105,11 +117,13 @@
     snapshot: RoomSnapshot;
     busy: boolean;
     selectedMemberId?: string;
+    interruptingMemberIds: string[];
   }>();
   const emit = defineEmits<{
     addMember: [];
     select: [memberId: string | undefined];
     move: [memberId: string, offset: number];
+    interrupt: [member: Member];
   }>();
 
   const humanMember = computed(() =>
@@ -117,4 +131,6 @@
   );
   const members = defineModel<Member[]>("members", { required: true });
   const moveMember = (memberId: string, offset: number) => emit("move", memberId, offset);
+  const interruptible = (member: Member) =>
+    member.kind === "agent" && Boolean(member.sessionId) && member.presence === "busy";
 </script>

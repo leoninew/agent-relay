@@ -60,6 +60,11 @@ class SessionCandidate(Session):
     unavailable_reason_code: str | None = None
 
 
+class MemberInterruptResult(RoomModel):
+    status: Literal["interrupted", "not_running"]
+    turn_id: str | None = None
+
+
 class ChangedMember(Member):
     metadata: RoomMetadata
 

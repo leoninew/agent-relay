@@ -23,6 +23,11 @@ export type Member = {
   deletedAt: string | null;
 };
 
+export type MemberInterruptResult = {
+  status: "interrupted" | "not_running";
+  turnId: string | null;
+};
+
 export type Delivery = {
   id: string;
   targetMemberId: string;
@@ -418,6 +423,17 @@ export async function fetchRoomSessions(
   const { data } = await apiClient.get<SessionCandidate[]>(
     roomResourcePath(roomId, channelId, "/session"),
     { signal },
+  );
+  return data;
+}
+
+export async function interruptRoomMember(
+  roomId: string,
+  memberId: string,
+  channelId: string,
+): Promise<MemberInterruptResult> {
+  const { data } = await apiClient.post<MemberInterruptResult>(
+    roomResourcePath(roomId, channelId, `/member/${encodeURIComponent(memberId)}/interrupt`),
   );
   return data;
 }

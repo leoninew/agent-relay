@@ -1,5 +1,5 @@
 # Codex 接入能力核验与方案建议
-最后修改时间: 2026-11-12 13:43:01
+最后修改时间: 2026-11-15 22:06:11
 
 ## 状态与结论
 
@@ -34,6 +34,7 @@ D07 保持显式结构化目标、受控成员身份与来源幂等规则；已�
 
 ## 删除等待项与中断轮次（2026-11-11）
 
+- 2026-11-15 已实现[忙碌成员打断](../plan/20261115-member-interrupt.md)：频道成员 HTTP 动作通过现有共享 daemon proxy 调用一次 `turn/interrupt`，同步有界查询原 turnId 的最终状态后返回结果。仅确认 `interrupted` 才返回打断成功，无法确认则返回稳定的结果未知错误；不清空队列、重试中断或自动启动下一项。本机 CLI/schema 和 daemon 为 0.169.0，已通过不存在会话的无副作用方法可达性探测及单元/HTTP 契约测试；未对真实工作会话执行中断。UI 测试由用户自行进行。
 - 本机 `codex 0.167.0` 的 `codex queue --help` 仅提供入队和可选 `--resume`；`codex-cli message queue --help` 也没有取消或中断参数。`--resume` 是尝试继续会话，不会取消当前轮次。
 - 本机 `codex app-server generate-json-schema --experimental` 提供 `thread/queue/delete`，以 `threadId` 与 `queuedSubmissionId` 定位等待项，返回 `deleted`。下表已有隔离会话的删除证据。Relay 通过 `queue clear --clear-codex` / `queue_clear(clear_codex=true)` 选择性使用该方法，仍以保存回执限定范围。
 - [OpenAI App Server 文档](https://developers.openai.com/codex/app-server/)和本机 schema 均提供 `turn/interrupt(threadId, turnId)`。它对正在运行的指定轮次发起取消；以同一轮次的 `turn/completed`、`status=interrupted` 确认结果。它不删除等待项，也不回滚已经发生的副作用。

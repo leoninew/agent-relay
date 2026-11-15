@@ -17,6 +17,7 @@ import {
   fetchRoomSessions,
   fetchRooms,
   fetchRoomSkills,
+  interruptRoomMember,
   postRoomMessage,
   updateRoom,
 } from "@/services/roomApi";
@@ -47,6 +48,15 @@ describe("room API", () => {
   afterEach(() => {
     apiClient.defaults.adapter = originalAdapter;
     vi.clearAllMocks();
+  });
+
+  it("posts a scoped interrupt without forwarding session IDs or queue options", async () => {
+    await interruptRoomMember("room/a", "member/b", "channel/c");
+    expect(adapterMock.mock.calls[0][0]).toMatchObject({
+      method: "post",
+      url: "/api/room/room%2Fa/channel/channel%2Fc/member/member%2Fb/interrupt",
+    });
+    expect(adapterMock.mock.calls[0][0].data).toBeUndefined();
   });
 
   it("requests room skills with an escaped identity and explicit reload", async () => {
