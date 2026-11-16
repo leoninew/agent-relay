@@ -267,7 +267,7 @@
     enableInputRules: false,
     enablePasteRules: false,
     editorProps: {
-      attributes: () => ({
+      attributes: (state) => ({
         id: props.id,
         role: props.pickerOpen ? "combobox" : "textbox",
         "aria-label": props.label,
@@ -276,6 +276,7 @@
         "aria-invalid": String(Boolean(props.invalid)),
         "aria-placeholder": props.placeholder,
         "data-placeholder": props.placeholder,
+        "data-empty": String(state.doc.firstChild?.content.size === 0),
         "aria-expanded": String(Boolean(props.pickerOpen)),
         "aria-autocomplete": "list",
         ...(props.describedBy ? { "aria-describedby": props.describedBy } : {}),
@@ -606,7 +607,7 @@
   .skill-message-editor :deep([data-message-body]) {
     margin: 0;
   }
-  .skill-message-editor :deep(.tiptap:has([data-message-body]:only-child > br:only-child)::before) {
+  .skill-message-editor :deep(.tiptap[data-empty="true"]::before) {
     content: attr(data-placeholder);
     position: absolute;
     color: hsl(var(--muted-foreground));

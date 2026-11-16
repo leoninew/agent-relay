@@ -1,5 +1,11 @@
 <template>
-  <AppDialog :open="open" :title="t('channel.create')" :busy="busy" @close="close">
+  <AppDialog
+    :open="open"
+    :title="t('channel.create')"
+    :busy="busy"
+    initial-focus="#channel-name"
+    @close="close"
+  >
     <form class="setup-form" novalidate @submit.prevent="submit">
       <div class="setup-form-content">
         <div class="setup-field">

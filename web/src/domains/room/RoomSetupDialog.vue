@@ -3,10 +3,60 @@
     :open="mode !== undefined"
     :title="title"
     :busy="saving || topicSaving"
+    initial-focus="#setup-name"
     @close="$emit('close')"
   >
     <form class="setup-form" novalidate @submit.prevent="submit">
       <div class="setup-form-content">
+        <div class="setup-field">
+          <label for="setup-name">
+            {{ nameLabel }}
+            <span class="required-mark">*</span>
+          </label>
+          <AppInput
+            id="setup-name"
+            v-model="name"
+            :maxlength="mode === 'topic' ? 40 : 80"
+            :disabled="saving"
+            :invalid="!!errors.name"
+            :clear-label="t('forms.clearName')"
+            aria-describedby="setup-name-error"
+            autocomplete="off"
+          />
+          <p v-if="errors.name" id="setup-name-error" class="field-error">
+            {{ translateMessage(errors.name) }}
+          </p>
+        </div>
+        <div v-if="mode === 'room'" class="setup-field">
+          <label for="setup-path"
+            >{{ t("setup.projectPath") }} <span v-if="!room" class="required-mark">*</span></label
+          >
+          <AppInput
+            id="setup-path"
+            v-model="projectPath"
+            maxlength="500"
+            :readonly="!!room"
+            :disabled="saving"
+            :invalid="!!errors.projectPath"
+            :clear-label="t('setup.clearPath')"
+            aria-describedby="setup-path-error"
+            placeholder=""
+            autocomplete="off"
+          />
+          <p v-if="errors.projectPath" id="setup-path-error" class="field-error">
+            {{ translateMessage(errors.projectPath) }}
+          </p>
+        </div>
+        <MemberTopicsField
+          v-if="mode === 'member'"
+          v-model="topicIds"
+          v-model:busy="topicSaving"
+          id-prefix="setup-member"
+          :topics="topics"
+          :room-id="roomId"
+          :channel-id="channelId"
+          :disabled="saving"
+        />
         <div v-if="mode === 'member'" class="setup-field">
           <div class="setup-field-heading">
             <label id="setup-session-label"
@@ -158,55 +208,6 @@
             {{ translateMessage(errors.session) }}
           </p>
         </div>
-        <div class="setup-field">
-          <label for="setup-name">
-            {{ nameLabel }}
-            <span class="required-mark">*</span>
-          </label>
-          <AppInput
-            id="setup-name"
-            v-model="name"
-            :maxlength="mode === 'topic' ? 40 : 80"
-            :disabled="saving"
-            :invalid="!!errors.name"
-            :clear-label="t('forms.clearName')"
-            aria-describedby="setup-name-error"
-            autocomplete="off"
-          />
-          <p v-if="errors.name" id="setup-name-error" class="field-error">
-            {{ translateMessage(errors.name) }}
-          </p>
-        </div>
-        <div v-if="mode === 'room'" class="setup-field">
-          <label for="setup-path"
-            >{{ t("setup.projectPath") }} <span v-if="!room" class="required-mark">*</span></label
-          >
-          <AppInput
-            id="setup-path"
-            v-model="projectPath"
-            maxlength="500"
-            :readonly="!!room"
-            :disabled="saving"
-            :invalid="!!errors.projectPath"
-            :clear-label="t('setup.clearPath')"
-            aria-describedby="setup-path-error"
-            placeholder=""
-            autocomplete="off"
-          />
-          <p v-if="errors.projectPath" id="setup-path-error" class="field-error">
-            {{ translateMessage(errors.projectPath) }}
-          </p>
-        </div>
-        <MemberTopicsField
-          v-if="mode === 'member'"
-          v-model="topicIds"
-          v-model:busy="topicSaving"
-          id-prefix="setup-member"
-          :topics="topics"
-          :room-id="roomId"
-          :channel-id="channelId"
-          :disabled="saving"
-        />
         <div v-if="mode === 'topic'" class="setup-field">
           <label for="setup-description">{{ t("setup.topicDescription") }}</label>
           <AppInput

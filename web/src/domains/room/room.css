@@ -1318,7 +1318,9 @@ button.topic-chip:hover:not(:disabled) {
 }
 .detail-copyable-id > span {
   min-width: 0;
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .detail-topics {
   display: flex;

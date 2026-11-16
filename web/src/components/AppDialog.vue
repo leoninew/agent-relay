@@ -7,6 +7,7 @@
         class="app-dialog"
         :class="contentClass"
         :aria-describedby="undefined"
+        @open-auto-focus="focusInitial"
         @escape-key-down="preventBusyClose"
         @interact-outside="preventBusyClose"
         @close-auto-focus="restoreFocus"
@@ -51,6 +52,7 @@
     title: string;
     busy: boolean;
     contentClass?: string;
+    initialFocus?: string;
   }>();
   const emit = defineEmits<{ close: []; "update:open": [open: boolean] }>();
   let previousFocus: HTMLElement | null = null;
@@ -72,6 +74,13 @@
 
   function preventBusyClose(event: Event): void {
     if (props.busy) event.preventDefault();
+  }
+
+  function focusInitial(event: Event): void {
+    if (!props.initialFocus || !(event.target instanceof HTMLElement)) return;
+    const target = event.target.querySelector<HTMLElement>(props.initialFocus);
+    target?.focus();
+    if (target && target.ownerDocument.activeElement === target) event.preventDefault();
   }
 
   function restoreFocus(event: Event): void {

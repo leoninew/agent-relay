@@ -150,7 +150,9 @@
             <template v-if="member.sessionId">
               <dt>{{ t("details.codexSessionId") }}</dt>
               <dd class="detail-copyable-id">
-                <span>{{ member.sessionId }}</span>
+                <AppTooltip :text="member.sessionId">
+                  <span tabindex="0">{{ member.sessionId }}</span>
+                </AppTooltip>
                 <button
                   type="button"
                   class="icon-button"

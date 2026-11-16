@@ -3,6 +3,7 @@
     :open="!!member"
     :title="t('forms.editMember')"
     :busy="saving || topicSaving"
+    initial-focus="#edit-member-name"
     @close="$emit('close')"
   >
     <form class="setup-form" novalidate @submit.prevent="submit">
