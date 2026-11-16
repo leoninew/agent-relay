@@ -155,6 +155,29 @@ def test_input_history_only_returns_correlatable_user_messages(history_rpc: Mock
     )
 
 
+def test_queue_page_preserves_exact_identity_and_excludes_input_content(history_rpc: Mock) -> None:
+    history_rpc.call.return_value = {
+        "data": [{"id": "queued", "clientUserMessageId": "client", "input": [{"type": "text"}]}],
+        "nextCursor": "older",
+    }
+    page = CodexDriver(["unused"], 1).read_queue_page("original", "previous")
+    assert page.next_cursor == "older" and len(page.inputs) == 1
+    assert page.inputs[0].client_message_id == "client"
+    assert page.inputs[0].receipt.metadata == {"id": "queued", "clientUserMessageId": "client"}
+    history_rpc.call.assert_called_once_with(
+        "thread/queue/list", {"threadId": "original", "cursor": "previous", "limit": 100}
+    )
+
+
+@pytest.mark.parametrize("row", [{"id": ""}, {"id": "q", "clientUserMessageId": 123}])
+def test_malformed_queue_evidence_cannot_confirm_original_input(
+    history_rpc: Mock, row: object
+) -> None:
+    history_rpc.call.return_value = {"data": [row]}
+    with pytest.raises(RpcDisconnected):
+        CodexDriver(["unused"], 1).read_queue_page("original")
+
+
 def test_unsupported_items_history_falls_back_to_full_turn_pages(history_rpc: Mock) -> None:
     history_rpc.call.side_effect = [
         RpcRejected("thread/items/list is not supported yet", -32601),

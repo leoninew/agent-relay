@@ -12,19 +12,23 @@ from threading import Thread
 from time import monotonic, sleep
 from typing import Any, cast
 
+from websockets.exceptions import ConnectionClosed
 from websockets.sync.client import ClientConnection, connect
 
 from conflua.application.delivery.ports import (
     ActivationRejected,
     InputHistoryUnavailable,
     QueueRejected,
+    SubmissionDeferred,
     SubmissionRejected,
     SubmissionUnknown,
 )
 from conflua.application.dto.capabilities import McpCatalog, SkillCatalog
 from conflua.application.dto.delivery import (
     InputPage,
+    QueuedInput,
     QueueHead,
+    QueuePage,
     QueueReceipt,
     QueueRequest,
     ReceivedInput,
@@ -70,6 +74,14 @@ class RpcDisconnected(RuntimeError):
     pass
 
 
+class TargetSessionUnavailable(QueueRejected):
+    pass
+
+
+class ProxyConfigurationError(OSError):
+    pass
+
+
 def _launch_command(command: list[str]) -> list[str]:
     executable = shutil.which(command[0]) or command[0]
     path = Path(executable)
@@ -79,7 +91,9 @@ def _launch_command(command: list[str]) -> list[str]:
     # npm's Windows shims aren't executable by CreateProcess. Start the official
     # package entry with Node, preserving argv without interpreting a shell script.
     if path.stem.lower() != "codex" or path.suffix.lower() == ".bat":
-        raise OSError("Expected a native Codex executable, Node entry or official npm Codex shim")
+        raise ProxyConfigurationError(
+            "Expected a native Codex executable, Node entry or official npm Codex shim"
+        )
     entry = path.parent / "node_modules" / "@openai" / "codex" / "bin" / "codex.js"
     if not entry.is_file():
         raise FileNotFoundError(f"Codex npm entry point not found: {entry}")
@@ -527,7 +541,9 @@ class CodexDriver:
             return self._mcp_catalog(rpc, thread_id)
 
     @staticmethod
-    def _mcp_catalog(rpc: ProxyRpc, thread_id: str) -> McpCatalog:
+    def _mcp_catalog(
+        rpc: ProxyRpc, thread_id: str, required_ids: frozenset[str] = frozenset()
+    ) -> McpCatalog:
         servers = []
         cursor: str | None = None
         seen_cursors: set[str] = set()
@@ -548,7 +564,15 @@ class CodexDriver:
                 if server.name in seen_servers:
                     raise RpcDisconnected("Duplicate MCP server identity")
                 seen_servers.add(server.name)
-                servers.append(server_option(server))
+                option = server_option(server)
+                if option.id in required_ids and not option.available:
+                    if (
+                        server.runtime_status in {"disabled", "authenticationRequired"}
+                        or server.auth_status == "notLoggedIn"
+                    ):
+                        raise QueueRejected("选中的 MCP 服务器已禁用或需要认证")
+                    raise SubmissionDeferred("选中的 MCP 服务器暂时未就绪，稍后重试")
+                servers.append(option)
             cursor = page.next_cursor
             if cursor is None:
                 return McpCatalog(servers=servers)
@@ -559,12 +583,12 @@ class CodexDriver:
     def _target_session(self, rpc: ProxyRpc, thread_id: str, project_path: str) -> SessionInfo:
         metadata = rpc.call("thread/read", {"threadId": thread_id, "includeTurns": False})
         session = self._session(metadata.get("thread"))
-        if (
-            session.id != thread_id
-            or not session.usable
-            or normalize_project_path(session.cwd) != normalize_project_path(project_path)
+        if session.id != thread_id or normalize_project_path(session.cwd) != normalize_project_path(
+            project_path
         ):
-            raise QueueRejected("Target Codex session is unavailable or outside this room")
+            raise QueueRejected("目标 Codex 会话标识或工作目录与绑定不符")
+        if not session.usable:
+            raise TargetSessionUnavailable("目标 Codex 会话暂时未接入或状态异常，稍后重试")
         return session
 
     def _queue_inputs(
@@ -595,7 +619,14 @@ class CodexDriver:
         seen = {("skill", required_skill.option.id)}
         skills = {binding.option.id: binding for binding in discovery.bindings}
         servers = (
-            {server.id: server for server in self._mcp_catalog(rpc, thread_id).servers}
+            {
+                server.id: server
+                for server in self._mcp_catalog(
+                    rpc,
+                    thread_id,
+                    frozenset(ref.id for ref in request.capabilities if ref.type == "mcp_server"),
+                ).servers
+            }
             if any(reference.type == "mcp_server" for reference in request.capabilities)
             else {}
         )
@@ -644,6 +675,8 @@ class CodexDriver:
                 },
             )
         except RpcRejected as exc:
+            if exc.code not in {-32600, -32601, -32602}:
+                raise SubmissionUnknown("Queue acceptance is uncertain", "queue") from exc
             raise QueueRejected(str(exc)) from exc
         receipt = result.get("queuedSubmission")
         if (
@@ -743,14 +776,65 @@ class CodexDriver:
                     note = "暂时无法定位当前轮次，已入队等待接收"
                 method = "queue"
                 return replace(self._enqueue(rpc, thread_id, client_message_id, inputs), note=note)
-        except (SubmissionRejected, SubmissionUnknown):
+        except (SubmissionDeferred, SubmissionRejected, SubmissionUnknown):
             raise
+        except TargetSessionUnavailable as exc:
+            if method is None:
+                raise SubmissionDeferred(str(exc)) from exc
+            raise SubmissionUnknown("Codex submission result is uncertain", method) from exc
         except QueueRejected as exc:
-            raise SubmissionRejected("Codex submission was not accepted", method) from exc
+            raise SubmissionRejected(str(exc), method) from exc
+        except (ProxyConfigurationError, FileNotFoundError, PermissionError) as exc:
+            if method is None:
+                raise SubmissionRejected("Codex 启动配置无效、文件缺失或没有执行权限") from exc
+            raise SubmissionUnknown("Codex submission result is uncertain", method) from exc
+        except (ConnectionError, TimeoutError, RpcDisconnected, ConnectionClosed) as exc:
+            if method is None:
+                raise SubmissionDeferred("提交前 Codex 通道暂时不可用，稍后重试") from exc
+            raise SubmissionUnknown("Codex submission result is uncertain", method) from exc
+        except OSError as exc:
+            if method is None:
+                raise SubmissionRejected("Codex 启动或连接配置不可用，未提交输入") from exc
+            raise SubmissionUnknown("Codex submission result is uncertain", method) from exc
+        except RpcRejected as exc:
+            if method is None and (
+                exc.code == -32603
+                or (exc.code == -32600 and str(exc) == f"thread not loaded: {thread_id}")
+            ):
+                raise SubmissionDeferred("提交前 Codex 服务暂时不可用，稍后重试") from exc
+            if method is None:
+                raise SubmissionRejected(str(exc)) from exc
+            raise SubmissionUnknown("Codex submission result is uncertain", method) from exc
         except Exception as exc:
             if method is None:
                 raise SubmissionRejected("Validation failed before submission") from exc
             raise SubmissionUnknown("Codex submission result is uncertain", method) from exc
+
+    def read_queue_page(self, thread_id: str, cursor: str | None = None) -> QueuePage:
+        with ProxyRpc(self.command, self.timeout) as rpc:
+            page = rpc.call(
+                "thread/queue/list", {"threadId": thread_id, "cursor": cursor, "limit": 100}
+            )
+            data = page.get("data")
+            if not isinstance(data, list):
+                raise RpcDisconnected("Missing Codex queue page")
+            inputs = []
+            for row in data:
+                if not isinstance(row, dict) or not isinstance(row.get("id"), str) or not row["id"]:
+                    raise RpcDisconnected("Invalid Codex queued input")
+                client_id = row.get("clientUserMessageId")
+                if client_id is None:
+                    continue
+                if not isinstance(client_id, str) or not client_id:
+                    raise RpcDisconnected("Invalid Codex queued client identity")
+                metadata = {key: value for key, value in row.items() if key != "input"}
+                inputs.append(QueuedInput(client_id, QueueReceipt(row["id"], metadata)))
+            next_cursor = page.get("nextCursor")
+            if next_cursor is not None and (
+                not isinstance(next_cursor, str) or not next_cursor or next_cursor == cursor
+            ):
+                raise RpcDisconnected("Invalid Codex queue pagination cursor")
+            return QueuePage(tuple(inputs), next_cursor)
 
     def delete(self, thread_id: str, queued_submission_id: str) -> bool:
         with ProxyRpc(self.command, self.timeout) as rpc:

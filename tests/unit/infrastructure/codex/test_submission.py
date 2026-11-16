@@ -5,13 +5,19 @@ import pytest
 
 from conflua.application.delivery.ports import (
     QueueRejected,
+    SubmissionDeferred,
     SubmissionRejected,
     SubmissionUnknown,
 )
 from conflua.application.dto.delivery import QueueReceipt, QueueRequest, SteerReceipt
 from conflua.domain.rooms.models import McpServerReference, SkillReference
 from conflua.infrastructure.codex.catalog import decode_skills, server_option
-from conflua.infrastructure.codex.driver import CodexDriver, RpcDisconnected, RpcRejected
+from conflua.infrastructure.codex.driver import (
+    CodexDriver,
+    ProxyConfigurationError,
+    RpcDisconnected,
+    RpcRejected,
+)
 from conflua.infrastructure.codex.models import McpPage
 
 
@@ -207,7 +213,7 @@ def test_add_outcome_is_not_retried_or_reclassified_as_preflight_failure(
         wire.bad_receipt = True
         error = RpcDisconnected
     else:
-        wire.add_error = RpcRejected("Explicit rejection")
+        wire.add_error = RpcRejected("Explicit rejection", -32602)
         error = QueueRejected
     with pytest.raises(error):
         runtime().enqueue("original", "client", wire.request())
@@ -320,7 +326,7 @@ def test_queue_failure_after_steer_fallback_is_not_sent_again(
 ) -> None:
     wire.thread["status"] = {"type": "active"}
     wire.steer_error = RpcRejected("Method not found", -32601)
-    wire.add_error = RpcRejected("Rejected") if rejected else TimeoutError("Unknown")
+    wire.add_error = RpcRejected("Rejected", -32602) if rejected else TimeoutError("Unknown")
     with pytest.raises(SubmissionRejected if rejected else SubmissionUnknown) as raised:
         runtime().submit("original", "client", wire.request())
     assert isinstance(raised.value, (SubmissionRejected, SubmissionUnknown))
@@ -331,8 +337,83 @@ def test_queue_failure_after_steer_fallback_is_not_sent_again(
 
 def test_submit_preflight_failure_is_definite_and_has_no_input_write(wire: QueueWire) -> None:
     request = wire.request()
-    wire.server["runtimeStatus"] = "failed"
+    wire.server["authStatus"] = "notLoggedIn"
     with pytest.raises(SubmissionRejected) as raised:
         runtime().submit("original", "client", request)
     assert raised.value.method is None
+    assert not any(method in {"turn/steer", "thread/queue/add"} for method, _ in wire.calls)
+
+
+@pytest.mark.parametrize("state", ["starting", "notStarted", "failed", "cancelled"])
+def test_temporary_mcp_runtime_state_is_deferred_before_input(wire: QueueWire, state: str) -> None:
+    request = wire.request()
+    wire.server["runtimeStatus"] = state
+    with pytest.raises(SubmissionDeferred):
+        runtime().submit("original", "client", request)
+    assert not any(method in {"turn/steer", "thread/queue/add"} for method, _ in wire.calls)
+
+
+@pytest.mark.parametrize("state", ["disabled", "authenticationRequired"])
+def test_mcp_configuration_failure_is_rejected_before_input(wire: QueueWire, state: str) -> None:
+    request = wire.request()
+    wire.server["runtimeStatus"] = state
+    with pytest.raises(SubmissionRejected):
+        runtime().submit("original", "client", request)
+    assert not any(method in {"turn/steer", "thread/queue/add"} for method, _ in wire.calls)
+
+
+def test_mcp_tools_error_does_not_hide_required_authentication(wire: QueueWire) -> None:
+    request = wire.request()
+    wire.server["authStatus"] = "notLoggedIn"
+    wire.server["toolsError"] = "cannot read tools before authentication"
+    with pytest.raises(SubmissionRejected):
+        runtime().submit("original", "client", request)
+    assert not any(method in {"turn/steer", "thread/queue/add"} for method, _ in wire.calls)
+
+
+@pytest.mark.parametrize(
+    ("error", "expected"),
+    [
+        (TimeoutError("timeout"), SubmissionDeferred),
+        (ConnectionResetError("disconnected"), SubmissionDeferred),
+        (RpcDisconnected("lost metadata connection"), SubmissionDeferred),
+        (FileNotFoundError("missing executable"), SubmissionRejected),
+        (PermissionError("not executable"), SubmissionRejected),
+        (ProxyConfigurationError("invalid shim"), SubmissionRejected),
+        (OSError("invalid executable format"), SubmissionRejected),
+    ],
+)
+def test_proxy_preparation_errors_are_classified_without_input(
+    wire: QueueWire, monkeypatch: pytest.MonkeyPatch, error: Exception, expected: type[Exception]
+) -> None:
+    request = wire.request()
+
+    def unavailable(*args: object) -> None:
+        raise error
+
+    monkeypatch.setattr("conflua.infrastructure.codex.driver.ProxyRpc", unavailable)
+    with pytest.raises(expected):
+        runtime().submit("original", "client", request)
+    assert wire.calls == []
+
+
+@pytest.mark.parametrize("steer_first", [False, True])
+def test_add_internal_error_is_uncertain_even_after_known_steer_refusal(
+    wire: QueueWire, steer_first: bool
+) -> None:
+    if steer_first:
+        wire.thread["status"] = {"type": "active"}
+        wire.steer_error = RpcRejected("unsupported", -32601)
+    wire.add_error = RpcRejected("internal failure after write", -32603)
+    with pytest.raises(SubmissionUnknown) as raised:
+        runtime().submit("original", "client", wire.request())
+    assert raised.value.method == "queue"
+    assert [method for method, _ in wire.calls].count("thread/queue/add") == 1
+
+
+def test_unloaded_target_is_deferred_without_input(wire: QueueWire) -> None:
+    request = wire.request()
+    wire.thread["status"] = {"type": "notLoaded"}
+    with pytest.raises(SubmissionDeferred):
+        runtime().submit("original", "client", request)
     assert not any(method in {"turn/steer", "thread/queue/add"} for method, _ in wire.calls)

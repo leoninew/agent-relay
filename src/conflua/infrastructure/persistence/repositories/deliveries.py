@@ -1,11 +1,23 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select, update
+from sqlalchemy import and_, literal_column, or_, select, update
 from sqlalchemy.orm import Session, aliased
+from sqlalchemy.orm.util import AliasedClass
 from sqlalchemy.sql.dml import Update
+from sqlalchemy.sql.elements import ColumnElement
 
-from conflua.application.dto.delivery import ClaimedDelivery, QueueHead, ReceivedInput
-from conflua.domain.rooms.delivery import INTERRUPTED_SUBMISSION, UNCONFIRMED_DELIVERY_STATUSES
+from conflua.application.dto.delivery import (
+    ActivationWork,
+    ClaimedDelivery,
+    QueueHead,
+    QueueReceipt,
+    ReceivedInput,
+)
+from conflua.domain.rooms.delivery import (
+    INTERRUPTED_SUBMISSION,
+    QUEUED_NOTE,
+    UNCONFIRMED_DELIVERY_STATUSES,
+)
 from conflua.domain.rooms.models import Delivery
 from conflua.infrastructure.persistence.mappers import delivery_from_model, delivery_values
 from conflua.infrastructure.persistence.models import (
@@ -17,7 +29,7 @@ from conflua.infrastructure.persistence.models import (
 )
 from conflua.infrastructure.persistence.repositories.messages import SQLAlchemyMessageRepository
 from conflua.infrastructure.persistence.repositories.rooms import SQLAlchemyRoomRepository
-from conflua.infrastructure.persistence.sqlite import insertion_order
+from conflua.infrastructure.persistence.sqlite import insertion_order, time_at_or_before
 
 
 class SQLAlchemyDeliveryRepository:
@@ -61,7 +73,34 @@ class SQLAlchemyDeliveryRepository:
             )
         )
 
-    def claim_delivery(self) -> ClaimedDelivery | None:
+    def _dispatchable(
+        self, delivery: type[DeliveryRecord] | AliasedClass[DeliveryRecord]
+    ) -> ColumnElement[bool]:
+        return (
+            select(MemberRecord.id)
+            .join(
+                ChannelRecord,
+                (ChannelRecord.room_id == MemberRecord.room_id)
+                & (ChannelRecord.id == MemberRecord.channel_id),
+            )
+            .join(RoomRecord, RoomRecord.id == MemberRecord.room_id)
+            .where(
+                MemberRecord.room_id == delivery.room_id,
+                MemberRecord.channel_id == delivery.channel_id,
+                MemberRecord.id == delivery.target_member_id,
+                MemberRecord.session_id == delivery.target_session_id,
+                MemberRecord.kind == "agent",
+                MemberRecord.deleted_at.is_(None),
+                ChannelRecord.archived_at.is_(None),
+                RoomRecord.archived_at.is_(None),
+            )
+            .correlate(delivery)
+            .exists()
+        )
+
+    def claim_delivery(
+        self, excluded_sessions: frozenset[str], now: datetime
+    ) -> ClaimedDelivery | None:
         active = aliased(DeliveryRecord)
         busy = (
             select(active.id)
@@ -72,29 +111,34 @@ class SQLAlchemyDeliveryRepository:
             )
             .exists()
         )
+        earlier = aliased(DeliveryRecord, name="earlier")
+        waiting = (
+            select(earlier.id)
+            .where(
+                earlier.target_session_id == DeliveryRecord.target_session_id,
+                or_(
+                    earlier.status == "pending",
+                    and_(earlier.status == "unknown", earlier.attempt_count > 0),
+                ),
+                earlier.deleted_at.is_(None),
+                self._dispatchable(earlier),
+                literal_column("earlier.rowid") < insertion_order("deliveries"),
+            )
+            .exists()
+        )
         candidate = self.session.scalar(
             select(DeliveryRecord)
-            .join(
-                MemberRecord,
-                (MemberRecord.room_id == DeliveryRecord.room_id)
-                & (MemberRecord.channel_id == DeliveryRecord.channel_id)
-                & (MemberRecord.id == DeliveryRecord.target_member_id)
-                & (MemberRecord.session_id == DeliveryRecord.target_session_id)
-                & (MemberRecord.kind == "agent"),
-            )
-            .join(
-                ChannelRecord,
-                (ChannelRecord.room_id == DeliveryRecord.room_id)
-                & (ChannelRecord.id == DeliveryRecord.channel_id),
-            )
-            .join(RoomRecord, RoomRecord.id == DeliveryRecord.room_id)
             .where(
                 DeliveryRecord.status == "pending",
                 DeliveryRecord.deleted_at.is_(None),
-                MemberRecord.deleted_at.is_(None),
-                ChannelRecord.archived_at.is_(None),
-                RoomRecord.archived_at.is_(None),
+                self._dispatchable(DeliveryRecord),
+                DeliveryRecord.target_session_id.not_in(excluded_sessions),
+                or_(
+                    DeliveryRecord.next_attempt_at.is_(None),
+                    time_at_or_before(DeliveryRecord.next_attempt_at, now),
+                ),
                 ~busy,
+                ~waiting,
             )
             .order_by(insertion_order("deliveries"))
             .limit(1)
@@ -109,7 +153,12 @@ class SQLAlchemyDeliveryRepository:
                 DeliveryRecord.status == "pending",
                 DeliveryRecord.deleted_at.is_(None),
             )
-            .values(status="submitting", updated_at=datetime.now(UTC))
+            .values(
+                status="submitting",
+                updated_at=now,
+                attempt_count=DeliveryRecord.attempt_count + 1,
+                next_attempt_at=None,
+            )
         )
         if changed != 1:
             return None
@@ -124,12 +173,41 @@ class SQLAlchemyDeliveryRepository:
             SQLAlchemyRoomRepository(self.session, candidate.channel_id).working_path(
                 candidate.room_id
             ),
+            candidate.attempt_count,
+        )
+
+    def defer_delivery(self, work: ClaimedDelivery, reason: str, next_attempt_at: datetime) -> bool:
+        return (
+            self._update(
+                update(DeliveryRecord)
+                .where(
+                    DeliveryRecord.room_id == work.room_id,
+                    DeliveryRecord.id == work.delivery.id,
+                    DeliveryRecord.status == "submitting",
+                    DeliveryRecord.deleted_at.is_(None),
+                    DeliveryRecord.client_message_id == work.delivery.client_message_id,
+                    DeliveryRecord.attempt_count == work.attempt_count,
+                )
+                .values(
+                    status="pending",
+                    updated_at=datetime.now(UTC),
+                    next_attempt_at=next_attempt_at,
+                    note=reason,
+                    error=None,
+                )
+            )
+            == 1
         )
 
     def finish_delivery(self, room_id: str, delivery: Delivery) -> bool:
         values = delivery_values(delivery)
         for field in ("id", "target_member_id", "target_session_id", "client_message_id"):
             del values[field]
+        values["next_attempt_at"] = (
+            datetime.now(UTC)
+            if delivery.status == "queued" and delivery.submission_method == "queue"
+            else None
+        )
         return (
             self._update(
                 update(DeliveryRecord)
@@ -143,6 +221,42 @@ class SQLAlchemyDeliveryRepository:
                 .values(**values)
             )
             == 1
+        )
+
+    def claim_activation_work(
+        self, excluded_sessions: frozenset[str], now: datetime
+    ) -> ActivationWork | None:
+        busy = aliased(DeliveryRecord)
+        candidate = self.session.scalar(
+            select(DeliveryRecord)
+            .where(
+                DeliveryRecord.status == "queued",
+                DeliveryRecord.submission_method == "queue",
+                DeliveryRecord.attempt_count > 0,
+                DeliveryRecord.queued_submission_id.is_not(None),
+                DeliveryRecord.receipt_metadata.is_not(None),
+                DeliveryRecord.activation_attempted_at.is_(None),
+                DeliveryRecord.deleted_at.is_(None),
+                DeliveryRecord.next_attempt_at.is_not(None),
+                time_at_or_before(DeliveryRecord.next_attempt_at, now),
+                DeliveryRecord.target_session_id.not_in(excluded_sessions),
+                self._dispatchable(DeliveryRecord),
+                ~select(busy.id)
+                .where(
+                    busy.target_session_id == DeliveryRecord.target_session_id,
+                    busy.status == "submitting",
+                    busy.deleted_at.is_(None),
+                )
+                .exists(),
+            )
+            .order_by(DeliveryRecord.next_attempt_at, insertion_order("deliveries"))
+            .limit(1)
+        )
+        if candidate is None or candidate.queued_submission_id is None:
+            return None
+        candidate.next_attempt_at = now + timedelta(seconds=2)
+        return ActivationWork(
+            candidate.target_session_id, candidate.client_message_id, candidate.queued_submission_id
         )
 
     def claim_activation(self, session_id: str, head: QueueHead) -> bool:
@@ -176,7 +290,7 @@ class SQLAlchemyDeliveryRepository:
                     )
                     .exists(),
                 )
-                .values(activation_attempted_at=datetime.now(UTC))
+                .values(activation_attempted_at=datetime.now(UTC), next_attempt_at=None)
             )
             == 1
         )
@@ -225,5 +339,39 @@ class SQLAlchemyDeliveryRepository:
                 received_turn_id=received.turn_id,
                 note=None,
                 error=None,
+            )
+        )
+
+    def confirm_queue(self, session_id: str, client_message_id: str, receipt: QueueReceipt) -> None:
+        if (
+            receipt.metadata.get("id") != receipt.id
+            or receipt.metadata.get("clientUserMessageId") != client_message_id
+        ):
+            raise ValueError("Queue evidence does not match the original request")
+        now = datetime.now(UTC)
+        self._update(
+            update(DeliveryRecord)
+            .where(
+                DeliveryRecord.target_session_id == session_id,
+                DeliveryRecord.client_message_id == client_message_id,
+                DeliveryRecord.status == "unknown",
+                DeliveryRecord.attempt_count > 0,
+                DeliveryRecord.submission_method.is_distinct_from("steer"),
+                DeliveryRecord.deleted_at.is_(None),
+            )
+            .values(
+                status="queued",
+                submission_method="queue",
+                queued_submission_id=receipt.id,
+                receipt_metadata={
+                    key: value
+                    for key, value in receipt.metadata.items()
+                    if key not in {"id", "clientUserMessageId"}
+                },
+                queued_at=now,
+                updated_at=now,
+                note=QUEUED_NOTE,
+                error=None,
+                next_attempt_at=now,
             )
         )

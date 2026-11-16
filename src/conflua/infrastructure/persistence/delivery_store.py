@@ -1,14 +1,15 @@
-from collections.abc import Iterator
-from contextlib import contextmanager
+from datetime import UTC, datetime
 
-from sqlalchemy import select
-
-from conflua.application.dto.delivery import ClaimedDelivery, QueueHead, ReceivedInput
-from conflua.domain.rooms.errors import RoomConflictError
+from conflua.application.dto.delivery import (
+    ActivationWork,
+    ClaimedDelivery,
+    QueueHead,
+    QueueReceipt,
+    ReceivedInput,
+)
 from conflua.domain.rooms.models import Delivery
-from conflua.infrastructure.persistence.channel_guard import room_operation
 from conflua.infrastructure.persistence.database import Database
-from conflua.infrastructure.persistence.models import ChannelRecord, DeliveryRecord, RoomRecord
+from conflua.infrastructure.persistence.models import ChannelRecord, RoomRecord
 from conflua.infrastructure.persistence.repositories.deliveries import (
     SQLAlchemyDeliveryRepository,
 )
@@ -18,43 +19,40 @@ class SQLAlchemyDeliveryStore:
     def __init__(self, database: Database) -> None:
         self.database = database
 
-    @contextmanager
-    def operation(self, work: ClaimedDelivery) -> Iterator[None]:
-        with room_operation(self.database.path, work.room_id):
-            with self.database.read() as session:
-                channel = session.get(ChannelRecord, (work.room_id, work.channel_id))
-                room = session.get(RoomRecord, work.room_id)
-                if (
-                    room is None
-                    or room.archived_at is not None
-                    or channel is None
-                    or channel.archived_at is not None
-                ):
-                    raise RoomConflictError("频道当前不可用", code="channel_unavailable")
-            yield
-
-    @contextmanager
-    def activation_operation(self, session_id: str, head: QueueHead) -> Iterator[None]:
+    def delivery_available(self, work: ClaimedDelivery) -> bool:
         with self.database.read() as session:
-            record = session.scalar(
-                select(DeliveryRecord).where(
-                    DeliveryRecord.target_session_id == session_id,
-                    DeliveryRecord.client_message_id == head.client_message_id,
-                )
+            channel = session.get(ChannelRecord, (work.room_id, work.channel_id))
+            room = session.get(RoomRecord, work.room_id)
+            return (
+                room is not None
+                and room.archived_at is None
+                and channel is not None
+                and channel.archived_at is None
             )
-            room_id = record.room_id if record is not None else None
-        if room_id is None:
-            raise RoomConflictError("队列首项不属于 Conflua", code="queue_head_not_found")
-        with room_operation(self.database.path, room_id):
-            yield
 
     def interrupt_submissions(self) -> None:
         with self.database.write() as session:
             SQLAlchemyDeliveryRepository(session).interrupt_submissions()
 
-    def claim_delivery(self) -> ClaimedDelivery | None:
+    def claim_delivery(
+        self, excluded_sessions: frozenset[str] = frozenset()
+    ) -> ClaimedDelivery | None:
         with self.database.write() as session:
-            return SQLAlchemyDeliveryRepository(session).claim_delivery()
+            return SQLAlchemyDeliveryRepository(session).claim_delivery(
+                excluded_sessions, datetime.now(UTC)
+            )
+
+    def defer_delivery(self, work: ClaimedDelivery, reason: str, next_attempt_at: datetime) -> bool:
+        with self.database.write() as session:
+            return SQLAlchemyDeliveryRepository(session).defer_delivery(
+                work, reason, next_attempt_at
+            )
+
+    def claim_activation_work(self, excluded_sessions: frozenset[str]) -> ActivationWork | None:
+        with self.database.write() as session:
+            return SQLAlchemyDeliveryRepository(session).claim_activation_work(
+                excluded_sessions, datetime.now(UTC)
+            )
 
     def finish_delivery(self, room_id: str, delivery: Delivery) -> bool:
         with self.database.write() as session:
@@ -77,3 +75,9 @@ class SQLAlchemyDeliveryStore:
     def confirm_input(self, session_id: str, received: ReceivedInput) -> None:
         with self.database.write() as session:
             SQLAlchemyDeliveryRepository(session).confirm_input(session_id, received)
+
+    def confirm_queue(self, session_id: str, client_message_id: str, receipt: QueueReceipt) -> None:
+        with self.database.write() as session:
+            SQLAlchemyDeliveryRepository(session).confirm_queue(
+                session_id, client_message_id, receipt
+            )

@@ -5,6 +5,7 @@ from sqlalchemy import (
     ForeignKey,
     ForeignKeyConstraint,
     Index,
+    Integer,
     Text,
     UniqueConstraint,
     text,
@@ -297,6 +298,8 @@ class DeliveryRecord(ChannelScoped, Base):
     client_message_id: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(Text)
     updated_at: Mapped[datetime] = mapped_column(ISODateTime)
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    next_attempt_at: Mapped[datetime | None] = mapped_column(ISODateTime)
     queued_at: Mapped[datetime | None] = mapped_column(ISODateTime)
     received_at: Mapped[datetime | None] = mapped_column(ISODateTime)
     received_item_id: Mapped[str | None] = mapped_column(Text)

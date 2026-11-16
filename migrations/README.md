@@ -39,7 +39,7 @@ uv run --locked alembic upgrade head --sql
 
 ## 基线与旧库
 
-当前 `0001_baseline` 直接创建完整结构，revision 保持为 `channel_description_20261114`。已经升级到该版本的数据库无需重建，执行迁移不会修改其数据。
+`0001_baseline` 创建频道结构，revision 为 `channel_description_20261114`；当前 head 为 `delivery_retry_20261116`。增量 `0002_delivery_retry` 仅增加投递尝试计数（旧行默认 0）与下次尝试时间（旧行默认空），保留原消息、回执和状态；历史 unknown 不自动重发或作为新机制的顺序屏障。已升级到频道基线的数据库可直接增量升级，无需重建。
 
 更早的 revision 不在合并后的迁移链上，不提供自动升级、旧数据转换或降级。需要保留旧数据时，可先使用合并前的版本升级到 `channel_description_20261114`，并在升级前停止服务及 dispatcher、备份数据库和图片目录。新旧服务不能混跑。
 

@@ -1,5 +1,4 @@
 import logging
-from contextlib import nullcontext
 from dataclasses import replace
 from datetime import UTC, datetime
 from unittest.mock import Mock, call
@@ -11,14 +10,18 @@ from conflua.application.delivery.ports import (
     DeliveryDriver,
     DeliveryRepository,
     InputHistoryUnavailable,
+    SubmissionDeferred,
     SubmissionRejected,
     SubmissionUnknown,
 )
 from conflua.application.delivery.service import DeliveryService
 from conflua.application.dto.delivery import (
+    ActivationWork,
     ClaimedDelivery,
     InputPage,
+    QueuedInput,
     QueueHead,
+    QueuePage,
     QueueReceipt,
     ReceivedInput,
     SteerReceipt,
@@ -58,8 +61,7 @@ def delivery_store() -> Mock:
     store = Mock(spec=DeliveryRepository)
     store.finish_delivery.return_value = True
     store.claim_activation.return_value = True
-    store.operation.side_effect = lambda work: nullcontext()
-    store.activation_operation.side_effect = lambda session_id, head: nullcontext()
+    store.delivery_available.return_value = True
     return store
 
 
@@ -68,7 +70,48 @@ def queue_driver() -> Mock:
     driver = Mock(spec=DeliveryDriver)
     driver.submit.return_value = QueueReceipt("queued", {"id": "queued"})
     driver.activation_candidate.return_value = None
+    driver.read_queue_page.return_value = QueuePage((), None)
     return driver
+
+
+def test_temporary_unsent_failure_is_deferred_with_original_identity(
+    work: ClaimedDelivery, delivery_store: Mock, queue_driver: Mock
+) -> None:
+    queue_driver.submit.side_effect = SubmissionDeferred("temporarily disconnected")
+    DeliveryService(delivery_store, queue_driver, logging.getLogger("tests.delivery")).submit(work)
+    deferred_work, reason, next_attempt_at = delivery_store.defer_delivery.call_args.args
+    assert deferred_work is work and reason == "temporarily disconnected"
+    assert next_attempt_at > datetime.now(UTC)
+    delivery_store.finish_delivery.assert_not_called()
+    queue_driver.submit.assert_called_once()
+
+
+def test_receipt_save_failure_retries_original_result_without_resubmitting(
+    work: ClaimedDelivery, delivery_store: Mock, queue_driver: Mock
+) -> None:
+    delivery_store.finish_delivery.side_effect = [RuntimeError("database busy"), True]
+    service = DeliveryService(delivery_store, queue_driver, logging.getLogger("tests.delivery"))
+    outcome = service.submit(work)
+    assert outcome is not None and outcome.delivery is not None
+    assert outcome.delivery.status == "queued"
+    queue_driver.activation_candidate.assert_not_called()
+    assert service.complete(outcome) is None
+    assert (
+        delivery_store.finish_delivery.call_args_list[0]
+        == delivery_store.finish_delivery.call_args_list[1]
+    )
+    queue_driver.submit.assert_called_once()
+    queue_driver.activation_candidate.assert_called_once()
+
+
+def test_unavailable_channel_is_rejected_before_external_submission(
+    work: ClaimedDelivery, delivery_store: Mock, queue_driver: Mock
+) -> None:
+    delivery_store.delivery_available.return_value = False
+    service = DeliveryService(delivery_store, queue_driver, logging.getLogger("tests.delivery"))
+    assert service.submit(work) is None
+    assert delivery_store.finish_delivery.call_args.args[1].status == "rejected"
+    queue_driver.submit.assert_not_called()
 
 
 @pytest.mark.parametrize("rejected", [False, True])
@@ -299,4 +342,44 @@ def test_unavailable_history_logs_once_and_observation_recovers_without_resubmis
     assert logger.info.call_count == 2
     logger.exception.assert_not_called()
     queue_driver.submit.assert_not_called()
+    queue_driver.activate.assert_not_called()
+
+
+def test_queue_observation_reconciles_original_item_on_older_page_without_starting(
+    delivery_store: Mock, queue_driver: Mock
+) -> None:
+    receipt = QueueReceipt("queued", {"id": "queued", "clientUserMessageId": "client"})
+    queue_driver.read_queue_page.side_effect = [
+        QueuePage((), "older"),
+        QueuePage((), "older"),
+        QueuePage((QueuedInput("client", receipt),), None),
+    ]
+    queue_driver.read_input_page.return_value = InputPage((), None)
+    service = DeliveryService(delivery_store, queue_driver, logging.getLogger("tests.delivery"))
+    service.observe("original-session", {"client"})
+    service.observe("original-session", {"client"})
+    delivery_store.confirm_queue.assert_called_once_with("original-session", "client", receipt)
+    delivery_store.confirm_input.assert_not_called()
+    queue_driver.submit.assert_not_called()
+    queue_driver.activate.assert_not_called()
+
+
+@pytest.mark.parametrize("head", [None, QueueHead("other", "other-client")])
+def test_first_activation_check_requires_original_idle_queue_head(
+    delivery_store: Mock, queue_driver: Mock, head: QueueHead | None
+) -> None:
+    queue_driver.activation_candidate.return_value = head
+    service = DeliveryService(delivery_store, queue_driver, logging.getLogger("tests.delivery"))
+    service.check_activation(ActivationWork("session", "client", "queued"))
+    delivery_store.claim_activation.assert_not_called()
+    queue_driver.activate.assert_not_called()
+
+
+def test_conditional_save_false_does_not_retry_or_start(
+    work: ClaimedDelivery, delivery_store: Mock, queue_driver: Mock
+) -> None:
+    delivery_store.finish_delivery.return_value = False
+    service = DeliveryService(delivery_store, queue_driver, logging.getLogger("tests.delivery"))
+    assert service.submit(work) is None
+    queue_driver.submit.assert_called_once()
     queue_driver.activate.assert_not_called()
