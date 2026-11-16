@@ -18,7 +18,7 @@
 桌面固定使用 `app` profile，配置优先级为内置 `config/app.yaml` → `~/.agent-relay/.env` → 系统环境变量。修改覆盖文件后重启应用：
 
 ```dotenv
-AGENT_RELAY_SERVER__PORT=9080
+AGENT_RELAY_SERVER__PORT=9081
 AGENT_RELAY_DATABASE__PATH=./data/agent-relay.sqlite3
 ```
 
@@ -38,7 +38,7 @@ AGENT_RELAY_DATABASE__PATH=./data/agent-relay.sqlite3
 
 ## CLI 与 MCP
 
-桌面默认地址为 `http://127.0.0.1:9080`；端口被占用时显示启动错误。CLI/MCP 默认连接同一地址；修改服务端口后，将 `AGENT_RELAY_URL` 设为对应地址。
+桌面默认地址为 `http://127.0.0.1:9081`；端口被占用时显示启动错误。CLI/MCP 默认连接同一地址；修改服务端口后，将 `AGENT_RELAY_URL` 设为对应地址。
 
 使用 `agent-relay.exe --help` 查看控制台命令，`agent-relay.exe mcp` 启动 stdio MCP。现有插件使用 `agent-relay mcp`，可将完整制品目录加入 `PATH`，或将 MCP 的 `command` 配置为控制台 EXE 的绝对路径。
 

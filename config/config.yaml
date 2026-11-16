@@ -4,7 +4,7 @@ preferences:
 
 server:
   host: 127.0.0.1
-  port: 9080
+  port: 9081
   reload: false
   reload_paths:
     - src/agent_relay/**/*.py

@@ -38,7 +38,7 @@ make webapi
 make web
 ```
 
-打开 `http://localhost:9081`。前端将 `/api` 代理到后端 `http://127.0.0.1:9080`；`dev` 配置启用代码重载和启动迁移。新数据库为空，可在页面创建聊天室并添加已有 Codex 会话。
+打开 `http://localhost:9080`。前端将 `/api` 代理到后端 `http://127.0.0.1:9081`；`dev` 配置启用代码重载和启动迁移。新数据库为空，可在页面创建聊天室并添加已有 Codex 会话。
 
 ### Windows 桌面应用
 
@@ -59,7 +59,7 @@ make install
 agent-relay --help
 ```
 
-安装 CLI 及 Codex 的 MCP/协作 skill 后，重新开启 Codex 会话。Relay HTTP 服务需要单独启动；CLI/MCP 默认连接 `http://127.0.0.1:9080`，可通过 `AGENT_RELAY_URL` 修改地址。
+安装 CLI 及 Codex 的 MCP/协作 skill 后，重新开启 Codex 会话。Relay HTTP 服务需要单独启动；CLI/MCP 默认连接 `http://127.0.0.1:9081`，可通过 `AGENT_RELAY_URL` 修改地址。
 
 无需安装 CLI 时，可在仓库中运行 `uv run --locked agent-relay --help`。频道管理命令见 `agent-relay channel --help`。资源操作必须使用全局 `--channel-id CHANNEL` 或 `AGENT_RELAY_CHANNEL_ID`；MCP 必须提供 `channel_id`，默认频道同样显式指定。例如：
 
@@ -71,7 +71,7 @@ agent-relay --channel-id CHANNEL member catalog ROOM
 
 `make web`、`make webapi` 和 `make migrate` 默认使用 `dev` profile，可追加 `profile=<名称>` 覆盖。配置见 `config/config.yaml` 和 `.env.<profile>`，系统环境变量优先。开发环境的数据库默认位于 `data/agent-relay.sqlite3`；迁移及旧库处理见[迁移指南](migrations/README.md)。
 
-桌面应用默认服务地址为 `http://127.0.0.1:9080`，用户配置、数据库和日志位于 `~/.agent-relay/`。具体配置优先级和目录结构见[桌面使用指南](docs/guide/windows-desktop.md#配置与数据)。
+桌面应用默认服务地址为 `http://127.0.0.1:9081`，用户配置、数据库和日志位于 `~/.agent-relay/`。具体配置优先级和目录结构见[桌面使用指南](docs/guide/windows-desktop.md#配置与数据)。
 
 界面默认跟随系统语言，中文系统使用简体中文，其他系统使用英文。可在右上角齿轮菜单切换语言，选择保存在用户目录的 `preferences.json` 中，优先于 `config/config.yaml` 的 `preferences.language` 默认值。聊天内容和用户定义的名称保留原文。
 

@@ -18,11 +18,11 @@ help:
 	@printf "  make install          Install CLI and publish MCP/skill to Codex\n"
 	@printf "  make check [fix=1]    Check backend and frontend types, lint, and format; fix=1 applies fixes\n"
 	@printf "  make test             Run backend and frontend unit tests\n"
-	@printf "  make web              Start the Vite development server on port 9081\n"
+	@printf "  make web              Start the Vite development server on port 9080\n"
 	@printf "  make desktop          Build the frontend and start the WebView application\n"
 	@printf "  make binary           Build the Windows GUI and console package and ZIP\n"
 	@printf "  make migrate          Upgrade the configured database schema\n"
-	@printf "  make webapi           Start the FastAPI development server on port 9080\n"
+	@printf "  make webapi           Start the FastAPI development server on port 9081\n"
 
 deps:
 	uv sync --all-groups --locked

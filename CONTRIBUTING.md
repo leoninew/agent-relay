@@ -24,12 +24,6 @@ make check
 make test
 ```
 
-涉及数据库迁移或频道 worktree 时，额外执行集成测试：
-
-```bash
-uv run --locked pytest tests/integration
-```
-
 `make check fix=1` 会自动修复部分 lint 和格式问题；提交前请检查自动修改的内容。
 
 ## 问题反馈

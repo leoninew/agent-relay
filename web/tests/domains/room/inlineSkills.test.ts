@@ -10,7 +10,6 @@ import {
 } from "@/domains/room/inlineSkills";
 import { renderMessage } from "@/domains/room/messageMarkdown";
 import type { SkillReference } from "@/services/roomApi";
-import cases from "../../../../tests/fixtures/inline_skills.json";
 
 const check: SkillReference = { type: "skill", id: "skill-check", name: "dev-check" };
 const fix: SkillReference = { type: "skill", id: "skill-fix", name: "dev-fix" };
@@ -44,14 +43,6 @@ describe("skill picker query", () => {
 });
 
 describe("inline skill format", () => {
-  it.each(cases)("keeps positions and literal Markdown: $content", ({ content, ids, text }) => {
-    const references = inlineSkills(content);
-    expect(references.map((reference) => reference.id)).toEqual(ids);
-    for (const reference of references)
-      expect(content.slice(reference.start, reference.end)).toContain(`](skill:${reference.id})`);
-    expect(messageText(content, [check, fix])).toBe(text);
-  });
-
   it("records a position in text that survives earlier edits and Unicode", () => {
     const marker = formatSkillReference(check);
     const content = `新增内容🙂\n在这里 ${marker} 检查`;

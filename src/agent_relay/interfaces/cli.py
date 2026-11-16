@@ -30,7 +30,7 @@ def _validate_keyword(
 )
 @click.option(
     "--base-url",
-    default="http://127.0.0.1:9080",
+    default="http://127.0.0.1:9081",
     envvar="AGENT_RELAY_URL",
     show_default=True,
     show_envvar=True,

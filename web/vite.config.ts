@@ -19,11 +19,11 @@ export default defineConfig(({ command, mode }) => {
     plugins: [tailwindcss(), vue()],
     server: {
       host: "localhost",
-      port: 9081,
+      port: 9080,
       strictPort: true,
       proxy: {
         "/api": {
-          target: env.VITE_API_PROXY_TARGET || "http://127.0.0.1:9080",
+          target: env.VITE_API_PROXY_TARGET || "http://127.0.0.1:9081",
           ws: true,
         },
       },
