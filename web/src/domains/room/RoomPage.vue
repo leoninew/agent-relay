@@ -50,11 +50,12 @@
         <MemberPanel
           v-model:members="activeAgents"
           :snapshot="snapshot"
-          :busy="sending || saving"
+          :busy="sending || saving || clearing || Boolean(pendingPublication)"
           :selected-member-id="selectedMemberId"
           :interrupting-member-ids="interruptingMemberIds"
           @move="moveMember"
           @interrupt="interruptMember"
+          @delete-member="openDelete({ kind: 'member', node: $event })"
           @select="
             selectSidebar('member', $event);
             closeNavigation();

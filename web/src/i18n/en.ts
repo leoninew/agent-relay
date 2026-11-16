@@ -200,7 +200,7 @@ export default {
     available: "Idle",
     busy: "Busy",
     offline: "Offline",
-    unknown: "Connection unconfirmed",
+    unknown: "Unknown",
     openNavigation: "Expand topics and members",
     openLeft: "Expand left panel",
     collapseLeft: "Collapse left panel",

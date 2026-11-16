@@ -86,6 +86,11 @@ describe("session model selection", () => {
     expect(modelTarget([{ ...members[0], sessionId: null }], [members[0].id])).toBeUndefined();
   });
 
+  it.each(["offline", "unknown"] as const)("does not load models for a %s session", (presence) => {
+    const member = { ...roomFixture().members[0], presence };
+    expect(modelTarget([member], [member.id])).toBeUndefined();
+  });
+
   it("previews four model values and identifies a selected overflow item", () => {
     const options = Array.from({ length: 7 }, (_, index) => ({
       id: `option-${index}`,

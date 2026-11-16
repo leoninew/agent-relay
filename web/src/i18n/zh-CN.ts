@@ -197,7 +197,7 @@ export default {
     available: "空闲",
     busy: "忙碌",
     offline: "离线",
-    unknown: "接入未确认",
+    unknown: "未知",
     openNavigation: "展开话题与成员面板",
     openLeft: "展开左侧面板",
     collapseLeft: "折叠左侧面板",

@@ -1107,7 +1107,7 @@ button.topic-chip:hover:not(:disabled) {
 .sidebar-member-node {
   position: relative;
 }
-.sidebar-interrupt-button {
+.sidebar-member-action-button {
   position: absolute;
   top: 50%;
   right: 9px;
@@ -1126,17 +1126,17 @@ button.topic-chip:hover:not(:disabled) {
   opacity: 0;
   pointer-events: none;
 }
-.sidebar-member-node:hover .sidebar-member-status.is-interruptible,
-.sidebar-member-node:has(> .sidebar-interrupt-button:focus-visible)
-  .sidebar-member-status.is-interruptible {
+.sidebar-member-node:hover .sidebar-member-status.is-actionable,
+.sidebar-member-node:has(> .sidebar-member-action-button:focus-visible)
+  .sidebar-member-status.is-actionable {
   visibility: hidden;
 }
-.sidebar-member-node:hover > .sidebar-interrupt-button,
-.sidebar-interrupt-button:focus-visible {
+.sidebar-member-node:hover > .sidebar-member-action-button,
+.sidebar-member-action-button:focus-visible {
   opacity: 1;
   pointer-events: auto;
 }
-.sidebar-interrupt-button:disabled {
+.sidebar-member-action-button:disabled {
   cursor: default;
 }
 .room-context-panel {

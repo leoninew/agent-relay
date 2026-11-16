@@ -75,22 +75,36 @@
             <span
               v-if="member.kind === 'agent'"
               class="sidebar-item-meta sidebar-member-status"
-              :class="{ 'is-interruptible': interruptible(member) }"
+              :class="{
+                'is-interruptible': memberSidebarAction(member) === 'interrupt',
+                'is-actionable': Boolean(memberSidebarAction(member)),
+              }"
               :data-presence="member.presence"
             >
               {{ t(`sidebar.${member.presence}`) }}
             </span>
           </button>
           <button
-            v-if="interruptible(member)"
+            v-if="memberSidebarAction(member) === 'interrupt'"
             type="button"
-            class="sidebar-interrupt-button"
+            class="sidebar-member-action-button"
             :disabled="busy || interruptingMemberIds.includes(member.id)"
             :aria-label="t('sidebar.interruptMember', { name: member.name })"
             :title="t('sidebar.interruptMember', { name: member.name })"
             @click.stop="$emit('interrupt', member)"
           >
             {{ t("sidebar.interrupt") }}
+          </button>
+          <button
+            v-else-if="memberSidebarAction(member) === 'delete'"
+            type="button"
+            class="sidebar-member-action-button"
+            :disabled="busy"
+            :aria-label="t('details.deleteMember', { name: member.name })"
+            :title="t('details.deleteMember', { name: member.name })"
+            @click.stop="$emit('deleteMember', member)"
+          >
+            {{ t("common.delete") }}
           </button>
         </div>
       </VueDraggable>
@@ -108,6 +122,7 @@
 
   import AppIcon from "@/components/AppIcon.vue";
   import MemberIdentity from "@/domains/room/MemberIdentity.vue";
+  import { memberSidebarAction } from "@/domains/room/memberSidebarAction";
   import RoomSidebarSection from "@/domains/room/RoomSidebarSection.vue";
   import { memberSessionName } from "@/domains/room/memberSessionName";
   import type { Member, RoomSnapshot } from "@/services/roomApi";
@@ -124,6 +139,7 @@
     select: [memberId: string | undefined];
     move: [memberId: string, offset: number];
     interrupt: [member: Member];
+    deleteMember: [member: Member];
   }>();
 
   const humanMember = computed(() =>
@@ -131,6 +147,4 @@
   );
   const members = defineModel<Member[]>("members", { required: true });
   const moveMember = (memberId: string, offset: number) => emit("move", memberId, offset);
-  const interruptible = (member: Member) =>
-    member.kind === "agent" && Boolean(member.sessionId) && member.presence === "busy";
 </script>

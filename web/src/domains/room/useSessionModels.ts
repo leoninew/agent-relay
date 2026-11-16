@@ -12,7 +12,8 @@ export function modelTarget(members: Member[], selectedIds: string[]): Member | 
       member.id === selectedIds[0] &&
       member.kind === "agent" &&
       !member.deletedAt &&
-      Boolean(member.sessionId),
+      Boolean(member.sessionId) &&
+      (member.presence === "available" || member.presence === "busy"),
   );
 }
 

@@ -16,6 +16,7 @@
   import { useI18n } from "vue-i18n";
   import { EditorContent, useEditor } from "@tiptap/vue-3";
   import { Extension, Node } from "@tiptap/core";
+  import type { Editor } from "@tiptap/core";
   import Mention from "@tiptap/extension-mention";
   import { UndoRedo } from "@tiptap/extensions";
   import { exitSuggestion, SuggestionPluginKey } from "@tiptap/suggestion";
@@ -437,7 +438,33 @@
       remember(selected);
       emit("change", content, knownSkills());
     },
+    onCreate({ editor: active }) {
+      syncModelValue(active, props.modelValue);
+    },
   });
+  function syncModelValue(active: Editor, value: string): void {
+    if (value === nodeSource(active.state.doc)) return;
+    uploads.cancelAll();
+    if (compositionTimer) clearTimeout(compositionTimer);
+    compositionTimer = undefined;
+    composing = false;
+    emit("compositionend");
+    remember(props.skills);
+    output = value;
+    const doc = active.schema.nodeFromJSON(
+      decodeMessage(value, knownSkills(), props.roomId, props.channelId),
+    );
+    outputIdentity = JSON.stringify(documentSkills(doc));
+    active.view.updateState(
+      EditorState.create({
+        doc,
+        schema: active.schema,
+        plugins: active.state.plugins,
+        selection: TextSelection.atEnd(doc),
+      }),
+    );
+    emit("query", undefined);
+  }
   function refreshSkillTooltips(): void {
     const root = editor.value?.view.dom;
     if (!root) return;
@@ -488,27 +515,7 @@
     () => props.modelValue,
     (value) => {
       const active = editor.value;
-      if (!active || value === nodeSource(active.state.doc)) return;
-      uploads.cancelAll();
-      if (compositionTimer) clearTimeout(compositionTimer);
-      compositionTimer = undefined;
-      composing = false;
-      emit("compositionend");
-      remember(props.skills);
-      output = value;
-      const doc = active.schema.nodeFromJSON(
-        decodeMessage(value, knownSkills(), props.roomId, props.channelId),
-      );
-      outputIdentity = JSON.stringify(documentSkills(doc));
-      active.view.updateState(
-        EditorState.create({
-          doc,
-          schema: active.schema,
-          plugins: active.state.plugins,
-          selection: TextSelection.atEnd(doc),
-        }),
-      );
-      emit("query", undefined);
+      if (active) syncModelValue(active, value);
     },
     { flush: "post" },
   );
