@@ -66,6 +66,7 @@ class ClaimedDelivery:
     delivery: Delivery
     channel_id: str
     working_path: str
+    target_member_name: str
     attempt_count: int = 1
 
 

@@ -86,6 +86,7 @@ class DeliveryService:
 
     def _request(self, work: ClaimedDelivery) -> QueueRequest:
         sender = f"{work.message.sender_name}（{work.message.sender_id}）"
+        recipient = f"{work.target_member_name}（{work.delivery.target_member_id}）"
         created_at = work.message.model_dump(mode="json", by_alias=True)["createdAt"]
         refer_to = (
             f"referTo: {work.message.reply_to_message_id}\n"
@@ -105,6 +106,7 @@ class DeliveryService:
             f"seq: {work.message.seq}\n"
             f"createdAt: {created_at}\n"
             f"sender: {sender}\n"
+            f"recipient: {recipient}\n"
             f"{refer_to}\n"
             f"{content}"
         )

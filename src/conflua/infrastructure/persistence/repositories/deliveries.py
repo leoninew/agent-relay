@@ -173,7 +173,14 @@ class SQLAlchemyDeliveryRepository:
             SQLAlchemyRoomRepository(self.session, candidate.channel_id).working_path(
                 candidate.room_id
             ),
-            candidate.attempt_count,
+            self.session.execute(
+                select(MemberRecord.name).where(
+                    MemberRecord.room_id == candidate.room_id,
+                    MemberRecord.channel_id == candidate.channel_id,
+                    MemberRecord.id == candidate.target_member_id,
+                )
+            ).scalar_one(),
+            attempt_count=candidate.attempt_count,
         )
 
     def defer_delivery(self, work: ClaimedDelivery, reason: str, next_attempt_at: datetime) -> bool:

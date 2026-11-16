@@ -17,6 +17,7 @@ from conflua.application.dto.delivery import (
     QueueReceipt,
     QueueRequest,
     ReceivedInput,
+    SteerReceipt,
 )
 from conflua.application.dto.messages import CreateMessage
 from conflua.application.messages.service import MessageService
@@ -280,6 +281,39 @@ def test_multi_target_delivery_recovers_unsent_head_without_duplicate_inputs(
         assert all(record.status == "received" and record.received_at for record in records)
     assert len(written) == 5
     driver.activate.assert_not_called()
+
+
+@pytest.mark.parametrize("method", ["queue", "steer"])
+def test_each_session_receives_only_its_own_recipient_header(
+    store: SQLAlchemyDeliveryStore, method: str
+) -> None:
+    with store.database.write() as session:
+        for member in session.scalars(select(MemberRecord)):
+            member.name = f"{member.room_id}-{member.id}"
+    driver = Mock(spec=DeliveryDriver)
+
+    def submit(
+        session_id: str, client_id: str, request: QueueRequest
+    ) -> QueueReceipt | SteerReceipt:
+        if method == "steer":
+            return SteerReceipt("turn")
+        return QueueReceipt("queued", {"id": "queued", "clientUserMessageId": client_id})
+
+    driver.submit.side_effect = submit
+    driver.activation_candidate.return_value = None
+    service = DeliveryService(store, driver, logging.getLogger("tests.delivery"))
+    while (work := store.claim_delivery()) is not None:
+        assert service.submit(work) is None
+    assert driver.submit.call_count == 4
+    for submission in driver.submit.call_args_list:
+        session_id, _, request = submission.args
+        room_id, _, number = session_id.split("-")
+        member_id = f"member-{number}"
+        header, content = request.text.split("\n\n", 1)
+        assert [line for line in header.splitlines() if line.startswith("recipient:")] == [
+            f"recipient: {room_id}-{member_id}（{member_id}）"
+        ]
+        assert content == "test"
 
 
 def test_different_targets_in_same_room_can_be_claimed_while_first_is_submitting(

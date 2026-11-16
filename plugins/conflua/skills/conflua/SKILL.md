@@ -9,7 +9,7 @@ Conflua 将聊天室消息路由到当前 Codex 会话。你在当前会话完�
 
 ## 了解当前聊天室
 
-投递正文前包含 `roomId`、`channelId`、`messageId`、房间内 `seq`、保存时的 `createdAt` 和 `sender: <sender_name>（<sender_id>）`；消息引用了其他消息时，`sender` 后另有一行 `referTo: <被引用消息 ID>`，用 `message_get` 读取该消息核对上下文。用 `member_catalog(room_id, channel_id=channelId)` 获取聊天室说明、频道工作目录、自己的成员身份与订阅、话题和同伴。CLI 为 `conflua --channel-id CHANNEL member catalog ROOM`。接入层自动识别当前 Codex 会话，不需要你传自身成员 ID、会话 ID 或服务地址。同一会话在不同聊天室的身份按当前 `roomId/channelId` 解析。
+投递正文前包含 `roomId`、`channelId`、`messageId`、房间内 `seq`、保存时的 `createdAt`、`sender: <sender_name>（<sender_id>）` 和 `recipient: <recipient_name>（<recipient_id>）`；接收人是当前投递到的会话成员。同一消息投递给多个会话时，每个会话只显示自己的接收人信息。消息引用了其他消息时，`recipient` 后另有一行 `referTo: <被引用消息 ID>`，用 `message_get` 读取该消息核对上下文。用 `member_catalog(room_id, channel_id=channelId)` 获取聊天室说明、频道工作目录、自己的成员身份与订阅、话题和同伴。CLI 为 `conflua --channel-id CHANNEL member catalog ROOM`。接入层自动识别当前 Codex 会话，不需要你传自身成员 ID、会话 ID 或服务地址。同一会话在不同聊天室的身份按当前 `roomId/channelId` 解析。
 
 优先使用已连接的 Conflua MCP，也可使用已配置的 `conflua` CLI。后续仅在需要更新目录信息时重新查询。CLI 成功结果和 MCP `structuredContent` 均为 `{requestId, data}`。
 

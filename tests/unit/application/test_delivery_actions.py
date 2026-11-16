@@ -53,7 +53,9 @@ def work() -> ClaimedDelivery:
         deliveries=[delivery],
     )
     room = Room(id="room", name="Room", project_path="d:/project", description="")
-    return ClaimedDelivery(room.id, room, message, delivery, "channel-default", room.project_path)
+    return ClaimedDelivery(
+        room.id, room, message, delivery, "channel-default", room.project_path, "接收成员"
+    )
 
 
 @pytest.fixture
@@ -176,7 +178,8 @@ def test_submission_includes_stable_message_lookup_facts_and_capabilities(
         f"messageId: {work.message.id}\n"
         f"seq: {work.message.seq}\n"
         f"createdAt: {created_at}\n"
-        f"sender: {work.message.sender_name}（{work.message.sender_id}）\n\n"
+        f"sender: {work.message.sender_name}（{work.message.sender_id}）\n"
+        f"recipient: 接收成员（{work.delivery.target_member_id}）\n\n"
         f"{work.message.content}"
     )
 
@@ -218,6 +221,7 @@ def test_submission_adds_reference_line_when_message_replies_to_another(
         f"seq: {work.message.seq}\n"
         f"createdAt: {created_at}\n"
         f"sender: {work.message.sender_name}（{work.message.sender_id}）\n"
+        f"recipient: 接收成员（{work.delivery.target_member_id}）\n"
         f"referTo: message-0278\n\n"
         f"{work.message.content}"
     )
