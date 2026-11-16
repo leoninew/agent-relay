@@ -25,7 +25,7 @@
             openChannelCreate();
           "
           @select="
-            roomPanel.selectChannel($event);
+            selectChannel($event);
             closeNavigation();
           "
         />
@@ -836,7 +836,11 @@
     };
   }
 
-  async function openChannel(roomId: string, channelId: string): Promise<void> {
+  async function openChannel(
+    roomId: string,
+    channelId: string,
+    showDetails = false,
+  ): Promise<void> {
     resetSearch();
     currentChannelId.value = channelId;
     channelsStore.remember(roomId, channelId);
@@ -856,7 +860,8 @@
     sessions.value = [];
     sessionsLoading.value = false;
     sessionsError.value = null;
-    roomPanel.changeChannel(channelId);
+    roomPanel.changeChannel();
+    if (showDetails) roomPanel.selectChannel(channelId);
     messageQueue.reset();
     replyTo.value = undefined;
     sendError.value = null;
@@ -881,12 +886,23 @@
     channelCreateOpen.value = true;
   }
 
+  async function selectChannel(channelId: string): Promise<void> {
+    const roomId = currentRoomId.value;
+    if (!roomId) return;
+    if (channelId === currentChannelId.value) {
+      roomPanel.selectChannel(channelId);
+      return;
+    }
+    await openChannel(roomId, channelId, true);
+    if (currentRoomId.value === roomId && currentChannelId.value === channelId)
+      await router.push(channelRoute(roomId, channelId));
+  }
+
   async function openCreatedChannel(channelId: string): Promise<void> {
     channelCreateOpen.value = false;
     toasts.success({ key: "notice.channelCreated" });
     if (!currentRoomId.value) return;
-    await openChannel(currentRoomId.value, channelId);
-    await router.push(channelRoute(currentRoomId.value, channelId));
+    await selectChannel(channelId);
   }
 
   async function selectSidebar(

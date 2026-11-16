@@ -46,10 +46,10 @@ export function useRoomPanel(messages: () => RoomMessage[]) {
     target.value = { kind: "channel", id: channelId };
   }
 
-  function changeChannel(channelId: string): void {
+  function changeChannel(): void {
     selectedTopicId.value = undefined;
     selectedMemberId.value = undefined;
-    selectChannel(channelId);
+    closeDetails();
   }
 
   function openDrawer(): void {

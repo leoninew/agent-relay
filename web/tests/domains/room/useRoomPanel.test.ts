@@ -181,24 +181,59 @@ describe("room panel", () => {
   );
 
   it.each([false, true])(
-    "clears filters on channel changes while preserving the drawer state (%s)",
+    "returns to the latest message on channel initialization without opening the drawer (%s)",
     (drawerOpen) => {
-      const panel = useRoomPanel(() => roomFixture().messages);
+      const messages = ref(roomFixture().messages);
+      const panel = useRoomPanel(() => messages.value);
       panel.drawerOpen.value = drawerOpen;
       panel.selectSidebar("topic", "frontend");
       panel.selectSidebar("member", "test-worker");
 
-      panel.changeChannel("channel-feature");
+      panel.changeChannel();
+      messages.value = [];
 
-      expect(panel.target.value).toEqual({ kind: "channel", id: "channel-feature" });
+      expect(panel.target.value).toBeUndefined();
+      expect(panel.message.value).toBeUndefined();
       expect(panel.selectedTopicId.value).toBeUndefined();
       expect(panel.selectedMemberId.value).toBeUndefined();
       expect(panel.queueScope.value).toEqual({});
       expect(panel.drawerOpen.value).toBe(drawerOpen);
+
+      messages.value = roomFixture().messages;
+      expect(panel.message.value?.id).toBe(messages.value.at(-1)?.id);
 
       panel.reset();
       expect(panel.target.value).toBeUndefined();
       expect(panel.drawerOpen.value).toBe(false);
     },
   );
+
+  it("treats a clicked channel as an explicit selection until another detail is chosen", () => {
+    const [first, next] = roomFixture().messages;
+    const messages = ref([first]);
+    const panel = useRoomPanel(() => messages.value);
+    panel.changeChannel();
+    panel.selectChannel("channel-feature");
+
+    messages.value = [first, next];
+    panel.syncMessages(messages.value);
+    expect(panel.target.value).toEqual({ kind: "channel", id: "channel-feature" });
+    expect(panel.message.value).toBeUndefined();
+
+    panel.selectSidebar("topic", "frontend");
+    expect(panel.target.value).toEqual({ kind: "topic", id: "frontend" });
+    panel.selectSidebar("member", "test-worker");
+    expect(panel.target.value).toEqual({ kind: "member", id: "test-worker" });
+    panel.selectMessage(first);
+    expect(panel.message.value?.id).toBe(first.id);
+
+    panel.selectChannel("channel-feature");
+    panel.closeDetails();
+    expect(panel.message.value?.id).toBe(next.id);
+    panel.selectChannel("channel-feature");
+    panel.selectSidebar("topic", undefined);
+    panel.selectSidebar("member", undefined);
+    expect(panel.target.value).toBeUndefined();
+    expect(panel.message.value?.id).toBe(next.id);
+  });
 });

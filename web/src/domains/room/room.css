@@ -435,7 +435,6 @@
 .message.is-selected .message-main,
 .message.is-selected:hover .message-main {
   border-color: hsl(var(--muted-foreground) / 0.5);
-  background: var(--selection-background);
 }
 .member-identity {
   display: inline-flex;

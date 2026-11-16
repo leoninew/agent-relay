@@ -8,20 +8,26 @@
     <nav class="sidebar-list" :aria-label="t('channel.navigation')">
       <div v-for="item in channels" :key="item.id" class="sidebar-node sidebar-node-fixed">
         <RouterLink
+          v-slot="{ href }"
           :to="{ name: 'channel', params: { roomId: item.roomId, channelId: item.id } }"
-          class="sidebar-list-item channel-item"
-          :class="{ 'is-active': item.id === channelId }"
-          :aria-current="item.id === channelId ? 'page' : undefined"
-          :aria-label="
-            t('channel.switch', { name: item.isDefault ? t('channel.default') : item.name })
-          "
-          :title="item.description"
-          @click.left.exact="$emit('select', item.id)"
+          custom
         >
-          <AppIcon name="chat" class="sidebar-item-icon" />
-          <span class="sidebar-node-name">{{
-            item.isDefault ? t("channel.default") : item.name
-          }}</span>
+          <a
+            :href="href"
+            class="sidebar-list-item channel-item"
+            :class="{ 'is-active': item.id === channelId }"
+            :aria-current="item.id === channelId ? 'page' : undefined"
+            :aria-label="
+              t('channel.switch', { name: item.isDefault ? t('channel.default') : item.name })
+            "
+            :title="item.description"
+            @click.left.exact.prevent="$emit('select', item.id)"
+          >
+            <AppIcon name="chat" class="sidebar-item-icon" />
+            <span class="sidebar-node-name">{{
+              item.isDefault ? t("channel.default") : item.name
+            }}</span>
+          </a>
         </RouterLink>
       </div>
     </nav>
