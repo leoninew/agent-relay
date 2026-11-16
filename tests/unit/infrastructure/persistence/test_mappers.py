@@ -2,8 +2,8 @@ from datetime import UTC, datetime
 
 import pytest
 
-from agent_relay.domain.rooms.models import Delivery
-from agent_relay.infrastructure.persistence.mappers import delivery_from_model, delivery_to_model
+from conflua.domain.rooms.models import Delivery
+from conflua.infrastructure.persistence.mappers import delivery_from_model, delivery_to_model
 
 
 @pytest.mark.parametrize("metadata", [None, {}, {"accepted": True, "details": {"attempt": 1}}])

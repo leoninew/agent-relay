@@ -7,8 +7,8 @@ server:
   port: 9081
   reload: false
   reload_paths:
-    - src/agent_relay/**/*.py
-    - src/agent_relay/logging.yaml
+    - src/conflua/**/*.py
+    - src/conflua/logging.yaml
     - config/*.yaml
     - .env.{profile}
 
@@ -16,8 +16,7 @@ static:
   directory: ./static
 
 database:
-  path: ./data/agent-relay.sqlite3
-  migrate_on_startup: false
+  path: ./data/conflua.db
 
 codex:
   command: [codex, app-server, proxy]

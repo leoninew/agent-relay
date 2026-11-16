@@ -5,9 +5,9 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from agent_relay.domain.rooms.models import McpServerReference
-from agent_relay.infrastructure.codex.catalog import decode_skills, server_option
-from agent_relay.infrastructure.codex.models import McpPage
+from conflua.domain.rooms.models import McpServerReference
+from conflua.infrastructure.codex.catalog import decode_skills, server_option
+from conflua.infrastructure.codex.models import McpPage
 
 
 def test_skill_identity_distinguishes_sources_and_paths_without_exposing_native_fields(

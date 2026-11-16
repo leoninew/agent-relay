@@ -73,10 +73,10 @@ class ReleaseConfig:
 SCRIPT_DIRECTORY = Path(__file__).resolve().parent
 REPOSITORY_ROOT = SCRIPT_DIRECTORY.parent
 
-PLUGIN_NAMES = ("agent-relay",)
-PLUGIN_PACKAGES = {"agent-relay": REPOSITORY_ROOT / "plugins" / "agent-relay"}
+PLUGIN_NAMES = ("conflua",)
+PLUGIN_PACKAGES = {"conflua": REPOSITORY_ROOT / "plugins" / "conflua"}
 PLUGIN_MARKETPLACE_ROOT = REPOSITORY_ROOT
-PLUGIN_MARKETPLACE_NAME = "agent-relay-local"
+PLUGIN_MARKETPLACE_NAME = "conflua-local"
 
 STANDALONE_SKILL_NAME: str | None = None
 STANDALONE_SKILL_SOURCE: Path | None = None

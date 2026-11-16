@@ -4,7 +4,7 @@ import tomllib
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
 
-from agent_relay import __version__
+from conflua import __version__
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -34,22 +34,22 @@ def main() -> None:
         print(version)
         return
 
-    package = ROOT / "dist" / "AgentRelay"
+    package = ROOT / "dist" / "conflua"
     for relative in (
-        "agent-relay-gui.exe",
-        "agent-relay.exe",
-        "_internal/resources/assets/agent-relay.ico",
-        "_internal/resources/config/app.yaml",
+        "conflua-gui.exe",
+        "conflua.exe",
+        "_internal/resources/assets/conflua.ico",
+        "_internal/resources/config/conflua.yaml",
         "_internal/resources/config/config.yaml",
         "_internal/resources/web/dist/index.html",
-        "_internal/resources/web/dist/agent-relay.png",
+        "_internal/resources/web/dist/conflua.png",
         "_internal/resources/alembic.ini",
         "_internal/resources/migrations/sqlite/env.py",
-        "_internal/agent_relay/logging.yaml",
+        "_internal/conflua/logging.yaml",
     ):
         if not (package / relative).is_file():
             raise FileNotFoundError(f"Incomplete desktop package: {relative}")
-    artifact_name = f"agent-relay-{version}-windows-x64"
+    artifact_name = f"conflua-{version}-windows-x64"
     archive = package.parent / f"{artifact_name}.zip"
     with ZipFile(archive, "w", compression=ZIP_DEFLATED) as output:
         for source in sorted(package.rglob("*")):

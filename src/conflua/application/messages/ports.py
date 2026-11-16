@@ -1,0 +1,46 @@
+from datetime import datetime
+from typing import Protocol
+
+from conflua.application.dto.messages import CodexQueueTarget, MessagePage, MessageQueuePage
+from conflua.domain.rooms.models import Message
+
+
+class MessageRepository(Protocol):
+    def message(self, room_id: str, message_id: str) -> Message: ...
+    def page(
+        self,
+        room_id: str,
+        *,
+        topic_id: str | None = None,
+        member_id: str | None = None,
+        keyword: str | None = None,
+        before_seq: int | None = None,
+        limit: int = 50,
+    ) -> MessagePage: ...
+    def queue(
+        self,
+        room_id: str,
+        *,
+        topic_id: str | None = None,
+        member_id: str | None = None,
+        before_seq: int | None = None,
+        limit: int = 50,
+    ) -> MessageQueuePage: ...
+    def publication(
+        self, room_id: str, publisher_id: str, publication_id: str
+    ) -> Message | None: ...
+    def message_exists(self, room_id: str, message_id: str) -> bool: ...
+    def next_message_seq(self, room_id: str) -> int: ...
+    def insert_message(self, room_id: str, message: Message) -> None: ...
+    def clear_queue(
+        self,
+        room_id: str,
+        *,
+        topic_id: str | None,
+        member_id: str | None,
+        deleted_at: datetime,
+        message_id: str | None = None,
+    ) -> int: ...
+    def codex_queue_targets(
+        self, room_id: str, *, topic_id: str | None, member_id: str | None
+    ) -> list[CodexQueueTarget]: ...

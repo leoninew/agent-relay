@@ -3,11 +3,11 @@ from unittest.mock import MagicMock, Mock
 
 import pytest
 
-from agent_relay.application.capabilities.ports import CapabilityDriver, CapabilityUnavailableError
-from agent_relay.application.capabilities.service import CapabilityService
-from agent_relay.application.dto.capabilities import McpCatalog, SkillCatalog
-from agent_relay.domain.rooms.errors import RoomConflictError, RoomInputError, RoomNotFoundError
-from agent_relay.domain.rooms.models import RoomState
+from conflua.application.capabilities.ports import CapabilityDriver, CapabilityUnavailableError
+from conflua.application.capabilities.service import CapabilityService
+from conflua.application.dto.capabilities import McpCatalog, SkillCatalog
+from conflua.domain.rooms.errors import RoomConflictError, RoomInputError, RoomNotFoundError
+from conflua.domain.rooms.models import RoomState
 
 
 def test_capability_queries_release_scope_and_pass_exact_room_and_target(
@@ -28,8 +28,8 @@ def test_capability_queries_release_scope_and_pass_exact_room_and_target(
     driver.list_skills.side_effect = list_skills
     driver.list_mcp_servers.side_effect = list_mcp_servers
     service = CapabilityService(room_store, driver)
-    assert service.skills("agent-relay", force_reload=True) is skills
-    assert service.mcp_servers("agent-relay", "frontend-worker") is servers
+    assert service.skills("conflua", force_reload=True) is skills
+    assert service.mcp_servers("conflua", "frontend-worker") is servers
     driver.list_skills.assert_called_once_with("d:/project", force_reload=True)
     driver.list_mcp_servers.assert_called_once_with("frontend-worker-session", "d:/project")
 
@@ -57,7 +57,7 @@ def test_invalid_member_scope_never_queries_codex(
         session.project_path = "D:/other"
         error = RoomConflictError
     with pytest.raises(error):
-        CapabilityService(room_store, driver).mcp_servers("agent-relay", member_id)
+        CapabilityService(room_store, driver).mcp_servers("conflua", member_id)
     driver.list_mcp_servers.assert_not_called()
 
 
@@ -73,5 +73,5 @@ def test_driver_failure_has_a_safe_public_error(room_store: MagicMock) -> None:
     driver = Mock(spec=CapabilityDriver)
     driver.list_skills.side_effect = RuntimeError("secret-token D:/private")
     with pytest.raises(CapabilityUnavailableError, match="无法读取能力目录") as caught:
-        CapabilityService(room_store, driver).skills("agent-relay")
+        CapabilityService(room_store, driver).skills("conflua")
     assert "secret-token" not in str(caught.value)

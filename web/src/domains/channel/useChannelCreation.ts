@@ -28,7 +28,7 @@ export function useChannelCreation(
 
   function savePending(room: string, value?: PendingCreation): void {
     if (!storage || !room) return;
-    const key = `relay-channel-creation:${room}`;
+    const key = `conflua-channel-creation:${room}`;
     if (value) storage.setItem(key, JSON.stringify(value));
     else storage.removeItem(key);
   }
@@ -45,7 +45,7 @@ export function useChannelCreation(
       storage && room
         ? readJSON<PendingCreation | undefined>(
             storage,
-            `relay-channel-creation:${room}`,
+            `conflua-channel-creation:${room}`,
             undefined,
           )
         : undefined;

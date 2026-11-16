@@ -4,11 +4,11 @@ from unittest.mock import MagicMock, Mock, call
 import pytest
 from pytest import MonkeyPatch
 
-from agent_relay.application.members.sessions import (
+from conflua.application.members.sessions import (
     SessionInterruptRejected,
     SessionUnavailableError,
 )
-from agent_relay.infrastructure.codex.driver import CodexDriver, ProxyRpc, RpcRejected
+from conflua.infrastructure.codex.driver import CodexDriver, ProxyRpc, RpcRejected
 
 
 def metadata(status: str = "active", **changes: Any) -> dict[str, Any]:
@@ -31,7 +31,7 @@ def turns(status: str, turn_id: str = "target") -> dict[str, Any]:
 def interrupt_rpc(monkeypatch: MonkeyPatch) -> Mock:
     rpc = MagicMock(spec=ProxyRpc)
     rpc.__enter__.return_value = rpc
-    monkeypatch.setattr("agent_relay.infrastructure.codex.driver.ProxyRpc", lambda *_: rpc)
+    monkeypatch.setattr("conflua.infrastructure.codex.driver.ProxyRpc", lambda *_: rpc)
     return rpc
 
 
@@ -140,7 +140,7 @@ def test_naturally_finished_target_is_not_reported_as_interrupted(
 def test_synchronous_confirmation_waits_for_target_without_resending(
     interrupt_rpc: Mock, monkeypatch: MonkeyPatch
 ) -> None:
-    monkeypatch.setattr("agent_relay.infrastructure.codex.driver.sleep", lambda *_: None)
+    monkeypatch.setattr("conflua.infrastructure.codex.driver.sleep", lambda *_: None)
     interrupt_rpc.call.side_effect = [
         metadata(),
         turns("inProgress"),
@@ -158,9 +158,9 @@ def test_synchronous_confirmation_waits_for_target_without_resending(
 def test_missing_target_cannot_turn_an_acknowledgement_into_success(
     interrupt_rpc: Mock, monkeypatch: MonkeyPatch
 ) -> None:
-    monkeypatch.setattr("agent_relay.infrastructure.codex.driver.sleep", lambda *_: None)
+    monkeypatch.setattr("conflua.infrastructure.codex.driver.sleep", lambda *_: None)
     monkeypatch.setattr(
-        "agent_relay.infrastructure.codex.driver.monotonic", Mock(side_effect=[0, 0.1, 0.2, 2])
+        "conflua.infrastructure.codex.driver.monotonic", Mock(side_effect=[0, 0.1, 0.2, 2])
     )
     interrupt_rpc.call.side_effect = [
         metadata(),

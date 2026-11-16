@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from agent_relay.domain.rooms.delivery import (
+from conflua.domain.rooms.delivery import (
     INTERRUPTED_SUBMISSION,
     PROCESSING_FAILURE,
     REJECTED_SUBMISSION,
@@ -11,7 +11,7 @@ from agent_relay.domain.rooms.delivery import (
     steer_accepted,
     submission_failed,
 )
-from agent_relay.domain.rooms.models import Delivery, SubmissionFailure
+from conflua.domain.rooms.models import Delivery, SubmissionFailure
 
 
 @pytest.fixture

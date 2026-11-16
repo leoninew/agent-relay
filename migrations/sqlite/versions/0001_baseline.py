@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from agent_relay.infrastructure.persistence.migration_sql import execute_sql_file
+from conflua.infrastructure.persistence.migration_sql import execute_sql_file
 
 revision = "channel_description_20261114"
 down_revision = None

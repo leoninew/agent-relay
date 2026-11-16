@@ -5,8 +5,8 @@ from sqlalchemy import Update
 from sqlalchemy.dialects import sqlite
 from sqlalchemy.orm import Session
 
-from agent_relay.infrastructure.persistence.models import ChannelRecord, RoomEventRecord, RoomRecord
-from agent_relay.infrastructure.persistence.repositories.rooms import SQLAlchemyRoomRepository
+from conflua.infrastructure.persistence.models import ChannelRecord, RoomEventRecord, RoomRecord
+from conflua.infrastructure.persistence.repositories.rooms import SQLAlchemyRoomRepository
 
 
 def test_clear_marks_messages_and_deliveries_in_one_room_without_deleting_history() -> None:

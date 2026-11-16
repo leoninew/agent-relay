@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "conflua": {
+      "command": "conflua",
+      "args": ["mcp"],
+      "env_vars": ["CONFLUA_URL", "CONFLUA_HTTP_TIMEOUT"]
+    }
+  }
+}

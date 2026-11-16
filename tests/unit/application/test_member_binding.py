@@ -4,14 +4,14 @@ from unittest.mock import MagicMock, Mock
 
 import pytest
 
-from agent_relay.application.dto.members import CreateMember, SessionInfo
-from agent_relay.application.members.service import MemberService
-from agent_relay.application.members.sessions import (
+from conflua.application.dto.members import CreateMember, SessionInfo
+from conflua.application.members.service import MemberService
+from conflua.application.members.sessions import (
     SessionDriver,
     SessionUnavailableError,
 )
-from agent_relay.domain.rooms.errors import RoomConflictError, RoomInputError
-from agent_relay.domain.rooms.models import RoomState
+from conflua.domain.rooms.errors import RoomConflictError, RoomInputError
+from conflua.domain.rooms.models import RoomState
 
 
 @pytest.fixture
@@ -56,13 +56,13 @@ def test_empty_sessions_and_driver_failure_do_not_create_members(
     session_driver: Mock,
 ) -> None:
     service = MemberService(room_store, session_driver)
-    assert service.candidates("agent-relay") == []
+    assert service.candidates("conflua") == []
     session_driver.list_sessions.side_effect = TimeoutError("secret upstream detail")
     session_driver.inspect.side_effect = TimeoutError("secret upstream detail")
     with pytest.raises(SessionUnavailableError):
-        service.candidates("agent-relay")
+        service.candidates("conflua")
     with pytest.raises(SessionUnavailableError):
-        service.add("agent-relay", CreateMember(name="Worker", session_id="one", topic_ids=[]))
+        service.add("conflua", CreateMember(name="Worker", session_id="one", topic_ids=[]))
     room_repository.save_resources.assert_not_called()
 
 
@@ -77,7 +77,7 @@ def test_discovery_keeps_posix_paths_case_sensitive(
         SessionInfo("exact", "/Work/project/", "codex", "Exact", "idle"),
         SessionInfo("wrong-case", "/work/project", "codex", "Wrong", "idle"),
     ]
-    candidates = MemberService(room_store, session_driver).candidates("agent-relay")
+    candidates = MemberService(room_store, session_driver).candidates("conflua")
     assert [candidate.id for candidate in candidates] == ["exact"]
 
 
@@ -117,7 +117,7 @@ def test_invalid_join_does_not_save_resources(
     session_driver.inspect.return_value = info
     with pytest.raises(error, match=message):
         MemberService(room_store, session_driver).add(
-            "agent-relay", CreateMember(name="Worker", session_id="one", topic_ids=topics)
+            "conflua", CreateMember(name="Worker", session_id="one", topic_ids=topics)
         )
     room_repository.save_resources.assert_not_called()
     if topics == ["missing"]:
@@ -133,8 +133,8 @@ def test_presence_failure_records_unknown_and_continues_other_members(
     session_driver: Mock,
 ) -> None:
     room_repository.bindings.return_value = [
-        ("agent-relay", "channel-default", "frontend-worker-session"),
-        ("agent-relay", "channel-default", "backend-worker-session"),
+        ("conflua", "channel-default", "frontend-worker-session"),
+        ("conflua", "channel-default", "backend-worker-session"),
     ]
     room_state.members = [
         member
@@ -176,7 +176,7 @@ def test_presence_failure_logs_once_until_the_session_recovers(
     session_driver: Mock,
 ) -> None:
     room_repository.bindings.return_value = [
-        ("agent-relay", "channel-default", "frontend-worker-session")
+        ("conflua", "channel-default", "frontend-worker-session")
     ]
     first_error = TimeoutError("upstream unavailable")
     session_driver.inspect.side_effect = [
@@ -210,7 +210,7 @@ def test_candidates_explain_unavailable_sessions_and_record_presence(
     if status == "unavailable":
         info = replace(info, status="unavailable")
     session_driver.list_sessions.return_value = [info]
-    candidate = MemberService(room_store, session_driver).candidates("agent-relay")[0]
+    candidate = MemberService(room_store, session_driver).candidates("conflua")[0]
     assert candidate.member_id == "frontend-worker"
     assert candidate.usable is (status == "idle")
     if status == "unavailable":

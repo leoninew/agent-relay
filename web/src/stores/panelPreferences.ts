@@ -3,7 +3,7 @@ import { ref } from "vue";
 
 import { browserStorage, readJSON, writeJSON } from "@/services/storage";
 
-const storageKey = "relay-panel-preferences";
+const storageKey = "conflua-panel-preferences";
 type Panel = "navigation" | "details";
 type PanelPreferences = Record<Panel, boolean>;
 

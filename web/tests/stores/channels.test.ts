@@ -26,7 +26,7 @@ function channel(overrides: Partial<Channel> = {}): Channel {
     roomId: "room-1",
     name: "默认",
     description: "",
-    workingPath: "D:/work/agent-relay",
+    workingPath: "D:/work/conflua",
     isDefault: true,
     workspaceKind: "existing",
     createdAt: null,

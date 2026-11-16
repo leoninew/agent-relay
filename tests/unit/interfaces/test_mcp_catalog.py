@@ -1,15 +1,15 @@
 import asyncio
 from urllib.request import Request
 
-from agent_relay.interfaces.client import HttpResponse, RelayClient
-from agent_relay.interfaces.mcp import create_mcp_server
+from conflua.interfaces.client import ConfluaClient, HttpResponse
+from conflua.interfaces.mcp import create_mcp_server
 
 
 def test_tool_catalog_exposes_typed_collaboration_and_management() -> None:
     def reject_request(request: Request, *, timeout: float) -> HttpResponse:
         raise AssertionError("Tool discovery must not send HTTP requests")
 
-    server = create_mcp_server(RelayClient("http://unused", 10, opener=reject_request))
+    server = create_mcp_server(ConfluaClient("http://unused", 10, opener=reject_request))
     tools = {tool.name: tool for tool in asyncio.run(server.list_tools())}
     assert set(tools) == {
         "room_list",

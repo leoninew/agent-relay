@@ -5,9 +5,9 @@ from unittest.mock import MagicMock, Mock, call
 import pytest
 from pytest import MonkeyPatch
 
-from agent_relay.application.delivery.ports import InputHistoryUnavailable
-from agent_relay.application.dto.delivery import InputPage, ReceivedInput
-from agent_relay.infrastructure.codex.driver import (
+from conflua.application.delivery.ports import InputHistoryUnavailable
+from conflua.application.dto.delivery import InputPage, ReceivedInput
+from conflua.infrastructure.codex.driver import (
     CodexDriver,
     ProxyRpc,
     RpcDisconnected,
@@ -31,7 +31,7 @@ def test_npm_codex_uses_node_without_shell_and_preserves_arguments(
     node.parent.mkdir(parents=True, exist_ok=True)
     node.touch()
     paths = {"codex": str(shim), "node": str(node)}
-    monkeypatch.setattr("agent_relay.infrastructure.codex.driver.shutil.which", paths.get)
+    monkeypatch.setattr("conflua.infrastructure.codex.driver.shutil.which", paths.get)
     command = ["codex", "app-server", "proxy", "argument with spaces", "&literal"]
     assert _launch_command(command) == [str(node), str(entry), *command[1:]]
     assert command[0] == "codex"
@@ -46,13 +46,13 @@ def test_native_and_explicit_node_commands_keep_their_arguments(
 ) -> None:
     executable = tmp_path / command[0]
     monkeypatch.setattr(
-        "agent_relay.infrastructure.codex.driver.shutil.which", lambda _: str(executable)
+        "conflua.infrastructure.codex.driver.shutil.which", lambda _: str(executable)
     )
     assert _launch_command(command) == [str(executable), *command[1:]]
 
 
 def test_relative_native_path_keeps_its_directory_prefix(monkeypatch: MonkeyPatch) -> None:
-    monkeypatch.setattr("agent_relay.infrastructure.codex.driver.shutil.which", lambda _: None)
+    monkeypatch.setattr("conflua.infrastructure.codex.driver.shutil.which", lambda _: None)
     command = ["./codex", "app-server", "proxy"]
     assert _launch_command(command) == command
 
@@ -67,15 +67,13 @@ def test_incomplete_npm_install_fails_without_another_codex_fallback(
         entry.parent.mkdir(parents=True)
         entry.touch()
     paths = {"codex": str(shim)}
-    monkeypatch.setattr("agent_relay.infrastructure.codex.driver.shutil.which", paths.get)
+    monkeypatch.setattr("conflua.infrastructure.codex.driver.shutil.which", paths.get)
     with pytest.raises(FileNotFoundError, match="entry point"):
         _launch_command(["codex", "app-server", "proxy"])
 
 
 def test_arbitrary_shell_wrapper_is_not_executed(monkeypatch: MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        "agent_relay.infrastructure.codex.driver.shutil.which", lambda _: "custom.cmd"
-    )
+    monkeypatch.setattr("conflua.infrastructure.codex.driver.shutil.which", lambda _: "custom.cmd")
     with pytest.raises(OSError, match="official npm Codex shim"):
         _launch_command(["codex", "app-server", "proxy"])
 
@@ -136,7 +134,7 @@ def test_malformed_rpc_error_is_uncertain_instead_of_an_explicit_rejection(error
 def history_rpc(monkeypatch: MonkeyPatch) -> Mock:
     rpc = MagicMock(spec=ProxyRpc)
     rpc.__enter__.return_value = rpc
-    monkeypatch.setattr("agent_relay.infrastructure.codex.driver.ProxyRpc", lambda *_: rpc)
+    monkeypatch.setattr("conflua.infrastructure.codex.driver.ProxyRpc", lambda *_: rpc)
     return rpc
 
 

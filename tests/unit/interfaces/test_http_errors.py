@@ -3,7 +3,7 @@ import json
 import pytest
 from starlette.requests import Request
 
-from agent_relay.interfaces.http.errors import error_json_response
+from conflua.interfaces.http.errors import error_json_response
 
 
 @pytest.mark.parametrize(

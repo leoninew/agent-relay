@@ -4,12 +4,12 @@ from unittest.mock import MagicMock, Mock
 
 import pytest
 
-from agent_relay.application.dto.members import SessionInfo
-from agent_relay.application.dto.rooms import CreateRoom, CreateTopic
-from agent_relay.application.members.sessions import SessionDriver, SessionUnavailableError
-from agent_relay.application.rooms.service import RoomService
-from agent_relay.domain.rooms.errors import RoomConflictError, RoomNotFoundError
-from agent_relay.domain.rooms.models import RoomState
+from conflua.application.dto.members import SessionInfo
+from conflua.application.dto.rooms import CreateRoom, CreateTopic
+from conflua.application.members.sessions import SessionDriver, SessionUnavailableError
+from conflua.application.rooms.service import RoomService
+from conflua.domain.rooms.errors import RoomConflictError, RoomNotFoundError
+from conflua.domain.rooms.models import RoomState
 
 
 def test_room_creation_persists_business_initialization_without_database_defaults(
@@ -101,7 +101,7 @@ def test_room_clear_does_not_write_when_session_discovery_fails(
     driver.list_sessions.side_effect = TimeoutError("private diagnostic")
 
     with pytest.raises(SessionUnavailableError, match="无法核验成员连接状态"):
-        RoomService(room_store).clear_room("agent-relay", driver)
+        RoomService(room_store).clear_room("conflua", driver)
 
     room_store.write.assert_not_called()
     room_repository.clear_messages.assert_not_called()

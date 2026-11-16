@@ -11,7 +11,7 @@
 
 建议首版面向 Windows，使用 WebView2，采用模板的 GUI 主线程与 Uvicorn 后台线程结构。开发阶段继续使用 `make webapi` 和 `make web`；桌面制品使用 PyInstaller `onedir`、GUI 入口 `windowed`。分发完整目录，包含运行资源和 Python 运行时。
 
-关闭桌面窗口时先确认；确认后，如本次运行在聊天室发送过管理端消息，向这些聊天室的成员投递“管理端已离线。”，随后退出由桌面启动的 Relay 服务。浏览器标签关闭不影响服务。退出流程复用现有发布、投递和资源关闭能力。
+关闭桌面窗口时先确认；确认后，如本次运行在聊天室发送过管理端消息，向这些聊天室的成员投递“管理端已离线。”，随后退出由桌面启动的 Conflua 服务。浏览器标签关闭不影响服务。退出流程复用现有发布、投递和资源关闭能力。
 
 ## 两种界面与共同后台
 
@@ -19,7 +19,7 @@
 | --- | --- | --- | --- |
 | 日常浏览器开发 | `make webapi` + `make web` | `http://localhost:9081` | 用户分别管理后端与 Vite |
 | 桌面源码验收 | 建议新增 `make desktop`，先构建前端 | `http://127.0.0.1:9080/static/` | 桌面进程启动本地 API |
-| 桌面制品 | `agent-relay-gui.exe` | 内嵌 WebView 打开同源 `/static/` | 桌面进程启动本地 API |
+| 桌面制品 | `conflua-gui.exe` | 内嵌 WebView 打开同源 `/static/` | 桌面进程启动本地 API |
 | 浏览器访问桌面服务 | 打开桌面服务的 `/static/` | `http://127.0.0.1:9080/static/` | 复用同一个 API 与数据库 |
 
 日常开发不需要桌面启动器自动管理 Vite，也不需要复制模板的 `DevelopmentFrontend` 子进程管理。以后确有桌面热更新需求时，再增加明确的联调入口。
@@ -32,7 +32,7 @@
 
 | 位置 | 职责 |
 | --- | --- |
-| 新增 `src/agent_relay/desktop.py` | 薄启动入口，解析桌面参数并交给组合根 |
+| 新增 `src/conflua/desktop.py` | 薄启动入口，解析桌面参数并交给组合根 |
 | 新增 `bootstrap/desktop.py` | 装配窗口、受控的 Uvicorn 后台线程、启动失败处理与停止流程 |
 | `bootstrap/settings.py` | 新增真正需要的桌面配置，如标题、尺寸、调试开关 |
 | `bootstrap` 中的路径解析模块 | 集中区分只读资源、用户配置和可写数据目录 |
@@ -55,7 +55,7 @@ PyWebView 放入 `desktop` optional extra；PyInstaller 放入开发依赖。独
 5. 在主线程创建窗口并执行 `webview.start()`，打开同源 `/static/`。
 6. 关闭窗口时确认；取消则继续运行，确认则按下述规则发送离线通知，再请求 Uvicorn 正常停止，复用 FastAPI lifespan 收尾。
 
-监听地址建议固定 `127.0.0.1:9080`。当前 CLI 默认地址和插件 MCP 使用同一端口；随机端口需要另建跨进程地址发现机制，并会改变前端本地存储的 origin。配置为其他端口时，要同步通过已有 `AGENT_RELAY_URL` 或 CLI 参数指定服务地址。
+监听地址建议固定 `127.0.0.1:9080`。当前 CLI 默认地址和插件 MCP 使用同一端口；随机端口需要另建跨进程地址发现机制，并会改变前端本地存储的 origin。配置为其他端口时，要同步通过已有 `CONFLUA_URL` 或 CLI 参数指定服务地址。
 
 首版端口占用时提示“管理端已运行或端口被占用”，保持固定地址。桌面只管理自己启动的 API。
 
@@ -76,68 +76,68 @@ PyWebView 放入 `desktop` optional extra；PyInstaller 放入开发依赖。独
 
 桌面入口固定选择 `app` profile，源码桌面模式和冻结制品使用相同约定。`make desktop` 进入此模式；浏览器开发保留 `make webapi` 的 `dev` profile 和仓库 `.env.dev`。前端仍按现有生产构建生成资源，后端的 `app` profile 不要求增加 Vite 配置环境。
 
-app 模式的用户根目录固定为 `Path.home() / ".agent-relay"`，覆盖文件就是 `~/.agent-relay/.env`。Windows 对应当前用户主目录下的 `.agent-relay`，不使用 LocalAppData，也不再增加 profile 子目录或 `.env.app` 文件。
+app 模式的用户根目录固定为 `Path.home() / ".conflua"`，覆盖文件就是 `~/.conflua/.env`。Windows 对应当前用户主目录下的 `.conflua`，不使用 LocalAppData，也不再增加 profile 子目录或 `.env.app` 文件。
 
 ```text
-~/.agent-relay/
+~/.conflua/
   .env
-  data/agent-relay.sqlite3
+  data/conflua.db
   logs/
   webview/
 ```
 
-配置优先级为：制品内置默认 YAML → 用户目录 `.env` → 系统环境变量。`.env` 可缺省，缺省时使用内置配置；用户只维护覆盖值，无需复制或管理一份 YAML。配置加载入口显式接收桌面 profile 和覆盖文件位置，桌面启动不受开发 shell 中 `AGENT_RELAY_PROFILE=dev` 的误导。
+配置优先级为：制品内置默认 YAML → 用户目录 `.env` → 系统环境变量。`.env` 可缺省，缺省时使用内置配置；用户只维护覆盖值，无需复制或管理一份 YAML。配置加载入口显式接收桌面 profile 和覆盖文件位置，桌面启动不受开发 shell 中 `CONFLUA_PROFILE=dev` 的误导。
 
-app 模式中配置的相对数据、日志路径均以 `~/.agent-relay/` 为基准，实际传给存储和日志模块时转成绝对路径；资源目录由包位置确定。重启、移动或替换制品继续使用同一用户目录。
+app 模式中配置的相对数据、日志路径均以 `~/.conflua/` 为基准，实际传给存储和日志模块时转成绝对路径；资源目录由包位置确定。重启、移动或替换制品继续使用同一用户目录。
 
 ## 资源、配置与数据
 
 | 内容 | 当前情况 | 桌面建议 |
 | --- | --- | --- |
-| 默认配置 | 从当前目录的 `config/config.yaml` 加载，支持显式 fallback | 制品带默认配置，用户只用 `~/.agent-relay/.env` 覆盖 |
+| 默认配置 | 从当前目录的 `config/config.yaml` 加载，支持显式 fallback | 制品带默认配置，用户只用 `~/.conflua/.env` 覆盖 |
 | 前端 | 构建到 `web/dist`，HTTP 默认静态目录为 `./static` | 随制品携带构建资源，启动时显式注入实际目录 |
 | 日志配置 | 相对包内 `logging.yaml` 定位 | 显式打包，保持只读资源访问方式 |
 | Alembic | `Path.cwd()/alembic.ini`，配置再引用根目录迁移树 | 显式资源根，包含 ini、env、revision 及对应 SQL；消除工作目录依赖 |
 | SQLite、锁、日志 | 多处相对当前目录解析 | 使用稳定的用户可写目录和绝对路径 |
 | WebView 浏览器配置 | 模板直接调用 `webview.start(debug=...)` | `private_mode=False`，设置稳定且可写的 `storage_path` |
 
-用户根目录按上一节固定为 `~/.agent-relay/`。开发阶段继续使用仓库内数据路径；制品升级或移动安装目录不会创建新的用户数据库。
+用户根目录按上一节固定为 `~/.conflua/`。开发阶段继续使用仓库内数据路径；制品升级或移动安装目录不会创建新的用户数据库。
 
 PyWebView 6.2.1 的 `private_mode` 默认为 `True`；当前页面通过 localStorage 保存排序，照搬模板会导致重启后偏好不持久。将其设为 `False` 并指定存储目录后，还要保持服务 origin 稳定。现有 sessionStorage 中的待确认发布记录仍遵守会话级语义，不因 WebView 接入改为持久草稿。
 
 只读资源根可通过包资源或冻结资源目录解析，用户目录单独传递。制品携带默认资源；用户 `.env`、数据库和浏览器配置留在用户目录。通过明确路径装配，消除当前工作目录依赖。
 
-当前生产默认配置 `migrate_on_startup=false`，新库直接打开会被数据库适配器拒绝。桌面默认应在提供服务前对明确的用户数据库执行受控升级，沿用现有迁移链；遇到不受支持的旧库应提示处理方式，不能重建覆盖。开发数据库不会自动复制到用户目录。
+服务启动时对配置的数据库执行迁移，桌面和开发环境使用各自的数据库路径。
 
-还存在一个会直接影响桌面启动的既有配置问题：`load_settings()` 将所有 `AGENT_RELAY_*` 变量作为服务配置字段，而 CLI/MCP 已使用同前缀的 `AGENT_RELAY_URL` 和 `AGENT_RELAY_HTTP_TIMEOUT`。在进程内临时设置两项变量、分别只调用配置加载，已确认它们触发 `url`、`http_timeout` 的 `extra_forbidden`。桌面进程可能继承这些合法的客户端变量，接入时应明确划分并排除已声明的客户端变量，保留对真正未知服务字段的严格校验。
+还存在一个会直接影响桌面启动的既有配置问题：`load_settings()` 将所有 `CONFLUA_*` 变量作为服务配置字段，而 CLI/MCP 已使用同前缀的 `CONFLUA_URL` 和 `CONFLUA_HTTP_TIMEOUT`。在进程内临时设置两项变量、分别只调用配置加载，已确认它们触发 `url`、`http_timeout` 的 `extra_forbidden`。桌面进程可能继承这些合法的客户端变量，接入时应明确划分并排除已声明的客户端变量，保留对真正未知服务字段的严格校验。
 
 ## 制品与 CLI/MCP
 
 建议桌面制品先采用 Windows 本机构建的 `onedir` 目录包；GUI 入口使用 `windowed`，无需为形式改成单文件。新增 `make binary` 统一执行锁定依赖安装、前端构建与 PyInstaller，保持现有浏览器开发命令。
 
-GUI EXE 不能替代 stdio MCP：当前插件 `.mcp.json` 运行的是 `agent-relay mcp`，要求可用的标准输入输出。建议桌面分发目录提供两个入口：
+GUI EXE 不能替代 stdio MCP：当前插件 `.mcp.json` 运行的是 `conflua mcp`，要求可用的标准输入输出。建议桌面分发目录提供两个入口：
 
-- `agent-relay-gui.exe`：打开窗口并拥有本地后台服务。
-- `agent-relay.exe`：控制台 CLI，继续提供现有命令和 `mcp`，连接同一个 HTTP 服务，不自行启动第二套后台。
+- `conflua-gui.exe`：打开窗口并拥有本地后台服务。
+- `conflua.exe`：控制台 CLI，继续提供现有命令和 `mcp`，连接同一个 HTTP 服务，不自行启动第二套后台。
 
-二者可以使用 PyInstaller spec 共享目录依赖。安装说明通过 PATH 或明确的绝对路径配置控制台入口，让现有插件能够执行 `agent-relay mcp`。现有 Python CLI 安装途径继续有效。
+二者可以使用 PyInstaller spec 共享目录依赖。安装说明通过 PATH 或明确的绝对路径配置控制台入口，让现有插件能够执行 `conflua mcp`。现有 Python CLI 安装途径继续有效。
 
-当前 wheel 主要交付 CLI/MCP，包配置只显式列出 `src/agent_relay`，没有桌面默认配置、前端和根目录迁移树的完整资源契约。桌面包要独立验证资源清单；如果还要承诺 wheel 安装后可直接运行桌面或独立服务，应同步补全 wheel 的资源包含与安装后路径契约。
+当前 wheel 主要交付 CLI/MCP，包配置只显式列出 `src/conflua`，没有桌面默认配置、前端和根目录迁移树的完整资源契约。桌面包要独立验证资源清单；如果还要承诺 wheel 安装后可直接运行桌面或独立服务，应同步补全 wheel 的资源包含与安装后路径契约。
 
-WebView2 Runtime 是 Windows 图形运行前提；Codex CLI、认证与共享 daemon 仍是投递能力的外部前提。Relay 制品只内置自身 Python 运行环境。需要验证从资源管理器双击时的 PATH 与 Codex 命令解析，不能只以开发终端运行成功作为验收。缺少 Codex 连接能力时应保留可诊断的离线状态。
+WebView2 Runtime 是 Windows 图形运行前提；Codex CLI、认证与共享 daemon 仍是投递能力的外部前提。Conflua 制品只内置自身 Python 运行环境。需要验证从资源管理器双击时的 PATH 与 Codex 命令解析，不能只以开发终端运行成功作为验收。缺少 Codex 连接能力时应保留可诊断的离线状态。
 
 无控制台入口的启动失败需要用户可见的错误及日志位置，不能仅输出 stderr。GUI 调试默认关闭，明确使用 WebView2，避免浏览器内核回退导致现有现代前端能力失效。
 
 ## 建议实施顺序与验收
 
-第一批完成桌面运行基础：`app` profile、`~/.agent-relay/.env`、迁移资源定位、客户端与服务配置变量边界、桌面入口、稳定浏览器配置，以及退出确认和离线通知。先证明源码桌面模式可以打开构建页面；保留 `make webapi` 与 `make web` 的既有职责。
+第一批完成桌面运行基础：`app` profile、`~/.conflua/.env`、迁移资源定位、客户端与服务配置变量边界、桌面入口、稳定浏览器配置，以及退出确认和离线通知。先证明源码桌面模式可以打开构建页面；保留 `make webapi` 与 `make web` 的既有职责。
 
 第二批完成制品交付：锁定桌面和打包依赖，增加 `make binary`、GUI/CLI 入口及资源清单，以及 `.github/workflows/build-desktop.yml`。GitHub Actions 在 Windows runner 调用相同 Makefile 入口，验证并上传完整目录压缩包作为可下载的 Actions artifact，再在脱离仓库目录的环境验收制品。具体任务、依赖和执行情况以 SpecFlow 总计划为准。
 
 最小验收范围：
 
 1. 浏览器开发命令、CLI 和 stdio MCP 继续可用；未安装桌面 extra 时可导入并运行非桌面入口。
-2. 从非仓库工作目录和含空格的目录启动制品；默认配置、日志配置和迁移 SQL 均可定位，新用户数据库可以初始化；`app` profile 正确读取 `~/.agent-relay/.env`。
+2. 从非仓库工作目录和含空格的目录启动制品；默认配置、日志配置和迁移 SQL 均可定位，新用户数据库可以初始化；`app` profile 正确读取 `~/.conflua/.env`。
 3. 浏览器与 WebView 连接同一服务，均能加载聊天室、收发消息、更新 WebSocket 事件；构建路由刷新、复制消息等现有交互正常。
 4. 重启窗口后数据库和排序偏好保留；浏览器与 WebView 的本地偏好独立符合预期；替换制品目录不影响用户数据。
 5. 端口冲突、迁移失败和 WebView 初始化失败都能反馈并回收已创建资源；启动失败后可以再次启动。

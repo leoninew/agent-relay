@@ -2,8 +2,8 @@ from datetime import UTC, datetime
 
 import pytest
 
-from agent_relay.domain.rooms.errors import RoomConflictError, RoomInputError
-from agent_relay.domain.rooms.models import (
+from conflua.domain.rooms.errors import RoomConflictError, RoomInputError
+from conflua.domain.rooms.models import (
     McpServerReference,
     Member,
     Message,
@@ -12,7 +12,7 @@ from agent_relay.domain.rooms.models import (
     SkillReference,
     Topic,
 )
-from agent_relay.domain.rooms.rules import (
+from conflua.domain.rooms.rules import (
     build_message,
     normalize_project_path,
     validate_publication_replay,

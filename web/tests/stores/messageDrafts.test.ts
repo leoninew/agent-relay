@@ -38,7 +38,7 @@ describe("message drafts", () => {
     const storage = storageFixture();
     const drafts = createMessageDraftStorage(storage);
     const draft: MessageDraft = { content: "first", topicIds: [], mentionedMemberIds: [] };
-    storage.setItem("relay-publication:first", "pending");
+    storage.setItem("conflua-publication:first", "pending");
     drafts.save("first", draft);
     drafts.save("second", { ...draft, content: "second" });
 
@@ -46,7 +46,7 @@ describe("message drafts", () => {
 
     expect(drafts.load("first")).toBeUndefined();
     expect(drafts.load("second")?.content).toBe("second");
-    expect(storage.getItem("relay-publication:first")).toBe("pending");
+    expect(storage.getItem("conflua-publication:first")).toBe("pending");
     expect(createMessageDraftStorage(storageFixture()).load("second")).toBeUndefined();
   });
 

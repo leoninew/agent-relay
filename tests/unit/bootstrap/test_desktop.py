@@ -11,10 +11,10 @@ import pytest
 from fastapi import FastAPI
 from pytest import MonkeyPatch
 
-from agent_relay.bootstrap import desktop
-from agent_relay.bootstrap.config import load_settings
-from agent_relay.bootstrap.desktop import LocalApiServer, run_desktop
-from agent_relay.bootstrap.settings import Settings
+from conflua.bootstrap import desktop
+from conflua.bootstrap.config import load_settings
+from conflua.bootstrap.desktop import LocalApiServer, run_desktop
+from conflua.bootstrap.settings import Settings
 
 
 def create_test_app(*, settings: Settings, static_directory: Path) -> FastAPI:
@@ -67,9 +67,9 @@ def test_local_api_server_prebinds_before_building_and_stops(monkeypatch: Monkey
     listener.getsockname.return_value = ("127.0.0.1", 19080)
     uvicorn_server = Mock(started=True)
     thread = Mock()
-    monkeypatch.setattr("agent_relay.bootstrap.desktop.socket.socket", lambda *_: listener)
-    monkeypatch.setattr("agent_relay.bootstrap.desktop.uvicorn.Server", lambda _: uvicorn_server)
-    monkeypatch.setattr("agent_relay.bootstrap.desktop.threading.Thread", lambda **_: thread)
+    monkeypatch.setattr("conflua.bootstrap.desktop.socket.socket", lambda *_: listener)
+    monkeypatch.setattr("conflua.bootstrap.desktop.uvicorn.Server", lambda _: uvicorn_server)
+    monkeypatch.setattr("conflua.bootstrap.desktop.threading.Thread", lambda **_: thread)
     settings = load_settings()
 
     def app_factory(**kwargs: object) -> FastAPI:
@@ -94,7 +94,7 @@ def test_local_api_server_prebinds_before_building_and_stops(monkeypatch: Monkey
 def test_local_api_server_reports_port_conflict(monkeypatch: MonkeyPatch) -> None:
     listener = Mock()
     listener.bind.side_effect = OSError("address in use")
-    monkeypatch.setattr("agent_relay.bootstrap.desktop.socket.socket", lambda *_: listener)
+    monkeypatch.setattr("conflua.bootstrap.desktop.socket.socket", lambda *_: listener)
     settings = load_settings().model_copy(
         update={"server": load_settings().server.model_copy(update={"port": 0})}
     )
@@ -113,7 +113,7 @@ def test_local_api_server_releases_listener_when_app_creation_fails(
 ) -> None:
     listener = Mock()
     listener.getsockname.return_value = ("127.0.0.1", 19080)
-    monkeypatch.setattr("agent_relay.bootstrap.desktop.socket.socket", lambda *_: listener)
+    monkeypatch.setattr("conflua.bootstrap.desktop.socket.socket", lambda *_: listener)
     settings = load_settings().model_copy(
         update={"server": load_settings().server.model_copy(update={"port": 0})}
     )
@@ -165,15 +165,15 @@ def test_run_desktop_persists_webview_and_confirms_close(
         nonlocal callback_calls
         callback_calls += 1
 
-    monkeypatch.setattr("agent_relay.bootstrap.desktop.configure_logging", lambda *_: None)
-    monkeypatch.setattr("agent_relay.bootstrap.desktop._publish_exit_notifications", notifications)
+    monkeypatch.setattr("conflua.bootstrap.desktop.configure_logging", lambda *_: None)
+    monkeypatch.setattr("conflua.bootstrap.desktop._publish_exit_notifications", notifications)
     monkeypatch.setattr(webview, "start", start)
     api_server = Mock()
     api_server.__enter__ = Mock(return_value=api_server)
     api_server.__exit__ = Mock(return_value=False)
     api_server.url = "http://127.0.0.1:19080"
     api_server.app = app_with_database()
-    monkeypatch.setattr("agent_relay.bootstrap.desktop.LocalApiServer", lambda *_, **__: api_server)
+    monkeypatch.setattr("conflua.bootstrap.desktop.LocalApiServer", lambda *_, **__: api_server)
 
     run_desktop(
         settings=settings,
@@ -189,7 +189,7 @@ def test_run_desktop_persists_webview_and_confirms_close(
     assert webview.start_options["private_mode"] is False
     assert Path(str(webview.start_options["storage_path"])) == tmp_path / "user data" / "webview"
     assert Path(str(webview.start_options["icon"])) == (
-        tmp_path / "resources" / "assets" / "agent-relay.ico"
+        tmp_path / "resources" / "assets" / "conflua.ico"
     )
     assert callback_calls == 1
     notifications.assert_called_once()
@@ -235,10 +235,10 @@ def test_run_desktop_reads_current_preferences_for_exit(
         def __exit__(self, *args: object) -> None:
             return None
 
-    monkeypatch.setattr("agent_relay.bootstrap.desktop.configure_logging", lambda *_: None)
-    monkeypatch.setattr("agent_relay.bootstrap.desktop._publish_exit_notifications", notifications)
+    monkeypatch.setattr("conflua.bootstrap.desktop.configure_logging", lambda *_: None)
+    monkeypatch.setattr("conflua.bootstrap.desktop._publish_exit_notifications", notifications)
     monkeypatch.setattr(webview, "start", start)
-    monkeypatch.setattr("agent_relay.bootstrap.desktop.LocalApiServer", ApiServer)
+    monkeypatch.setattr("conflua.bootstrap.desktop.LocalApiServer", ApiServer)
 
     run_desktop(
         settings=settings,
@@ -248,8 +248,8 @@ def test_run_desktop_reads_current_preferences_for_exit(
     )
 
     assert webview.window.dialogs == [
-        ("Exit Agent Relay", "Close the management app?"),
-        ("退出 Agent Relay", "确定要关闭管理端吗？"),
+        ("Exit Conflua", "Close the management app?"),
+        ("退出 Conflua", "确定要关闭管理端吗？"),
     ]
     assert injected["preferences_service"] is not None
 
@@ -283,15 +283,15 @@ def test_exit_notification_uses_current_language(tmp_path: Path, monkeypatch: Mo
         app.state.database = Mock()
         return app
 
-    monkeypatch.setattr("agent_relay.bootstrap.desktop.configure_logging", lambda *_: None)
-    monkeypatch.setattr("agent_relay.bootstrap.desktop._publish_exit_notifications", notifications)
+    monkeypatch.setattr("conflua.bootstrap.desktop.configure_logging", lambda *_: None)
+    monkeypatch.setattr("conflua.bootstrap.desktop._publish_exit_notifications", notifications)
     monkeypatch.setattr(webview, "start", start)
     api_server = Mock()
     api_server.__enter__ = Mock(return_value=api_server)
     api_server.__exit__ = Mock(return_value=False)
     api_server.url = "http://127.0.0.1:19080"
     api_server.app = app_with_database()
-    monkeypatch.setattr("agent_relay.bootstrap.desktop.LocalApiServer", lambda *_, **__: api_server)
+    monkeypatch.setattr("conflua.bootstrap.desktop.LocalApiServer", lambda *_, **__: api_server)
 
     run_desktop(
         settings=settings,
@@ -325,9 +325,9 @@ def test_exit_notifications_bound_wait_without_waiting_for_receipts(
     monkeypatch.setattr(desktop, "DesktopExitNotificationService", lambda *_: notifications)
     monkeypatch.setattr(desktop, "DesktopExitNotificationReader", lambda _: Mock())
     monkeypatch.setattr(desktop, "create_room_store", lambda _: Mock(queries=queries))
-    monkeypatch.setattr("agent_relay.bootstrap.desktop.time.sleep", sleep)
+    monkeypatch.setattr("conflua.bootstrap.desktop.time.sleep", sleep)
     monkeypatch.setattr(
-        "agent_relay.bootstrap.desktop.time.monotonic",
+        "conflua.bootstrap.desktop.time.monotonic",
         Mock(side_effect=[0, 6 if scenario == "unclaimed" else 0.1]),
     )
     monkeypatch.setattr(desktop, "logger", logger)
@@ -347,8 +347,8 @@ def test_exit_notifications_bound_wait_without_waiting_for_receipts(
 
 
 def test_desktop_modules_do_not_import_pywebview_until_startup() -> None:
-    import_module("agent_relay.desktop")
-    import_module("agent_relay.server")
+    import_module("conflua.desktop")
+    import_module("conflua.server")
 
     assert "webview" not in sys.modules
 

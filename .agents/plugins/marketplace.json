@@ -1,14 +1,14 @@
 {
-  "name": "agent-relay-local",
+  "name": "conflua-local",
   "interface": {
-    "displayName": "Agent Relay"
+    "displayName": "Conflua"
   },
   "plugins": [
     {
-      "name": "agent-relay",
+      "name": "conflua",
       "source": {
         "source": "local",
-        "path": "./plugins/agent-relay"
+        "path": "./plugins/conflua"
       },
       "policy": {
         "installation": "AVAILABLE",

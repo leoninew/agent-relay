@@ -3,7 +3,7 @@
     <header class="app-header">
       <RouterLink to="/" class="app-brand" :aria-label="t('settings.home')">
         <img class="brand-mark" :src="brandIconUrl" alt="" width="32" height="32" />
-        <span>Agent Relay</span>
+        <span>Conflua</span>
       </RouterLink>
       <nav :aria-label="t('settings.navigation')" class="app-navigation">
         <RoomSwitcher />
@@ -37,7 +37,7 @@
 
   const { t } = useI18n();
   const preferences = usePreferencesStore();
-  const brandIconUrl = `${import.meta.env.BASE_URL}agent-relay.png`;
+  const brandIconUrl = `${import.meta.env.BASE_URL}conflua.png`;
 </script>
 
 <style scoped>

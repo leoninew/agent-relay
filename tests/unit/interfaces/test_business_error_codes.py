@@ -7,11 +7,11 @@ from unittest.mock import Mock
 import pytest
 from starlette.requests import Request
 
-from agent_relay.application.dto.members import SessionCandidate, SessionInfo
-from agent_relay.application.members.sessions import SessionUnavailableError
-from agent_relay.domain.rooms.errors import RoomConflictError, RoomInputError, RoomNotFoundError
-from agent_relay.domain.rooms.rules import normalize_project_path
-from agent_relay.interfaces.http.exception_handlers import (
+from conflua.application.dto.members import SessionCandidate, SessionInfo
+from conflua.application.members.sessions import SessionUnavailableError
+from conflua.domain.rooms.errors import RoomConflictError, RoomInputError, RoomNotFoundError
+from conflua.domain.rooms.rules import normalize_project_path
+from conflua.interfaces.http.exception_handlers import (
     room_exception_handler,
     session_unavailable_handler,
 )

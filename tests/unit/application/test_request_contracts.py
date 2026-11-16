@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from agent_relay.application.dto.messages import CreateMessage
+from conflua.application.dto.messages import CreateMessage
 
 
 @pytest.mark.parametrize(

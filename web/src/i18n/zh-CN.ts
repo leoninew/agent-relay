@@ -420,7 +420,7 @@ export default {
     saveFailed: "无法保存偏好设置。",
     saveUnknown: "保存结果未知，请重新读取偏好设置确认。",
     back: "返回",
-    home: "Agent Relay 首页",
+    home: "Conflua 首页",
     navigation: "主导航",
   },
   appMenu: {

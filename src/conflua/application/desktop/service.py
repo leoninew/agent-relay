@@ -1,0 +1,51 @@
+import hashlib
+import logging
+from datetime import datetime
+
+from conflua.application.desktop.ports import DesktopExitNotificationQueries
+from conflua.application.dto.messages import CreateMessage
+from conflua.application.messages.service import MessageService
+from conflua.domain.rooms.models import Message
+
+OFFLINE_MESSAGE = "管理端已离线。"
+
+
+class DesktopExitNotificationService:
+    def __init__(
+        self,
+        queries: DesktopExitNotificationQueries,
+        messages: MessageService,
+        logger: logging.Logger,
+    ) -> None:
+        self.queries = queries
+        self.messages = messages
+        self.logger = logger
+
+    def publish(
+        self,
+        *,
+        started_at: datetime,
+        run_id: str,
+        content: str = OFFLINE_MESSAGE,
+    ) -> list[tuple[str, Message]]:
+        published: list[tuple[str, Message]] = []
+        for target in self.queries.notification_targets(started_at):
+            if not target.agent_member_ids:
+                continue
+            scope = f"{target.room_id}:{target.channel_id}"
+            room_key = hashlib.sha256(scope.encode("utf-8")).hexdigest()[:12]
+            request = CreateMessage(
+                publication_id=f"desktop-offline-{run_id}-{room_key}",
+                content=content,
+                mentioned_member_ids=list(target.agent_member_ids),
+            )
+            try:
+                service = self.messages.for_channel(target.channel_id)
+                message = service.post_message(target.room_id, request)
+            except Exception:
+                self.logger.exception(
+                    "Unable to publish desktop offline notification room=%s", target.room_id
+                )
+                continue
+            published.append((target.room_id, message))
+        return published

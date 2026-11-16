@@ -824,7 +824,7 @@
     messageQueue.reset();
     replyTo.value = undefined;
     sendError.value = null;
-    const saved = sessionStorage.getItem(`relay-publication:${scope}`);
+    const saved = sessionStorage.getItem(`conflua-publication:${scope}`);
     pendingPublication.value = saved ? (JSON.parse(saved) as CreateMessage) : undefined;
     openDraft(scope, pendingPublication.value);
     await loadRoom();
@@ -897,7 +897,7 @@
     if (sending.value || clearing.value || !scope) return;
     if (pendingPublication.value) return;
     const request = { ...draft, publicationId: crypto.randomUUID() };
-    sessionStorage.setItem(`relay-publication:${scope}`, JSON.stringify(request));
+    sessionStorage.setItem(`conflua-publication:${scope}`, JSON.stringify(request));
     pendingPublication.value = request;
     await publish(request);
   }
@@ -929,7 +929,7 @@
         caught.kind === "http_error" &&
         [404, 409, 422].includes(caught.status ?? 0)
       ) {
-        sessionStorage.removeItem(`relay-publication:${scope}`);
+        sessionStorage.removeItem(`conflua-publication:${scope}`);
         if (scope === requestScope.value) pendingPublication.value = undefined;
       }
       const message = describeApiError(caught, "errors.publish");
@@ -938,7 +938,7 @@
       sending.value = false;
       return;
     }
-    sessionStorage.removeItem(`relay-publication:${scope}`);
+    sessionStorage.removeItem(`conflua-publication:${scope}`);
     finishDraft(scope, request);
     if (scope !== requestScope.value) {
       sending.value = false;

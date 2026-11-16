@@ -6,11 +6,11 @@ from unittest.mock import Mock
 
 import pytest
 
-from agent_relay.application.dto.preferences import StoredPreferences
-from agent_relay.application.preferences.ports import PreferenceReadError, PreferenceWriteError
-from agent_relay.application.preferences.service import PreferencesService
-from agent_relay.infrastructure.preferences.store import FilePreferencesStore
-from agent_relay.infrastructure.preferences.system_language import detect_system_language
+from conflua.application.dto.preferences import StoredPreferences
+from conflua.application.preferences.ports import PreferenceReadError, PreferenceWriteError
+from conflua.application.preferences.service import PreferencesService
+from conflua.infrastructure.preferences.store import FilePreferencesStore
+from conflua.infrastructure.preferences.system_language import detect_system_language
 
 
 @pytest.mark.parametrize("locale", ["zh-CN", "zh-TW", "zh-HK", "zh_Hans_CN", "zh_CN.UTF-8"])
@@ -81,7 +81,7 @@ def test_replace_failure_preserves_original(
     path = tmp_path / "preferences.json"
     path.write_text('{"language":"en"}', encoding="utf-8")
     monkeypatch.setattr(
-        "agent_relay.infrastructure.preferences.store.os.replace", Mock(side_effect=OSError)
+        "conflua.infrastructure.preferences.store.os.replace", Mock(side_effect=OSError)
     )
     with pytest.raises(PreferenceWriteError):
         FilePreferencesStore(path).update(language="zh-CN")

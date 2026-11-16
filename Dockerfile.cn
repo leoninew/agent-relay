@@ -21,8 +21,8 @@ ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONUTF8=1 \
-    AGENT_RELAY_SERVER__HOST=0.0.0.0 \
-    AGENT_RELAY_SERVER__PORT=80
+    CONFLUA_SERVER__HOST=0.0.0.0 \
+    CONFLUA_SERVER__PORT=80
 
 WORKDIR /app
 
@@ -42,4 +42,4 @@ COPY --from=web-build /web/dist ./static
 
 USER appuser
 EXPOSE 80
-CMD ["python", "-m", "agent_relay.server"]
+CMD ["python", "-m", "conflua.server"]

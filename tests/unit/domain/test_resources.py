@@ -3,10 +3,10 @@ from datetime import UTC, datetime
 import pytest
 from pydantic import ValidationError
 
-from agent_relay.domain.rooms.errors import RoomConflictError, RoomInputError
-from agent_relay.domain.rooms.members import rename_member, retire_member
-from agent_relay.domain.rooms.models import Member, Room, RoomState
-from agent_relay.domain.rooms.resources import (
+from conflua.domain.rooms.errors import RoomConflictError, RoomInputError
+from conflua.domain.rooms.members import rename_member, retire_member
+from conflua.domain.rooms.models import Member, Room, RoomState
+from conflua.domain.rooms.resources import (
     DEFAULT_TOPIC_NAMES,
     new_room_state,
     retire_topic,

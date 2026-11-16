@@ -6,5 +6,5 @@ export function useSidebarOrder<Item extends { id: string }>(
   section: "topics" | "members",
   items: () => Item[],
 ) {
-  return useStoredOrder(() => `relay-sidebar-order:${roomId()}:${channelId()}:${section}`, items);
+  return useStoredOrder(() => `conflua-sidebar-order:${roomId()}:${channelId()}:${section}`, items);
 }

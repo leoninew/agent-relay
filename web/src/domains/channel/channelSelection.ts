@@ -1,7 +1,7 @@
 import type { JSONStorage } from "@/services/storage";
 import { browserStorage, readJSON, writeJSON } from "@/services/storage";
 
-const storageKey = (roomId: string) => `relay-selected-channel:${roomId}`;
+const storageKey = (roomId: string) => `conflua-selected-channel:${roomId}`;
 
 export function createChannelSelectionStorage(storage: JSONStorage | null = browserStorage()) {
   return {

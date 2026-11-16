@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Derive Agent Relay's version from Git history; preview changes by default.
+"""Derive Conflua's version from Git history; preview changes by default.
 
 Rules (x is fixed at 0):
   * y, z start at 0
@@ -7,7 +7,7 @@ Rules (x is fixed at 0):
   * any other commit                           -> z += 1
 
 ``--no-dry-run`` updates ``pyproject.toml`` and the static runtime version in
-``src/agent_relay/__init__.py``, then refreshes ``uv.lock``. The target defaults
+``src/conflua/__init__.py``, then refreshes ``uv.lock``. The target defaults
 to this script's repository, independently of the current working directory.
 The About dialog uses this runtime version in source and packaged applications.
 
@@ -146,9 +146,9 @@ def prepare_project_version_update(repository: Path, version: str) -> tuple[str,
 
 def package_version_files(repository: Path) -> tuple[Path, ...]:
     """Require the runtime version used by the API and desktop application."""
-    path = repository / "src" / "agent_relay" / "__init__.py"
+    path = repository / "src" / "conflua" / "__init__.py"
     if not path.is_file():
-        raise RuntimeError(f"target repository has no Agent Relay package: {repository}")
+        raise RuntimeError(f"target repository has no Conflua package: {repository}")
     return (path,)
 
 
@@ -231,7 +231,7 @@ def apply_version(repository: Path, version: str) -> None:
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(
-        description="Calculate Agent Relay's version; apply with --no-dry-run"
+        description="Calculate Conflua's version; apply with --no-dry-run"
     )
     parser.add_argument(
         "target_dir",
@@ -239,7 +239,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         nargs="?",
         default=DEFAULT_TARGET,
         metavar="TARGET_DIR",
-        help="Agent Relay checkout to calculate (default: this script's repository)",
+        help="Conflua checkout to calculate (default: this script's repository)",
     )
     parser.add_argument(
         "--no-dry-run",

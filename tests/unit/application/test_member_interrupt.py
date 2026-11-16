@@ -3,11 +3,11 @@ from unittest.mock import MagicMock, Mock
 
 import pytest
 
-from agent_relay.application.dto.members import MemberInterruptResult
-from agent_relay.application.members.service import MemberService
-from agent_relay.application.members.sessions import SessionDriver, SessionInterruptRejected
-from agent_relay.domain.rooms.errors import RoomConflictError, RoomNotFoundError
-from agent_relay.domain.rooms.models import RoomState
+from conflua.application.dto.members import MemberInterruptResult
+from conflua.application.members.service import MemberService
+from conflua.application.members.sessions import SessionDriver, SessionInterruptRejected
+from conflua.domain.rooms.errors import RoomConflictError, RoomNotFoundError
+from conflua.domain.rooms.models import RoomState
 
 
 def test_interrupt_uses_binding_and_releases_database_before_rpc(
@@ -57,5 +57,5 @@ def test_interrupt_rejection_uses_existing_conflict_contract(room_store: MagicMo
         "当前会话不支持打断", code="session_interrupt_unsupported"
     )
     with pytest.raises(RoomConflictError) as caught:
-        MemberService(room_store, driver).interrupt("agent-relay", "frontend-worker")
+        MemberService(room_store, driver).interrupt("conflua", "frontend-worker")
     assert caught.value.code == "session_interrupt_unsupported"

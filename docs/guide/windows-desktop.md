@@ -6,29 +6,29 @@
 
 源码启动使用 `make desktop`，会先构建前端。构建可分发制品使用 `make binary`，生成：
 
-- `dist/AgentRelay/`：包含桌面入口 `agent-relay-gui.exe`、控制台入口 `agent-relay.exe` 和共享运行资源 `_internal/`。
-- `dist/agent-relay-<version>-windows-x64.zip`：完整目录的压缩包，版本取自 `pyproject.toml`。
+- `dist/conflua/`：包含桌面入口 `conflua-gui.exe`、控制台入口 `conflua.exe` 和共享运行资源 `_internal/`。
+- `dist/conflua-<version>-windows-x64.zip`：完整目录的压缩包，版本取自 `pyproject.toml`。
 
-解压后双击 `agent-relay-gui.exe`。必须保留整个目录；目标机器无需 Python 或 Node.js。
+解压后双击 `conflua-gui.exe`。必须保留整个目录；目标机器无需 Python 或 Node.js。
 
 右上角“关于”显示当前桌面程序的版本。版本与程序代码一同打包，不受本机另外安装的 CLI、uv tool 或开发环境版本影响。
 
 ## 配置与数据
 
-桌面固定使用 `app` profile，配置优先级为内置 `config/app.yaml` → `~/.agent-relay/.env` → 系统环境变量。修改覆盖文件后重启应用：
+桌面固定使用 `app` profile，配置优先级为内置 `config/conflua.yaml` → `~/.conflua/.env` → 系统环境变量。修改覆盖文件后重启应用：
 
 ```dotenv
-AGENT_RELAY_SERVER__PORT=9081
-AGENT_RELAY_DATABASE__PATH=./data/agent-relay.sqlite3
+CONFLUA_SERVER__PORT=9081
+CONFLUA_DATABASE__PATH=./data/conflua.db
 ```
 
-数据库相对路径从 `~/.agent-relay/` 解析；前端相对路径从程序资源目录解析。用户目录内容：
+数据库相对路径从 `~/.conflua/` 解析；前端相对路径从程序资源目录解析。用户目录内容：
 
 | 路径                   | 用途                                       |
 | ---------------------- | ------------------------------------------ |
 | `.env`                 | 用户配置覆盖                               |
 | `data/`                | 默认数据库目录                             |
-| `logs/agent-relay.log` | 应用日志                                   |
+| `logs/conflua.log` | 应用日志                                   |
 | `webview/`             | 排序等浏览器偏好                           |
 | `preferences.json`     | 界面语言等用户偏好；不存在时使用配置默认值 |
 
@@ -38,9 +38,9 @@ AGENT_RELAY_DATABASE__PATH=./data/agent-relay.sqlite3
 
 ## CLI 与 MCP
 
-桌面默认地址为 `http://127.0.0.1:9081`；端口被占用时显示启动错误。CLI/MCP 默认连接同一地址；修改服务端口后，将 `AGENT_RELAY_URL` 设为对应地址。
+桌面默认地址为 `http://127.0.0.1:9081`；端口被占用时显示启动错误。CLI/MCP 默认连接同一地址；修改服务端口后，将 `CONFLUA_URL` 设为对应地址。
 
-使用 `agent-relay.exe --help` 查看控制台命令，`agent-relay.exe mcp` 启动 stdio MCP。现有插件使用 `agent-relay mcp`，可将完整制品目录加入 `PATH`，或将 MCP 的 `command` 配置为控制台 EXE 的绝对路径。
+使用 `conflua.exe --help` 查看控制台命令，`conflua.exe mcp` 启动 stdio MCP。现有插件使用 `conflua mcp`，可将完整制品目录加入 `PATH`，或将 MCP 的 `command` 配置为控制台 EXE 的绝对路径。
 
 ## 关闭窗口
 

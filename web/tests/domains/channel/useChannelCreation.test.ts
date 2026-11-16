@@ -19,7 +19,7 @@ function channel(id: string, worktree = false): Channel {
     roomId: "room-1",
     name: "API",
     description: "Backend work",
-    workingPath: "D:/work/agent-relay",
+    workingPath: "D:/work/conflua",
     isDefault: false,
     workspaceKind: worktree ? "worktree" : "existing",
     createdAt: null,

@@ -4,9 +4,9 @@ from unittest.mock import MagicMock, Mock
 import pytest
 from pytest import MonkeyPatch
 
-from agent_relay.application.dto.session_models import SessionModelCatalog, UpdateSessionModel
-from agent_relay.application.members.sessions import SessionModelRejected, SessionUnavailableError
-from agent_relay.infrastructure.codex.driver import CodexDriver, ProxyRpc, RpcRejected
+from conflua.application.dto.session_models import SessionModelCatalog, UpdateSessionModel
+from conflua.application.members.sessions import SessionModelRejected, SessionUnavailableError
+from conflua.infrastructure.codex.driver import CodexDriver, ProxyRpc, RpcRejected
 
 
 def metadata(**changes: Any) -> dict[str, Any]:
@@ -40,7 +40,7 @@ def model(name: str = "new", **changes: Any) -> dict[str, Any]:
 def model_rpc(monkeypatch: MonkeyPatch) -> MagicMock:
     rpc = MagicMock(spec=ProxyRpc)
     rpc.__enter__.return_value = rpc
-    monkeypatch.setattr("agent_relay.infrastructure.codex.driver.ProxyRpc", lambda *_: rpc)
+    monkeypatch.setattr("conflua.infrastructure.codex.driver.ProxyRpc", lambda *_: rpc)
     return rpc
 
 

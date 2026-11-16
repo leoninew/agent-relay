@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 import pytest
 from starlette.types import Message, Receive, Scope, Send
 
-from agent_relay.interfaces.http.middleware import RequestTransactionMiddleware
+from conflua.interfaces.http.middleware import RequestTransactionMiddleware
 
 
 @dataclass

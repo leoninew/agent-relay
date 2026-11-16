@@ -109,7 +109,7 @@
   >
     <div class="about-content">
       <img :src="brandIconUrl" alt="" width="48" height="48" />
-      <div class="about-brand">Agent Relay</div>
+      <div class="about-brand">Conflua</div>
       <dl class="about-version">
         <dt>{{ t("appMenu.version") }}</dt>
         <dd>
@@ -150,7 +150,7 @@
   const aboutOpen = ref(false);
   const version = ref<string | null>(null);
   const loadingVersion = ref(false);
-  const brandIconUrl = `${import.meta.env.BASE_URL}agent-relay.png`;
+  const brandIconUrl = `${import.meta.env.BASE_URL}conflua.png`;
   const options = computed(() => [
     { value: "system" as const, label: t("settings.system") },
     { value: "zh-CN" as const, label: "简体中文" },

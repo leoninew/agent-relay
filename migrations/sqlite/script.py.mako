@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from agent_relay.infrastructure.persistence.migration_sql import execute_sql_file
+from conflua.infrastructure.persistence.migration_sql import execute_sql_file
 
 revision = ${repr(up_revision)}
 down_revision = ${repr(down_revision)}

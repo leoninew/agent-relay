@@ -132,7 +132,7 @@ jobs:
           else
             gh release create "$RELEASE_TAG" "$archive" \
               --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes \
-              --title "Agent Relay $RELEASE_TAG" --draft
+              --title "Conflua $RELEASE_TAG" --draft
           fi
           gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false
           release_url="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json url --jq '.url')"

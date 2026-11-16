@@ -8,7 +8,7 @@ export type SkillEditorPart = {
   skill?: SkillReference;
 };
 
-export const skillClipboardType = "application/x-agent-relay-skills+json";
+export const skillClipboardType = "application/x-conflua-skills+json";
 export const messageMaxLength = 6000;
 export function writeSkillClipboard(content: string, skills: readonly SkillReference[]) {
   const references = referencedCapabilities(content, skills);

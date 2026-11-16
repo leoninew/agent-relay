@@ -3,11 +3,11 @@ from pathlib import Path
 
 import pytest
 
-from agent_relay.interfaces.http.app_info import get_app_info
+from conflua.interfaces.http.app_info import get_app_info
 
 
 def test_app_info_uses_runtime_version(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("agent_relay.interfaces.http.app_info.__version__", "1.2.3")
+    monkeypatch.setattr("conflua.interfaces.http.app_info.__version__", "1.2.3")
     assert get_app_info().model_dump() == {"version": "1.2.3"}
 
 

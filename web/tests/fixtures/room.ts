@@ -13,9 +13,9 @@ export function roomFixture(): RoomSnapshot {
       { memberId: "test-worker", topicId: "backend", seq: 0, updatedAt: null, laterCount: 1 },
     ],
     room: {
-      id: "agent-relay",
-      name: "Agent Relay 开发室",
-      projectPath: "D:/work/agent-relay",
+      id: "conflua",
+      name: "Conflua 开发室",
+      projectPath: "D:/work/conflua",
       description: "项目讨论",
     },
     topics: [
@@ -100,7 +100,7 @@ export function roomFixture(): RoomSnapshot {
         id: "session-frontend",
         name: "前端会话",
         provider: "codex",
-        projectPath: "D:/work/agent-relay",
+        projectPath: "D:/work/conflua",
         presence: "busy",
         observedAt: null,
       },

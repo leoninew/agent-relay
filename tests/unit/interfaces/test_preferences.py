@@ -10,15 +10,15 @@ from pydantic import ValidationError
 from starlette.requests import Request
 from starlette.types import Message, Receive, Scope, Send
 
-from agent_relay.application.dto.preferences import Preferences, UpdatePreferences
-from agent_relay.application.preferences.ports import PreferenceReadError, PreferenceWriteError
-from agent_relay.bootstrap.config import load_settings
-from agent_relay.bootstrap.http import create_app
-from agent_relay.interfaces.http.exception_handlers import preferences_exception_handler
-from agent_relay.interfaces.http.middleware import RequestTransactionMiddleware
-from agent_relay.interfaces.http.preferences.dependencies import get_preferences
-from agent_relay.interfaces.http.preferences.routes import get_preferences as get_route
-from agent_relay.interfaces.http.preferences.routes import update_preferences
+from conflua.application.dto.preferences import Preferences, UpdatePreferences
+from conflua.application.preferences.ports import PreferenceReadError, PreferenceWriteError
+from conflua.bootstrap.config import load_settings
+from conflua.bootstrap.http import create_app
+from conflua.interfaces.http.exception_handlers import preferences_exception_handler
+from conflua.interfaces.http.middleware import RequestTransactionMiddleware
+from conflua.interfaces.http.preferences.dependencies import get_preferences
+from conflua.interfaces.http.preferences.routes import get_preferences as get_route
+from conflua.interfaces.http.preferences.routes import update_preferences
 
 
 def test_routes_use_injected_service() -> None:
@@ -42,9 +42,9 @@ def test_routes_use_injected_service() -> None:
 
 def test_app_preserves_injected_service(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     service = Mock()
-    monkeypatch.setattr("agent_relay.bootstrap.http.create_delivery_runner", Mock())
-    monkeypatch.setattr("agent_relay.bootstrap.http.create_presence_runner", Mock())
-    monkeypatch.setattr("agent_relay.bootstrap.http.create_http_dependencies", Mock())
+    monkeypatch.setattr("conflua.bootstrap.http.create_delivery_runner", Mock())
+    monkeypatch.setattr("conflua.bootstrap.http.create_presence_runner", Mock())
+    monkeypatch.setattr("conflua.bootstrap.http.create_http_dependencies", Mock())
     app = create_app(
         logging.getLogger(__name__),
         settings=load_settings(),

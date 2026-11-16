@@ -1,0 +1,35 @@
+preferences:
+  language: system
+  theme: system
+
+server:
+  host: 127.0.0.1
+  port: 9081
+  reload: false
+  reload_paths:
+    - src/conflua/**/*.py
+    - src/conflua/logging.yaml
+    - config/*.yaml
+    - .env.{profile}
+
+static:
+  directory: ./web/dist
+
+database:
+  path: ./data/conflua.db
+
+codex:
+  command: [codex, app-server, proxy]
+  rpc_timeout: 30
+  queue_concurrency: 4
+
+logging:
+  body:
+    limit: 4096
+  request:
+    begin: "Request begin request_id=%s method=%s path=%s"
+    body: "Request body request_id=%s body=%s"
+    end: "Request end request_id=%s method=%s path=%s status=%d duration_ms=%d"
+    failed: "Request failed request_id=%s method=%s path=%s status=%d duration_ms=%d"
+  response:
+    body: "Response body request_id=%s body=%s"

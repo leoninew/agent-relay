@@ -3,7 +3,7 @@ from unittest.mock import Mock
 import pytest
 from sqlalchemy.orm import Session
 
-from agent_relay.infrastructure.persistence.transaction import SQLAlchemyTransaction
+from conflua.infrastructure.persistence.transaction import SQLAlchemyTransaction
 
 
 def test_transaction_opens_once_and_finishes_once() -> None:

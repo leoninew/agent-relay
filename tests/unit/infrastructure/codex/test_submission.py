@@ -3,16 +3,16 @@ from typing import Any, Self
 
 import pytest
 
-from agent_relay.application.delivery.ports import (
+from conflua.application.delivery.ports import (
     QueueRejected,
     SubmissionRejected,
     SubmissionUnknown,
 )
-from agent_relay.application.dto.delivery import QueueReceipt, QueueRequest, SteerReceipt
-from agent_relay.domain.rooms.models import McpServerReference, SkillReference
-from agent_relay.infrastructure.codex.catalog import decode_skills, server_option
-from agent_relay.infrastructure.codex.driver import CodexDriver, RpcDisconnected, RpcRejected
-from agent_relay.infrastructure.codex.models import McpPage
+from conflua.application.dto.delivery import QueueReceipt, QueueRequest, SteerReceipt
+from conflua.domain.rooms.models import McpServerReference, SkillReference
+from conflua.infrastructure.codex.catalog import decode_skills, server_option
+from conflua.infrastructure.codex.driver import CodexDriver, RpcDisconnected, RpcRejected
+from conflua.infrastructure.codex.models import McpPage
 
 
 class QueueWire:
@@ -20,11 +20,11 @@ class QueueWire:
         self.skills = skills
         self.skills["data"][0]["skills"].append(
             {
-                "name": "agent-relay:agent-relay",
-                "pluginId": "agent-relay@agent-relay-local",
-                "path": "C:/plugins/agent-relay/SKILL.md",
+                "name": "conflua:conflua",
+                "pluginId": "conflua@conflua-local",
+                "path": "C:/plugins/conflua/SKILL.md",
                 "scope": "user",
-                "description": "Relay",
+                "description": "Conflua",
                 "enabled": True,
             }
         )
@@ -106,7 +106,7 @@ class QueueWire:
             "d:/PROJECT",
             (
                 SkillReference(id=bindings[0].option.id, name="Untrusted display snapshot"),
-                SkillReference(id=bindings[1].option.id, name="Relay selected by user"),
+                SkillReference(id=bindings[1].option.id, name="Conflua selected by user"),
                 McpServerReference(id=server.id, name="Untrusted MCP snapshot"),
             ),
         )
@@ -119,7 +119,7 @@ def wire(
     mcp_server: dict[str, Any],
 ) -> QueueWire:
     wire = QueueWire(skill_payload, mcp_server)
-    monkeypatch.setattr("agent_relay.infrastructure.codex.driver.ProxyRpc", lambda *_: wire)
+    monkeypatch.setattr("conflua.infrastructure.codex.driver.ProxyRpc", lambda *_: wire)
     return wire
 
 
@@ -127,7 +127,9 @@ def runtime() -> CodexDriver:
     return CodexDriver(["unused"], 1)
 
 
-def test_native_inputs_resolve_current_bindings_and_include_relay_once(wire: QueueWire) -> None:
+def test_native_inputs_resolve_current_bindings_and_include_required_skill_once(
+    wire: QueueWire,
+) -> None:
     assert runtime().enqueue("original", "client", wire.request()).id == "queued"
     assert [method for method, _ in wire.calls] == [
         "thread/read",
@@ -142,8 +144,8 @@ def test_native_inputs_resolve_current_bindings_and_include_relay_once(wire: Que
             {"type": "text", "text": "Envelope text"},
             {
                 "type": "skill",
-                "name": "agent-relay:agent-relay",
-                "path": "C:/plugins/agent-relay/SKILL.md",
+                "name": "conflua:conflua",
+                "path": "C:/plugins/conflua/SKILL.md",
             },
             {
                 "type": "skill",
@@ -157,7 +159,17 @@ def test_native_inputs_resolve_current_bindings_and_include_relay_once(wire: Que
 
 @pytest.mark.parametrize(
     "failure",
-    ["missing", "disabled", "ambiguous", "relay", "mcp", "auth", "thread", "cwd", "unloaded"],
+    [
+        "missing",
+        "disabled",
+        "ambiguous",
+        "required_skill",
+        "mcp",
+        "auth",
+        "thread",
+        "cwd",
+        "unloaded",
+    ],
 )
 def test_failed_capability_preflight_never_submits(wire: QueueWire, failure: str) -> None:
     request = wire.request()
@@ -167,7 +179,7 @@ def test_failed_capability_preflight_never_submits(wire: QueueWire, failure: str
         wire.skills["data"][0]["skills"][0]["enabled"] = False
     elif failure == "ambiguous":
         wire.skills["data"][0]["skills"].append(deepcopy(wire.skills["data"][0]["skills"][0]))
-    elif failure == "relay":
+    elif failure == "required_skill":
         wire.skills["data"][0]["skills"].pop()
     elif failure == "mcp":
         wire.server["runtimeStatus"] = "failed"
@@ -226,7 +238,7 @@ def test_busy_submission_steers_original_turn_with_client_identity_and_native_in
     assert params["threadId"] == "original" and params["clientUserMessageId"] == "client"
     assert params["expectedTurnId"] == "active-turn"
     assert [item["type"] for item in params["input"]] == ["text", "skill", "skill", "mention"]
-    assert params["input"][1]["name"] == "agent-relay:agent-relay"
+    assert params["input"][1]["name"] == "conflua:conflua"
     assert params["input"][-1]["path"] == "mcp://plugin/local server"
     assert [method for method, _ in wire.calls].count("skills/list") == 1
     assert not any(

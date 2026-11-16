@@ -3,9 +3,9 @@ from unittest.mock import Mock
 import pytest
 import uvicorn
 
-from agent_relay import server
-from agent_relay.bootstrap import reload as development_reload
-from agent_relay.bootstrap.config import load_settings
+from conflua import server
+from conflua.bootstrap import reload as development_reload
+from conflua.bootstrap.config import load_settings
 
 
 @pytest.mark.parametrize("reload_enabled", [True, False])
@@ -25,7 +25,7 @@ def test_server_uses_configured_startup(
     monkeypatch.setattr(server, "configure_logging", Mock())
     monkeypatch.setattr(server, "run_development", run_development)
     monkeypatch.setattr("uvicorn.run", run)
-    monkeypatch.setattr("sys.argv", ["agent-relay-server"])
+    monkeypatch.setattr("sys.argv", ["conflua-server"])
 
     server.main()
 
@@ -33,7 +33,7 @@ def test_server_uses_configured_startup(
         run_development.assert_called_once_with(settings.server, "qa")
     else:
         run.assert_called_once_with(
-            "agent_relay.server:create_server_app",
+            "conflua.server:create_server_app",
             host=settings.server.host,
             port=settings.server.port,
             reload=False,
@@ -57,8 +57,8 @@ def test_development_startup_resolves_active_profile(monkeypatch: pytest.MonkeyP
 
     assert config.reload is True
     assert reload_factory.call_args.kwargs["paths"] == [
-        "src/agent_relay/**/*.py",
-        "src/agent_relay/logging.yaml",
+        "src/conflua/**/*.py",
+        "src/conflua/logging.yaml",
         "config/*.yaml",
         ".env.qa",
     ]

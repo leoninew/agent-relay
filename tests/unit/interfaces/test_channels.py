@@ -3,8 +3,8 @@ from unittest.mock import Mock
 import pytest
 from pydantic import ValidationError
 
-from agent_relay.application.dto.channels import CreateChannel, UpdateChannel
-from agent_relay.interfaces.http.channels.routes import create_channel, update_channel
+from conflua.application.dto.channels import CreateChannel, UpdateChannel
+from conflua.interfaces.http.channels.routes import create_channel, update_channel
 
 
 def test_channel_routes_delegate_to_creation_service() -> None:

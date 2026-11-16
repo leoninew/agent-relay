@@ -31,7 +31,7 @@ describe("panel preferences", () => {
   });
 
   it("ignores invalid stored values", () => {
-    saved.set("relay-panel-preferences", '{"navigation":"false","details":true}');
+    saved.set("conflua-panel-preferences", '{"navigation":"false","details":true}');
     expect(usePanelPreferencesStore().collapsed).toEqual({ navigation: false, details: true });
   });
 });

@@ -430,7 +430,7 @@ export default {
     saveFailed: "Could not save preferences.",
     saveUnknown: "The save result is unknown. Reload preferences to check.",
     back: "Back",
-    home: "Agent Relay home",
+    home: "Conflua home",
     navigation: "Main navigation",
   },
   appMenu: {

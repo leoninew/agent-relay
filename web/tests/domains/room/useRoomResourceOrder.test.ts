@@ -60,10 +60,7 @@ describe("room resource order", () => {
   });
 
   it("restores saved room and channel orders without leaking changes between channels", () => {
-    saved.set(
-      "relay-sidebar-order:agent-relay:channel-a:topics",
-      '["backend","summary","frontend"]',
-    );
+    saved.set("conflua-sidebar-order:conflua:channel-a:topics", '["backend","summary","frontend"]');
     const channel = ref("channel-a");
     const snapshot = roomFixture();
     const order = scope.run(() =>

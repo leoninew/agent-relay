@@ -3,11 +3,11 @@ from unittest.mock import MagicMock, Mock
 
 import pytest
 
-from agent_relay.application.dto.session_models import SessionModelCatalog, UpdateSessionModel
-from agent_relay.application.members.service import MemberService
-from agent_relay.application.members.sessions import SessionDriver, SessionModelRejected
-from agent_relay.domain.rooms.errors import RoomConflictError, RoomNotFoundError
-from agent_relay.domain.rooms.models import RoomState
+from conflua.application.dto.session_models import SessionModelCatalog, UpdateSessionModel
+from conflua.application.members.service import MemberService
+from conflua.application.members.sessions import SessionDriver, SessionModelRejected
+from conflua.domain.rooms.errors import RoomConflictError, RoomNotFoundError
+from conflua.domain.rooms.models import RoomState
 
 
 def test_model_calls_use_bound_session_outside_database_scope(room_store: MagicMock) -> None:
@@ -23,10 +23,10 @@ def test_model_calls_use_bound_session_outside_database_scope(room_store: MagicM
 
     driver.model_catalog.side_effect = read
     service = MemberService(room_store, driver)
-    assert service.model_catalog("agent-relay", "frontend-worker") == expected
+    assert service.model_catalog("conflua", "frontend-worker") == expected
     driver.update_model.return_value = expected
     request = UpdateSessionModel(session_id="frontend-worker-session", model="new")
-    assert service.update_model("agent-relay", "frontend-worker", request) == expected
+    assert service.update_model("conflua", "frontend-worker", request) == expected
     driver.update_model.assert_called_once_with("frontend-worker-session", "d:/project", request)
     room_store.write.assert_not_called()
 
@@ -51,7 +51,7 @@ def test_invalid_model_targets_never_write(
     error = RoomNotFoundError if target in {"missing", "deleted"} else RoomConflictError
     with pytest.raises(error):
         MemberService(room_store, driver).update_model(
-            "agent-relay",
+            "conflua",
             member_id,
             UpdateSessionModel(session_id="frontend-worker-session", model="new"),
         )
@@ -64,5 +64,5 @@ def test_rejection_maps_to_conflict(room_store: MagicMock) -> None:
         "safe", code="session_model_target_unavailable"
     )
     with pytest.raises(RoomConflictError) as caught:
-        MemberService(room_store, driver).model_catalog("agent-relay", "frontend-worker")
+        MemberService(room_store, driver).model_catalog("conflua", "frontend-worker")
     assert caught.value.code == "session_model_target_unavailable"

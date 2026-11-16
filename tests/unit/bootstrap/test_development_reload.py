@@ -4,12 +4,12 @@ from unittest.mock import Mock
 import pytest
 from uvicorn import Config
 
-from agent_relay.bootstrap.reload import DevelopmentReload
+from conflua.bootstrap.reload import DevelopmentReload
 
 
 def reloader(root: Path, pattern: str) -> DevelopmentReload:
     return DevelopmentReload(
-        Config("agent_relay.server:create_server_app", log_config=None, reload_delay=0),
+        Config("conflua.server:create_server_app", log_config=None, reload_delay=0),
         target=Mock(),
         sockets=[],
         paths=[str(root / pattern)],
@@ -19,11 +19,11 @@ def reloader(root: Path, pattern: str) -> DevelopmentReload:
 @pytest.mark.parametrize(
     ("relative", "pattern"),
     [
-        ("src/agent_relay/server.py", "src/agent_relay/**/*.py"),
-        ("src/agent_relay/routers/room.py", "src/agent_relay/**/*.py"),
+        ("src/conflua/server.py", "src/conflua/**/*.py"),
+        ("src/conflua/routers/room.py", "src/conflua/**/*.py"),
         ("config/config.yaml", "config/*.yaml"),
         (".env.qa", ".env.qa"),
-        ("src/agent_relay/logging.yaml", "src/agent_relay"),
+        ("src/conflua/logging.yaml", "src/conflua"),
     ],
 )
 def test_reloads_when_a_configured_file_is_saved(
@@ -55,8 +55,8 @@ def test_reloads_after_atomic_save(tmp_path: Path, relative: str) -> None:
 
 
 def test_reloads_after_source_is_added_and_deleted(tmp_path: Path) -> None:
-    reload = reloader(tmp_path, "src/agent_relay/**/*.py")
-    path = tmp_path / "src/agent_relay/routers/room.py"
+    reload = reloader(tmp_path, "src/conflua/**/*.py")
+    path = tmp_path / "src/conflua/routers/room.py"
     path.parent.mkdir(parents=True)
 
     path.write_text("new source", encoding="utf-8")

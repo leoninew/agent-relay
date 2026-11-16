@@ -3,11 +3,11 @@ from unittest.mock import Mock
 
 from starlette.requests import Request
 
-from agent_relay.application.rooms.ports import RoomStore
-from agent_relay.interfaces.dto import HttpDependencies, HttpLogging
-from agent_relay.interfaces.http.channels.dependencies import get_channel_service
-from agent_relay.interfaces.http.persistence import get_independent_room_store, get_room_store
-from agent_relay.interfaces.http.transactions import RequestTransaction
+from conflua.application.rooms.ports import RoomStore
+from conflua.interfaces.dto import HttpDependencies, HttpLogging
+from conflua.interfaces.http.channels.dependencies import get_channel_service
+from conflua.interfaces.http.persistence import get_independent_room_store, get_room_store
+from conflua.interfaces.http.transactions import RequestTransaction
 
 
 def test_providers_separate_request_transactions_from_rpc_scopes() -> None:

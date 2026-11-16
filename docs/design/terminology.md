@@ -1,4 +1,4 @@
-# Agent Relay 统一术语
+# Conflua 统一术语
 最后修改时间: 2026-11-14 12:30:00
 
 ## 状态与适用范围
@@ -13,10 +13,10 @@ Accepted。2026-11-07 用户接受统一术语建议；2026-11-14 增补 Channel
 | Channel | 频道 | 聊天室内独立组织成员、话题、消息、队列和草稿的协作范围。默认频道绑定房间原目录；其他频道可选择独立 worktree。代码使用 Channel/channelId |
 | Topic | 话题 | 聊天室内可订阅的消息分类和路由目标，一条消息可关联多个话题。代码使用 Topic/topicId/topicIds |
 | Member | 成员 | 聊天室中的参与身份，分为固定用户与 Agent；只有 Agent 绑定会话。固定用户在所有产品场景统一称为“你”，英文界面显示“You”，不显示管理员称谓。代码使用 Member/memberId |
-| Session | 会话 | Relay 对模型持续交互上下文的通用抽象。代码使用 Session/sessionId |
+| Session | 会话 | Conflua 对模型持续交互上下文的通用抽象。代码使用 Session/sessionId |
 | Codex Thread | Codex 会话 | Codex 持久保存对话历史和上下文的对象，是当前 Session 的底层实现。协议保持 thread/start、thread/resume、threadId |
 | Turn | 轮次 | 会话中的一轮模型执行，保留 turnId；不承诺一条聊天室消息独占一个轮次 |
-| Message | 消息 | Relay 持久接收并在聊天室中呈现的发布内容，携带明确路由目标 |
+| Message | 消息 | Conflua 持久接收并在聊天室中呈现的发布内容，携带明确路由目标 |
 | Delivery | 投递记录 | 一条消息向一个 Agent 接收成员绑定会话的分发事实；用户接收消息不生成会话投递。queued 表示目标队列已确认入队，received 表示匹配原会话输入，二者均不表示模型理解或任务完成 |
 | Subscription | 订阅 | 成员与话题的关系；统一写“订阅话题”“话题订阅”，相关动作写“订阅/取消订阅” |
 | OS / runtime thread | 线程 | 程序并发执行的技术概念，不能用来称呼成员的模型会话 |
@@ -31,4 +31,4 @@ Accepted。2026-11-07 用户接受统一术语建议；2026-11-14 增补 Channel
 - 产品叙述写“发现会话、选择会话、添加成员、绑定会话”。添加成员不等于创建会话；Codex 技术字段保持真实 threadId，Session/sessionId 对应被选择的原会话。
 - 如果以后引入围绕某条消息展开的一组回复，称为“讨论串”，另行定义。本次没有增加该实体；replyToMessageId 仍只是消息引用关系。
 
-统一表述：**Agent 成员绑定会话、订阅话题，固定用户成员“你”始终可接收消息；消息发布到话题或 @ 成员，Relay 合并目标、排除发布成员并校验非空，仅向 Agent 接收成员绑定的会话入队。**
+统一表述：**Agent 成员绑定会话、订阅话题，固定用户成员“你”始终可接收消息；消息发布到话题或 @ 成员，Conflua 合并目标、排除发布成员并校验非空，仅向 Agent 接收成员绑定的会话入队。**

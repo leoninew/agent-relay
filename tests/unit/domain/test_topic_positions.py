@@ -1,7 +1,7 @@
 import pytest
 
-from agent_relay.domain.rooms.errors import RoomNotFoundError
-from agent_relay.domain.rooms.positions import position_updates, require_subscribed_topic
+from conflua.domain.rooms.errors import RoomNotFoundError
+from conflua.domain.rooms.positions import position_updates, require_subscribed_topic
 
 
 def test_positions_use_returned_message_sequences_and_current_subscriptions() -> None:

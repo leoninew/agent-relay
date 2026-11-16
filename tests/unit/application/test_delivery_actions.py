@@ -6,7 +6,7 @@ from unittest.mock import Mock, call
 
 import pytest
 
-from agent_relay.application.delivery.ports import (
+from conflua.application.delivery.ports import (
     ActivationRejected,
     DeliveryDriver,
     DeliveryRepository,
@@ -14,8 +14,8 @@ from agent_relay.application.delivery.ports import (
     SubmissionRejected,
     SubmissionUnknown,
 )
-from agent_relay.application.delivery.service import DeliveryService
-from agent_relay.application.dto.delivery import (
+from conflua.application.delivery.service import DeliveryService
+from conflua.application.dto.delivery import (
     ClaimedDelivery,
     InputPage,
     QueueHead,
@@ -23,7 +23,7 @@ from agent_relay.application.dto.delivery import (
     ReceivedInput,
     SteerReceipt,
 )
-from agent_relay.domain.rooms.models import Delivery, Message, Room, SkillReference
+from conflua.domain.rooms.models import Delivery, Message, Room, SkillReference
 
 
 @pytest.fixture

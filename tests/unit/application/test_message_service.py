@@ -3,11 +3,11 @@ from unittest.mock import ANY, MagicMock, Mock, call
 
 import pytest
 
-from agent_relay.application.delivery.ports import QueueDriver
-from agent_relay.application.dto.messages import CodexQueueTarget, CreateMessage
-from agent_relay.application.messages.service import MessageService
-from agent_relay.domain.rooms.errors import RoomConflictError, RoomInputError, RoomNotFoundError
-from agent_relay.domain.rooms.models import Message, RoomState
+from conflua.application.delivery.ports import QueueDriver
+from conflua.application.dto.messages import CodexQueueTarget, CreateMessage
+from conflua.application.messages.service import MessageService
+from conflua.domain.rooms.errors import RoomConflictError, RoomInputError, RoomNotFoundError
+from conflua.domain.rooms.models import Message, RoomState
 
 
 @pytest.fixture
@@ -35,7 +35,7 @@ def test_publication_normalizes_targets_and_saves_the_domain_result(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     build = Mock(return_value=message)
-    monkeypatch.setattr("agent_relay.application.messages.service.build_message", build)
+    monkeypatch.setattr("conflua.application.messages.service.build_message", build)
     room_repository.next_message_seq.return_value = message.seq
     request = CreateMessage(
         publication_id="publication-one",
@@ -45,7 +45,7 @@ def test_publication_normalizes_targets_and_saves_the_domain_result(
     )
 
     result = MessageService(room_store).post_message(
-        "agent-relay", request, member_id="frontend-worker"
+        "conflua", request, member_id="frontend-worker"
     )
 
     build.assert_called_once_with(
@@ -61,7 +61,7 @@ def test_publication_normalizes_targets_and_saves_the_domain_result(
         seq=message.seq,
         capabilities=request.capabilities,
     )
-    room_repository.insert_message.assert_called_once_with("agent-relay", message)
+    room_repository.insert_message.assert_called_once_with("conflua", message)
     assert result == message and result is not message
 
 
@@ -69,13 +69,13 @@ def test_domain_rejection_does_not_save_a_partial_publication(
     room_store: MagicMock, room_repository: Mock, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(
-        "agent_relay.application.messages.service.build_message",
+        "conflua.application.messages.service.build_message",
         Mock(side_effect=RoomInputError("无接收人")),
     )
 
     with pytest.raises(RoomInputError, match="无接收人"):
         MessageService(room_store).post_message(
-            "agent-relay",
+            "conflua",
             CreateMessage(publication_id="invalid", content="Message", topic_ids=["frontend"]),
         )
 
@@ -87,7 +87,7 @@ def test_publication_replay_returns_saved_facts_without_routing_or_writing_again
 ) -> None:
     validate_replay = Mock()
     monkeypatch.setattr(
-        "agent_relay.application.messages.service.validate_publication_replay", validate_replay
+        "conflua.application.messages.service.validate_publication_replay", validate_replay
     )
     room_repository.publication.return_value = message
     room_repository.message_exists.return_value = True
@@ -99,8 +99,8 @@ def test_publication_replay_returns_saved_facts_without_routing_or_writing_again
     )
 
     service = MessageService(room_store)
-    assert service.post_message("agent-relay", request, member_id="frontend-worker") == message
-    assert service.publication("agent-relay", request.publication_id) == message
+    assert service.post_message("conflua", request, member_id="frontend-worker") == message
+    assert service.publication("conflua", request.publication_id) == message
     validate_replay.assert_called_once_with(
         message,
         content=request.content,
@@ -123,9 +123,9 @@ def test_cleared_publication_cannot_be_replayed_or_found_by_publication_id(
     request = CreateMessage(publication_id="cleared", content="Message", topic_ids=["frontend"])
 
     with pytest.raises(RoomConflictError, match="该发布记录已清空"):
-        service.post_message("agent-relay", request)
+        service.post_message("conflua", request)
     with pytest.raises(RoomNotFoundError, match="发布记录不存在"):
-        service.publication("agent-relay", request.publication_id)
+        service.publication("conflua", request.publication_id)
 
     room_repository.insert_message.assert_not_called()
 
@@ -137,11 +137,11 @@ def test_queue_message_deletion_targets_only_the_requested_message(
     room_repository.message_exists.return_value = True
     room_repository.clear_queue.return_value = removed
 
-    result = MessageService(room_store).delete_queue_message("agent-relay", "message-one")
+    result = MessageService(room_store).delete_queue_message("conflua", "message-one")
 
-    room_repository.message_exists.assert_called_once_with("agent-relay", "message-one")
+    room_repository.message_exists.assert_called_once_with("conflua", "message-one")
     room_repository.clear_queue.assert_called_once_with(
-        "agent-relay", topic_id=None, member_id=None, message_id="message-one", deleted_at=ANY
+        "conflua", topic_id=None, member_id=None, message_id="message-one", deleted_at=ANY
     )
     assert result.removed_messages == removed
     assert result.codex_queue is None
@@ -153,7 +153,7 @@ def test_queue_message_deletion_rejects_a_missing_message_without_clearing_the_q
     room_repository.message_exists.return_value = False
 
     with pytest.raises(RoomNotFoundError, match="消息不存在"):
-        MessageService(room_store).delete_queue_message("agent-relay", "missing")
+        MessageService(room_store).delete_queue_message("conflua", "missing")
 
     room_repository.clear_queue.assert_not_called()
 
@@ -177,13 +177,13 @@ def test_queue_clear_releases_the_store_before_deleting_remote_items(
     room_repository.clear_queue.return_value = 2
     room_repository.codex_queue_targets.return_value = targets
     result = MessageService(room_store).clear_queue_with_codex(
-        "agent-relay", driver, topic_id="backend", member_id="test-worker"
+        "conflua", driver, topic_id="backend", member_id="test-worker"
     )
     room_repository.clear_queue.assert_called_once_with(
-        "agent-relay", topic_id="backend", member_id="test-worker", deleted_at=ANY
+        "conflua", topic_id="backend", member_id="test-worker", deleted_at=ANY
     )
     room_repository.codex_queue_targets.assert_called_once_with(
-        "agent-relay", topic_id="backend", member_id="test-worker"
+        "conflua", topic_id="backend", member_id="test-worker"
     )
     assert driver.delete.call_args_list == [
         call("session-alpha", "queue-alpha"),

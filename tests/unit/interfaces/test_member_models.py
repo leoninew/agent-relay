@@ -7,11 +7,11 @@ import httpx2
 import pytest
 from fastapi import FastAPI
 
-from agent_relay.application.dto.session_models import SessionModelCatalog, SessionModelOption
-from agent_relay.application.members.sessions import SessionModelRejected, SessionUnavailableError
-from agent_relay.domain.rooms.models import Member, Room, RoomState
-from agent_relay.interfaces.http.exception_handlers import register_exception_handlers
-from agent_relay.interfaces.http.rooms.routes import channel_router
+from conflua.application.dto.session_models import SessionModelCatalog, SessionModelOption
+from conflua.application.members.sessions import SessionModelRejected, SessionUnavailableError
+from conflua.domain.rooms.models import Member, Room, RoomState
+from conflua.interfaces.http.exception_handlers import register_exception_handlers
+from conflua.interfaces.http.rooms.routes import channel_router
 
 
 @pytest.fixture

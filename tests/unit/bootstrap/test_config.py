@@ -4,7 +4,7 @@ from shutil import copyfile
 import pytest
 from pytest import MonkeyPatch
 
-from agent_relay.bootstrap.config import load_settings
+from conflua.bootstrap.config import load_settings
 
 CONFIG_FILE = Path(__file__).parents[3] / "config" / "config.yaml"
 
@@ -18,11 +18,11 @@ def test_settings_loads_dotenv_with_environment_override(
     config_dir.mkdir()
     copyfile(CONFIG_FILE, config_dir / "config.yaml")
     env_file.write_text(
-        "AGENT_RELAY_SERVER__HOST=localhost\nAGENT_RELAY_STATIC__DIRECTORY=./assets\n",
+        "CONFLUA_SERVER__HOST=localhost\nCONFLUA_STATIC__DIRECTORY=./assets\n",
         encoding="utf-8",
     )
-    monkeypatch.setenv("AGENT_RELAY_SERVER__HOST", "127.0.0.2")
-    monkeypatch.setenv("AGENT_RELAY_PROFILE", "prod")
+    monkeypatch.setenv("CONFLUA_SERVER__HOST", "127.0.0.2")
+    monkeypatch.setenv("CONFLUA_PROFILE", "prod")
 
     settings = load_settings(tmp_path)
 
@@ -31,9 +31,9 @@ def test_settings_loads_dotenv_with_environment_override(
 
 
 def test_load_settings_caches_one_settings_instance(monkeypatch: MonkeyPatch) -> None:
-    monkeypatch.setenv("AGENT_RELAY_SERVER__HOST", "127.0.0.2")
+    monkeypatch.setenv("CONFLUA_SERVER__HOST", "127.0.0.2")
     initial_settings = load_settings()
-    monkeypatch.setenv("AGENT_RELAY_SERVER__HOST", "127.0.0.3")
+    monkeypatch.setenv("CONFLUA_SERVER__HOST", "127.0.0.3")
 
     assert load_settings() is initial_settings
     assert initial_settings.server.host == "127.0.0.2"
@@ -41,15 +41,13 @@ def test_load_settings_caches_one_settings_instance(monkeypatch: MonkeyPatch) ->
 
 @pytest.mark.parametrize("value", ["[]", '[""]', '["codex", ""]'])
 def test_empty_codex_commands_are_rejected(monkeypatch: MonkeyPatch, value: str) -> None:
-    monkeypatch.setenv("AGENT_RELAY_CODEX__COMMAND", value)
+    monkeypatch.setenv("CONFLUA_CODEX__COMMAND", value)
     with pytest.raises(ValueError, match="codex.command"):
         load_settings()
 
 
 def test_command_override_replaces_default_arguments(monkeypatch: MonkeyPatch) -> None:
-    monkeypatch.setenv(
-        "AGENT_RELAY_CODEX__COMMAND", '["C:/tools/codex.exe", "app-server", "proxy"]'
-    )
+    monkeypatch.setenv("CONFLUA_CODEX__COMMAND", '["C:/tools/codex.exe", "app-server", "proxy"]')
     assert load_settings().codex.command == ["C:/tools/codex.exe", "app-server", "proxy"]
 
 
@@ -57,14 +55,14 @@ def test_command_override_replaces_default_arguments(monkeypatch: MonkeyPatch) -
 def test_load_settings_rejects_invalid_body_log_limit(
     monkeypatch: MonkeyPatch, body_log_limit: str
 ) -> None:
-    monkeypatch.setenv("AGENT_RELAY_LOGGING__BODY__LIMIT", body_log_limit)
+    monkeypatch.setenv("CONFLUA_LOGGING__BODY__LIMIT", body_log_limit)
 
     with pytest.raises(ValueError, match="logging.body.limit"):
         load_settings()
 
 
 def test_load_settings_allows_zero_body_log_limit(monkeypatch: MonkeyPatch) -> None:
-    monkeypatch.setenv("AGENT_RELAY_LOGGING__BODY__LIMIT", "0")
+    monkeypatch.setenv("CONFLUA_LOGGING__BODY__LIMIT", "0")
 
     assert load_settings().logging.body.limit == 0
 
@@ -76,7 +74,7 @@ def test_unknown_configuration_fields_fail_at_startup(
     config_dir = tmp_path / "config"
     config_dir.mkdir()
     copyfile(CONFIG_FILE, config_dir / "config.yaml")
-    monkeypatch.setenv(f"AGENT_RELAY_{field}", "9000")
+    monkeypatch.setenv(f"CONFLUA_{field}", "9000")
 
     with pytest.raises(ValueError, match="Extra inputs are not permitted"):
         load_settings(tmp_path)
@@ -84,23 +82,23 @@ def test_unknown_configuration_fields_fail_at_startup(
 
 @pytest.mark.parametrize("language", ["system", "zh-CN", "en"])
 def test_language_configuration(monkeypatch: MonkeyPatch, language: str) -> None:
-    monkeypatch.setenv("AGENT_RELAY_PREFERENCES__LANGUAGE", language)
+    monkeypatch.setenv("CONFLUA_PREFERENCES__LANGUAGE", language)
     assert load_settings().preferences.language == language
 
 
 def test_invalid_language_configuration(monkeypatch: MonkeyPatch) -> None:
-    monkeypatch.setenv("AGENT_RELAY_PREFERENCES__LANGUAGE", "fr")
+    monkeypatch.setenv("CONFLUA_PREFERENCES__LANGUAGE", "fr")
     with pytest.raises(ValueError, match="preferences.language"):
         load_settings()
 
 
 @pytest.mark.parametrize("theme", ["system", "light", "dark"])
 def test_theme_configuration(monkeypatch: MonkeyPatch, theme: str) -> None:
-    monkeypatch.setenv("AGENT_RELAY_PREFERENCES__THEME", theme)
+    monkeypatch.setenv("CONFLUA_PREFERENCES__THEME", theme)
     assert load_settings().preferences.theme == theme
 
 
 def test_invalid_theme_configuration(monkeypatch: MonkeyPatch) -> None:
-    monkeypatch.setenv("AGENT_RELAY_PREFERENCES__THEME", "auto")
+    monkeypatch.setenv("CONFLUA_PREFERENCES__THEME", "auto")
     with pytest.raises(ValueError, match="preferences.theme"):
         load_settings()

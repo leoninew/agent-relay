@@ -3,12 +3,12 @@ from unittest.mock import MagicMock, Mock
 
 import pytest
 
-from agent_relay.application.context.ports import ContextRepository
-from agent_relay.application.context.service import ContextService
-from agent_relay.application.dto.context import ContextMessage, ContextQuery
-from agent_relay.application.transactions import RepositoryScope
-from agent_relay.domain.rooms.errors import RoomNotFoundError
-from agent_relay.domain.rooms.models import VisibilityScope
+from conflua.application.context.ports import ContextRepository
+from conflua.application.context.service import ContextService
+from conflua.application.dto.context import ContextMessage, ContextQuery
+from conflua.application.transactions import RepositoryScope
+from conflua.domain.rooms.errors import RoomNotFoundError
+from conflua.domain.rooms.models import VisibilityScope
 
 
 @pytest.fixture
@@ -49,9 +49,7 @@ def test_provision_records_returned_messages_and_builds_the_requested_cursor(
     repository.select_messages.return_value = (messages, True)
     updates = {"frontend": 7}
     position_updates = Mock(return_value=updates)
-    monkeypatch.setattr(
-        "agent_relay.application.context.service.position_updates", position_updates
-    )
+    monkeypatch.setattr("conflua.application.context.service.position_updates", position_updates)
     request = ContextQuery(after_seq=0) if forward else ContextQuery()
     before = datetime.now(UTC)
 
@@ -91,9 +89,7 @@ def test_rejected_topic_stops_before_message_selection(
     repository: Mock, scope: MagicMock, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     validation = Mock(side_effect=RoomNotFoundError("未订阅"))
-    monkeypatch.setattr(
-        "agent_relay.application.context.service.require_subscribed_topic", validation
-    )
+    monkeypatch.setattr("conflua.application.context.service.require_subscribed_topic", validation)
 
     with pytest.raises(RoomNotFoundError):
         ContextService(scope).provide("room", "member", ContextQuery(topic_id="private"))

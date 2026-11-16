@@ -31,7 +31,7 @@ deps:
 install:
 	uv run --locked python scripts/install.py plugin check --codex
 	uv tool install --editable . --force
-	agent-relay --help
+	conflua --help
 	uv run --locked python scripts/install.py plugin apply --codex
 	@printf "Restart Codex sessions to load the installed MCP and skill.\n"
 
@@ -52,17 +52,17 @@ web:
 
 desktop:
 	cd web && $(PNPM) build
-	uv run --locked --extra desktop python -m agent_relay.desktop
+	uv run --locked --extra desktop python -m conflua.desktop
 
 binary:
 	uv sync --all-groups --locked --extra desktop
 	cd web && $(PNPM) install --frozen-lockfile && $(PNPM) build
-	uv run --locked --no-sync pyinstaller --noconfirm --clean --distpath dist --workpath build/pyinstaller packaging/AgentRelay.spec
+	uv run --locked --no-sync pyinstaller --noconfirm --clean --distpath dist --workpath build/pyinstaller packaging/conflua.spec
 	uv run --locked --no-sync python scripts/binary.py
 
-migrate webapi: export AGENT_RELAY_PROFILE = $(profile)
+migrate webapi: export CONFLUA_PROFILE = $(profile)
 migrate:
-	uv run --locked python -m agent_relay.migrate
+	uv run --locked python -m conflua.migrate
 
 webapi:
-	uv run --locked python -m agent_relay.server
+	uv run --locked python -m conflua.server

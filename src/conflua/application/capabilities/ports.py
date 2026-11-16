@@ -1,0 +1,14 @@
+from typing import Protocol
+
+from conflua.application.dto.capabilities import McpCatalog, SkillCatalog
+
+
+class CapabilityUnavailableError(RuntimeError):
+    def __init__(self, message: str, *, code: str = "service_unavailable") -> None:
+        super().__init__(message)
+        self.code = code
+
+
+class CapabilityDriver(Protocol):
+    def list_skills(self, project_path: str, *, force_reload: bool = False) -> SkillCatalog: ...
+    def list_mcp_servers(self, thread_id: str, project_path: str) -> McpCatalog: ...

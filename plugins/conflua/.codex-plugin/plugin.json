@@ -1,0 +1,11 @@
+{
+  "name": "conflua",
+  "version": "0.1.0",
+  "description": "Use Conflua rooms, topics and member messages to collaborate across Codex sessions.",
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Conflua",
+    "shortDescription": "Coordinate work and communicate through Conflua."
+  }
+}

@@ -5,8 +5,8 @@ from sqlalchemy import Select
 from sqlalchemy.dialects import sqlite
 from sqlalchemy.orm import Session
 
-from agent_relay.domain.rooms.errors import RoomNotFoundError
-from agent_relay.infrastructure.persistence.repositories.messages import SQLAlchemyMessageRepository
+from conflua.domain.rooms.errors import RoomNotFoundError
+from conflua.infrastructure.persistence.repositories.messages import SQLAlchemyMessageRepository
 
 
 @pytest.mark.parametrize("read", ["message", "page", "queue", "message_exists"])

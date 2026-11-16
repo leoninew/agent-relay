@@ -93,11 +93,11 @@ describe("room API", () => {
 
   it("loads a room and sends combined filters and a pagination cursor", async () => {
     await expect(fetchRooms()).resolves.toEqual([roomFixture().room]);
-    await expect(fetchRoom("agent-relay", {}, undefined, "channel-default")).resolves.toEqual(
+    await expect(fetchRoom("conflua", {}, undefined, "channel-default")).resolves.toEqual(
       roomFixture(),
     );
     await fetchRoom(
-      "agent-relay",
+      "conflua",
       {
         topicId: "frontend",
         memberId: "frontend-worker",
@@ -111,7 +111,7 @@ describe("room API", () => {
     expect(adapterMock).toHaveBeenLastCalledWith(
       expect.objectContaining({
         method: "get",
-        url: "/api/room/agent-relay/channel/channel-default/snapshot",
+        url: "/api/room/conflua/channel/channel-default/snapshot",
         params: {
           topic_id: "frontend",
           member_id: "frontend-worker",
@@ -174,13 +174,13 @@ describe("room API", () => {
         { type: "mcp_server", id: "example", name: "Example MCP" },
       ],
     };
-    await expect(postRoomMessage("agent-relay", request, "channel-default")).resolves.toEqual(
+    await expect(postRoomMessage("conflua", request, "channel-default")).resolves.toEqual(
       roomFixture().messages[0],
     );
     expect(adapterMock).toHaveBeenCalledWith(
       expect.objectContaining({
         method: "post",
-        url: "/api/room/agent-relay/channel/channel-default/message",
+        url: "/api/room/conflua/channel/channel-default/message",
         data: JSON.stringify(request),
       }),
     );

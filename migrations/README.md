@@ -13,17 +13,17 @@ make migrate
 PowerShell 等价命令：
 
 ```powershell
-$env:AGENT_RELAY_PROFILE = 'dev'
-uv run --locked python -m agent_relay.migrate
+$env:CONFLUA_PROFILE = 'dev'
+uv run --locked python -m conflua.migrate
 ```
 
-默认数据库为 `data/agent-relay.sqlite3`。`.env.dev` 已启用启动迁移；其他环境可配置 `AGENT_RELAY_DATABASE__MIGRATE_ON_STARTUP=true`。
+默认数据库为 `data/conflua.db`。服务启动时自动执行迁移。
 
 ## 修改结构
 
 1. 在 `sqlite/sql/<批次>/` 编写 `.up.sql`，显式定义表、约束和索引。
 2. 在 `sqlite/versions/` 添加 revision，以 `down_revision` 连接当前 head，并在 `upgrade()` 中通过 `execute_sql_file()` 显式调用 SQL 文件。
-3. 同步更新 `src/agent_relay/infrastructure/persistence/migrations.py` 中的 `MIGRATION_HEAD`，以及对应持久化读写实现。
+3. 同步更新 `src/conflua/infrastructure/persistence/migrations.py` 中的 `MIGRATION_HEAD`，以及对应持久化读写实现。
 
 主外键、查询和索引字段使用列或关联表；消息能力引用等附属值数组使用 JSON。不从业务模型自动生成 DDL。
 

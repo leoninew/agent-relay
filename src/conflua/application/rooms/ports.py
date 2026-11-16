@@ -1,0 +1,96 @@
+from contextlib import AbstractContextManager
+from datetime import datetime
+from typing import Protocol
+
+from conflua.application.dto.desktop import ShutdownNotificationTarget
+from conflua.application.dto.messages import (
+    MessagePage,
+    MessageQueuePage,
+)
+from conflua.application.dto.rooms import (
+    RoomEventPage,
+    RoomMetadata,
+    RoomSnapshot,
+)
+from conflua.application.messages.ports import MessageRepository
+from conflua.application.transactions import RepositoryScope
+from conflua.domain.rooms.models import Member, Message, Room, RoomState
+
+
+class RoomRepository(Protocol):
+    def working_path(self, room_id: str) -> str: ...
+    def rooms(self) -> list[Room]: ...
+    def room(self, room_id: str) -> Room: ...
+    def member_for_session(self, room_id: str, session_id: str) -> Member: ...
+    def events(self, room_id: str, after_event_id: int, limit: int = 200) -> RoomEventPage: ...
+    def notification_targets(self, started_at: datetime) -> list[ShutdownNotificationTarget]: ...
+    def resources(self, room_id: str) -> RoomState: ...
+    def metadata(self, room_id: str) -> RoomMetadata: ...
+    def project_exists(self, project_path: str) -> bool: ...
+    def publisher(self, room_id: str, member_id: str | None) -> Member: ...
+    def joined_members(self, room_id: str) -> dict[str, str]: ...
+    def bindings(self) -> list[tuple[str, str, str]]: ...
+    def insert_room(self, room: Room, user: Member) -> None: ...
+    def delete_room(self, room_id: str) -> None: ...
+    def clear_messages(self, room_id: str, deleted_at: datetime) -> int: ...
+    def save_resources(self, state: RoomState, original: RoomState) -> None: ...
+    def save_observation(
+        self,
+        room_id: str,
+        member_id: str,
+        session_id: str,
+        presence: str,
+        activity: str,
+        observed_at: datetime,
+        session_name: str | None,
+        *,
+        refresh_cutoff: datetime,
+    ) -> None: ...
+
+
+class RoomData(RoomRepository, MessageRepository, Protocol):
+    pass
+
+
+class RoomQueries(Protocol):
+    def rooms(self) -> list[Room]: ...
+    def member_for_session(self, room_id: str, session_id: str) -> Member: ...
+    def metadata(self, room_id: str) -> RoomMetadata: ...
+    def snapshot(
+        self,
+        room_id: str,
+        topic_id: str | None = None,
+        *,
+        member_id: str | None = None,
+        keyword: str | None = None,
+        before_seq: int | None = None,
+        limit: int = 50,
+    ) -> RoomSnapshot: ...
+    def page(
+        self,
+        room_id: str,
+        *,
+        topic_id: str | None = None,
+        member_id: str | None = None,
+        keyword: str | None = None,
+        before_seq: int | None = None,
+        limit: int = 50,
+    ) -> MessagePage: ...
+    def message(self, room_id: str, message_id: str) -> Message: ...
+    def queue(
+        self,
+        room_id: str,
+        *,
+        topic_id: str | None = None,
+        member_id: str | None = None,
+        before_seq: int | None = None,
+        limit: int = 50,
+    ) -> MessageQueuePage: ...
+    def events(self, room_id: str, after_event_id: int, limit: int = 200) -> RoomEventPage: ...
+
+
+class RoomStore(RepositoryScope[RoomData], Protocol):
+    def guard(self, room_id: str) -> AbstractContextManager[None]: ...
+    def for_channel(self, channel_id: str) -> "RoomStore": ...
+    @property
+    def queries(self) -> RoomQueries: ...

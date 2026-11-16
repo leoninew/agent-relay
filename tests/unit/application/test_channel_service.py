@@ -3,11 +3,11 @@ from unittest.mock import MagicMock, Mock
 
 import pytest
 
-from agent_relay.application.channels.ports import ChannelData, ChannelStore, WorktreeDriver
-from agent_relay.application.channels.service import ChannelService
-from agent_relay.application.dto.channels import CreateChannel
-from agent_relay.domain.rooms.errors import RoomNotFoundError
-from agent_relay.domain.rooms.models import RoomState
+from conflua.application.channels.ports import ChannelData, ChannelStore, WorktreeDriver
+from conflua.application.channels.service import ChannelService
+from conflua.application.dto.channels import CreateChannel
+from conflua.domain.rooms.errors import RoomNotFoundError
+from conflua.domain.rooms.models import RoomState
 
 
 @pytest.mark.parametrize("use_worktree", [False, True])

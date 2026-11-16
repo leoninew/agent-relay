@@ -3,7 +3,7 @@ requires = ["hatchling>=1.26"]
 build-backend = "hatchling.build"
 
 [project]
-name = "agent-relay"
+name = "conflua"
 version = "0.38.0"
 description = "Agent collaboration message relay service."
 readme = "README.md"
@@ -29,7 +29,7 @@ dependencies = [
 desktop = ["pywebview==6.2.1"]
 
 [project.scripts]
-agent-relay = "agent_relay.cli:main"
+conflua = "conflua.cli:main"
 
 [dependency-groups]
 dev = [
@@ -43,7 +43,7 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/agent_relay"]
+packages = ["src/conflua"]
 
 [tool.ruff]
 line-length = 100

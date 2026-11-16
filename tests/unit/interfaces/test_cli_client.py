@@ -7,17 +7,17 @@ from urllib.request import Request
 
 import pytest
 
-from agent_relay.interfaces.cli import main
-from agent_relay.interfaces.client import HttpResponse, RelayClient
+from conflua.interfaces.cli import main
+from conflua.interfaces.client import ConfluaClient, HttpResponse
 
-ROOM = "agent-relay"
+ROOM = "conflua"
 
 
 @pytest.fixture(autouse=True)
 def operator_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("CODEX_THREAD_ID", raising=False)
-    monkeypatch.delenv("AGENT_RELAY_SESSION_ID", raising=False)
-    monkeypatch.setenv("AGENT_RELAY_CHANNEL_ID", "channel-default")
+    monkeypatch.delenv("CONFLUA_SESSION_ID", raising=False)
+    monkeypatch.setenv("CONFLUA_CHANNEL_ID", "channel-default")
 
 
 @dataclass
@@ -75,7 +75,7 @@ def test_channel_scope_applies_to_resource_requests_and_preserves_discovery(
 def test_channel_resources_require_an_explicit_scope(
     arguments: list[str], monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.delenv("AGENT_RELAY_CHANNEL_ID")
+    monkeypatch.delenv("CONFLUA_CHANNEL_ID")
 
     def reject_request(request: Request, *, timeout: float) -> HttpResponse:
         raise AssertionError("A missing channel must not send a request")
@@ -119,14 +119,14 @@ def test_channel_creation_preserves_operation_id_when_response_is_unknown(
     assert error["channelId"] == json.loads(calls[0].data)["channelId"]
 
 
-def test_clear_codex_rejects_old_relay_response(capsys: pytest.CaptureFixture[str]) -> None:
+def test_clear_codex_rejects_old_conflua_response(capsys: pytest.CaptureFixture[str]) -> None:
     def old_service(request: Request, *, timeout: float) -> HttpResponse:
         assert request.get_method() == "DELETE"
-        return BufferedResponse(200, {"X-Request-Id": "old-relay"}, b'{"removedMessages": 1}')
+        return BufferedResponse(200, {"X-Request-Id": "old-conflua"}, b'{"removedMessages": 1}')
 
     assert main(["queue", "clear", ROOM, "--clear-codex"], opener=old_service) == 4
     payload = json.loads(capsys.readouterr().err)
-    assert payload["requestId"] == "old-relay" and payload["error"]["outcome"] == "unknown"
+    assert payload["requestId"] == "old-conflua" and payload["error"]["outcome"] == "unknown"
 
 
 def test_message_query_validates_http_bounds_before_sending(
@@ -153,10 +153,10 @@ def test_cli_address_and_timeout_configuration_precedence(
         calls.append((request, timeout))
         return BufferedResponse(200, {}, b"[]")
 
-    monkeypatch.setenv("AGENT_RELAY_URL", "http://configured-relay")
-    monkeypatch.setenv("AGENT_RELAY_HTTP_TIMEOUT", "3.5")
+    monkeypatch.setenv("CONFLUA_URL", "http://configured-conflua")
+    monkeypatch.setenv("CONFLUA_HTTP_TIMEOUT", "3.5")
     assert main(["room", "list"], opener=open_request) == 0
-    assert calls[-1][0].full_url == "http://configured-relay/api/room" and calls[-1][1] == 3.5
+    assert calls[-1][0].full_url == "http://configured-conflua/api/room" and calls[-1][1] == 3.5
     capsys.readouterr()
     assert (
         main(
@@ -176,10 +176,10 @@ def test_client_encodes_base_path_and_query_values() -> None:
         assert timeout == 4
         return BufferedResponse(200, {"x-request-id": "request-encoding"}, b"[]")
 
-    client = RelayClient("http://localhost/relay/", 4, opener=open_request)
+    client = ConfluaClient("http://localhost/conflua/", 4, opener=open_request)
     result = client.request("GET", "/api/room", params={"topic_id": "话题 +&", "limit": 10})
     url = urlsplit(calls[0].full_url)
-    assert url.path == "/relay/api/room"
+    assert url.path == "/conflua/api/room"
     assert parse_qs(url.query) == {"topic_id": ["话题 +&"], "limit": ["10"]}
     assert result.request_id == "request-encoding"
 

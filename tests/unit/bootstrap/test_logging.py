@@ -3,7 +3,7 @@ from io import BytesIO, TextIOWrapper
 
 from pytest import MonkeyPatch
 
-from agent_relay.bootstrap.logging import configure_console_encoding
+from conflua.bootstrap.logging import configure_console_encoding
 
 
 def test_console_encoding_supports_unicode_with_gbk_streams(monkeypatch: MonkeyPatch) -> None:

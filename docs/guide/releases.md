@@ -15,7 +15,7 @@ uv run --locked --no-sync python scripts/version-calc.py --no-dry-run
 
 版本从执行时 `HEAD` 可达的全部提交计算，按从旧到新的顺序处理：主版本固定为 `0`，提交标题以 `feat` 开头时次版本加一、修订号归零，其他提交使修订号加一。计算不依赖已有 tag，也不计入未提交修改；默认只输出结果。
 
-应用命令统一更新 `pyproject.toml` 的项目版本、`src/agent_relay/__init__.py` 的静态 `__version__` 和 `uv.lock`。`uv lock` 失败时恢复更新前的这三份文件；脚本不提交或创建 tag，也不更新已安装环境。
+应用命令统一更新 `pyproject.toml` 的项目版本、`src/conflua/__init__.py` 的静态 `__version__` 和 `uv.lock`。`uv lock` 失败时恢复更新前的这三份文件；脚本不提交或创建 tag，也不更新已安装环境。
 
 “关于”通过 `/api/app` 读取当前服务代码的 `__version__`。源码运行、wheel 安装和 WebView EXE 使用同一规则，版本随代码发布；本机另一个 tool 或虚拟环境的安装元数据不参与取值。`make binary` 会校验运行版本与项目版本、发布 tag 一致，ZIP 文件名沿用项目版本。
 
@@ -59,7 +59,7 @@ pipeline 依次执行：
 Release 链接指向以下持久文件：
 
 ```text
-<GitLab API>/projects/<project-id>/packages/generic/agent-relay/<tag>/agent-relay-windows-x64.zip
+<GitLab API>/projects/<project-id>/packages/generic/conflua/<tag>/conflua-windows-x64.zip
 ```
 
 在项目的 Release 页面或 **Packages and registries → Package Registry** 下载。私有项目下载需要相应访问权限。Package Registry 的文件独立于 pipeline artifact；保留发布版本时，不要通过清理策略删除这些包。

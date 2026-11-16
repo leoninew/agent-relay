@@ -1,4 +1,4 @@
-# Agent Relay 后端结构与边界
+# Conflua 后端结构与边界
 最后修改时间: 2026-11-12 21:52:16
 
 依据 [Python + FastAPI 架构指南修订 2](../../../best-practices/docs/guides/python-backend-service-architecture.md)。本轮职责调整见[总计划](../plan/20261111-backend-responsibility-alignment.md)及[契约调查](../task/20261111-backend-responsibility-alignment/T01-responsibility-contracts.md)；这是本项目实际结构说明，不复制通用标准。
@@ -6,7 +6,7 @@
 ## 目录与业务归属
 
 ```text
-src/agent_relay/
+src/conflua/
   domain/rooms/
     models/                      # 领域实体、值对象、状态与类型；按房间、消息、投递等分文件
     resources.py / members.py    # 初始化、资源及成员生命周期规则
@@ -30,7 +30,7 @@ src/agent_relay/
     http/                        # 路由、provider、中间件、错误和流式响应
     cli.py                       # Click 输入输出适配
     mcp.py                       # MCP 工具和调用身份适配
-    client.py                    # CLI/MCP 共用的 Relay HTTP 客户端
+    client.py                    # CLI/MCP 共用的 Conflua HTTP 客户端
     dto.py                       # 客户端结果、HTTP 响应等接口数据
   bootstrap/
     settings.py                  # 配置模型与字段校验
@@ -73,7 +73,7 @@ src/agent_relay/
 - 提供上下文：HTTP member route → `ContextService.provide` → 一个 `RepositoryScope.write`：读取有效订阅 → 领域订阅检查/VisibilityScope → SQL 可见筛选和 limit+1 → 对实际返回消息计算位置 → 保存 query/messages/位置/事件 → 读取最终位置并返回。时间、query ID、空结果处理和游标归应用；仓储保留 SQL 与原子记账，不再提供 `query` 整用例。
 - 投递：DeliveryRunner 持有单库锁 → `DeliveryService.recover` 标记中断提交 → `SQLAlchemyDeliveryStore` 短事务原子领取并提交 → `DeliveryService.submit` 调用 QueueDriver → 领域提交结果 → 短事务条件保存 → 受保护首项启动。`observe` 核验原输入，不因未知结果或启动失败重新入队。
 - 简单读取：HTTP → RoomQueries 或 ContextQueries 端口 → application 的 RoomReader 或 ContextReader → RepositoryScope.read → Repository 查询及批量投影。桌面退出通知目标通过 DesktopExitNotificationReader 读取 RoomRepository。WebSocket 使用独立仓储作用域，每次补取后释放再等待。
-- CLI/MCP：各自入口 → `RelayClient` → HTTP 服务。身份来自已有会话上下文，错误与结果由各自协议适配，仍使用同一份持久事实。
+- CLI/MCP：各自入口 → `ConfluaClient` → HTTP 服务。身份来自已有会话上下文，错误与结果由各自协议适配，仍使用同一份持久事实。
 
 ## 装配与资源作用域
 
@@ -102,7 +102,7 @@ src/agent_relay/
 
 ORM 映射当前 `channel_description_20261114` 的 15 张表，消息能力引用直接保存在 `messages.capabilities` JSON 列；SQL-first Alembic 仍是 schema 来源，不调用 create_all，不隐式修复/升级不匹配的库。频道复合键约束资源关系；`RoomStore.for_channel(channel_id)` 将显式频道作用域绑定到仓储，默认频道同样使用频道接口。sessions 元数据及消息 seq 保持房间级，查询和投递使用频道的 working_path。房间及频道采用软归档，保留外部回执和工作目录。
 
-`ChannelService` 通过请求级依赖绑定现有 `RequestTransactionMiddleware`，复用 `SQLAlchemyScope`；频道、固定用户、默认话题和事件在同一请求事务内提交，异常由切面统一回滚。频道业务属性为名称和描述，不维护创建中或待核验状态。可选 worktree 在创建时从当前 HEAD 建立并核对，错误直接返回；数据库回滚不删除 Git 目录或分支。创建、归档、输入及 activation 共用房间级文件锁。创建响应未知时按同 ID 查询，不重复创建。`migrate_on_startup` 和独立 migrate 入口保持原方式。ISO 文本类型保留时区与精度，回执类型仅保存额外 metadata，标识由独立列重建并校验。
+`ChannelService` 通过请求级依赖绑定现有 `RequestTransactionMiddleware`，复用 `SQLAlchemyScope`；频道、固定用户、默认话题和事件在同一请求事务内提交，异常由切面统一回滚。频道业务属性为名称和描述，不维护创建中或待核验状态。可选 worktree 在创建时从当前 HEAD 建立并核对，错误直接返回；数据库回滚不删除 Git 目录或分支。创建、归档、输入及 activation 共用房间级文件锁。创建响应未知时按同 ID 查询，不重复创建。服务启动时自动执行迁移，也提供独立 migrate 入口。ISO 文本类型保留时区与精度，回执类型仅保存额外 metadata，标识由独立列重建并校验。
 
 运行时 CRUD 和动态筛选使用 SQLAlchemy 表达式。`persistence/sqlite.py` 集中保留：连接时的 `PRAGMA foreign_keys = ON`、`PRAGMA busy_timeout = 5000`，事务开始时的 `BEGIN`/`BEGIN IMMEDIATE`，白名单表的固定 rowid 排序列，以及 `instr` 字面子串、`julianday(value) <= julianday(cutoff)` 时间窗口函数。其他仓储不拼接 SQL，也不使用 text() 包装旧查询。产品源码不直接依赖 sqlite3 API；SQLAlchemy 底层仍使用 SQLite DBAPI，历史迁移 SQL 保留。
 
@@ -112,7 +112,7 @@ ORM 映射当前 `channel_description_20261114` 的 15 张表，消息能力引�
 - `uv run --locked mypy src tests`、`uv run --locked mypy migrations`：检查源码、单测和迁移脚本类型。
 - 迁移链及 SQL 使用 `alembic history`、`alembic heads`、`alembic upgrade queue_deleted_20261110:head --sql` 离线核对，不执行真实 SQLite 测试。
 - `make test`：后端与前端单元测试；`make check`：既有类型、lint 和格式入口，可用 `fix=1` 自动修复。
-- `python -m agent_relay.server`、`python -m agent_relay.cli`、`python -m agent_relay.migrate` 及 `agent-relay` script 保持原调用方式。旧内部 Python 模块路径随职责迁移，仓库内消费者已更新。
+- `python -m conflua.server`、`python -m conflua.cli`、`python -m conflua.migrate` 及 `conflua` script 保持原调用方式。旧内部 Python 模块路径随职责迁移，仓库内消费者已更新。
 
 单测 fixture 按需放在对应目录的 `conftest.py`，仓储和驱动使用端口 Mock 或局部替身。基础设施单测按 `persistence/`、`codex/`、`dispatch/` 组织，Codex 协议 fixture 只在对应目录生效。已移除依赖旧 `tests/support` 的集成测试及协议子进程脚手架，不恢复共享模拟仓储。
 

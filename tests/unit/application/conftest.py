@@ -2,9 +2,9 @@ from unittest.mock import MagicMock, Mock
 
 import pytest
 
-from agent_relay.application.dto.rooms import RoomMetadata, RoomSummary
-from agent_relay.application.rooms.ports import RoomData, RoomStore
-from agent_relay.domain.rooms.models import Member, Room, RoomState, Session, Topic
+from conflua.application.dto.rooms import RoomMetadata, RoomSummary
+from conflua.application.rooms.ports import RoomData, RoomStore
+from conflua.domain.rooms.models import Member, Room, RoomState, Session, Topic
 
 
 @pytest.fixture
@@ -39,7 +39,7 @@ def room_state() -> RoomState:
         ],
     ]
     return RoomState(
-        room=Room(id="agent-relay", name="Room", project_path="d:/project", description=""),
+        room=Room(id="conflua", name="Room", project_path="d:/project", description=""),
         channel_id="channel-default",
         working_path="d:/project",
         topics=[Topic(id=topic, name=topic, description="") for topic in ["frontend", "backend"]],

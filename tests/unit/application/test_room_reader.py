@@ -2,9 +2,9 @@ from unittest.mock import MagicMock, Mock
 
 import pytest
 
-from agent_relay.application.dto.messages import MessagePage
-from agent_relay.application.rooms.queries import RoomReader
-from agent_relay.domain.rooms.errors import RoomNotFoundError
+from conflua.application.dto.messages import MessagePage
+from conflua.application.rooms.queries import RoomReader
+from conflua.domain.rooms.errors import RoomNotFoundError
 
 
 def test_snapshot_reads_metadata_and_filtered_messages_in_one_repository_scope(
@@ -15,14 +15,14 @@ def test_snapshot_reads_metadata_and_filtered_messages_in_one_repository_scope(
     )
 
     snapshot = RoomReader(room_store).snapshot(
-        "agent-relay", "frontend", member_id="user", keyword="接口", before_seq=163, limit=20
+        "conflua", "frontend", member_id="user", keyword="接口", before_seq=163, limit=20
     )
 
-    assert snapshot.room.id == "agent-relay" and snapshot.messages == []
+    assert snapshot.room.id == "conflua" and snapshot.messages == []
     room_store.read.assert_called_once_with()
-    room_repository.metadata.assert_called_once_with("agent-relay")
+    room_repository.metadata.assert_called_once_with("conflua")
     room_repository.page.assert_called_once_with(
-        "agent-relay",
+        "conflua",
         topic_id="frontend",
         member_id="user",
         keyword="接口",
@@ -49,8 +49,8 @@ def test_each_event_poll_releases_its_repository_scope(
 ) -> None:
     reader = RoomReader(room_store)
 
-    reader.events("agent-relay", 160)
-    reader.events("agent-relay", 163)
+    reader.events("conflua", 160)
+    reader.events("conflua", 163)
 
     assert room_store.read.call_count == 2
     assert room_store.read.return_value.__exit__.call_count == 2

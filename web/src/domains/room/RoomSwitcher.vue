@@ -170,7 +170,7 @@
   const roomsStore = useRoomsStore();
   const channelsStore = useChannelsStore();
   const { orderedItems: rooms, moveItem: moveRoom } = useStoredOrder(
-    () => "relay-room-order",
+    () => "conflua-room-order",
     () => roomsStore.rooms,
   );
   const toasts = useToastsStore();

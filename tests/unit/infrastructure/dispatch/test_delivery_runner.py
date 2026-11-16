@@ -5,11 +5,11 @@ from unittest.mock import MagicMock, Mock
 
 import pytest
 
-from agent_relay.application.delivery.ports import DeliveryRepository
-from agent_relay.application.delivery.service import DeliveryService
-from agent_relay.application.dto.delivery import ClaimedDelivery
-from agent_relay.infrastructure.dispatch.delivery import DeliveryRunner
-from agent_relay.infrastructure.dispatch.lock import SubmitterLock
+from conflua.application.delivery.ports import DeliveryRepository
+from conflua.application.delivery.service import DeliveryService
+from conflua.application.dto.delivery import ClaimedDelivery
+from conflua.infrastructure.dispatch.delivery import DeliveryRunner
+from conflua.infrastructure.dispatch.lock import SubmitterLock
 
 
 @pytest.mark.parametrize("concurrency", [1, 4])
@@ -63,11 +63,9 @@ def test_dispatch_fairness_remains_bounded_without_real_waits(
     stop.wait.side_effect = advance
     pool.submit.side_effect = submit
     monkeypatch.setattr(
-        "agent_relay.infrastructure.dispatch.delivery.ThreadPoolExecutor", lambda **_: pool
+        "conflua.infrastructure.dispatch.delivery.ThreadPoolExecutor", lambda **_: pool
     )
-    monkeypatch.setattr(
-        "agent_relay.infrastructure.dispatch.delivery.monotonic", lambda: ticks * 3.0
-    )
+    monkeypatch.setattr("conflua.infrastructure.dispatch.delivery.monotonic", lambda: ticks * 3.0)
 
     runner._run()
 
@@ -127,11 +125,9 @@ def test_due_observations_survive_full_capacity_until_a_slot_is_released(
     stop.wait.side_effect = advance
     pool.submit.side_effect = submit
     monkeypatch.setattr(
-        "agent_relay.infrastructure.dispatch.delivery.ThreadPoolExecutor", lambda **_: pool
+        "conflua.infrastructure.dispatch.delivery.ThreadPoolExecutor", lambda **_: pool
     )
-    monkeypatch.setattr(
-        "agent_relay.infrastructure.dispatch.delivery.monotonic", lambda: ticks * 3.0
-    )
+    monkeypatch.setattr("conflua.infrastructure.dispatch.delivery.monotonic", lambda: ticks * 3.0)
 
     runner._run()
 
