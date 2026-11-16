@@ -749,21 +749,34 @@ button.topic-chip:hover:not(:disabled) {
   white-space: nowrap;
 }
 .message-reference {
-  display: flex;
-  align-items: center;
-  gap: 7px;
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 6px;
   max-width: 100%;
-  margin: 8px 0;
-  border-left: 2px solid hsl(var(--border));
-  padding: 4px 10px;
+  margin-top: 4px;
+  border: 0;
+  border-left: 2px solid hsl(var(--muted-foreground) / 0.4);
+  padding: 3px 8px;
   color: hsl(var(--muted-foreground));
-  background: hsl(var(--reference));
+  background: transparent;
   font-size: var(--font-size-caption);
   line-height: var(--line-height-caption);
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.message-reference:hover {
+  color: hsl(var(--foreground));
+  background: hsl(var(--muted-foreground) / 0.1);
+}
+.message-reference:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 2px;
 }
 .message-reference svg {
   width: 12px;
   height: 12px;
+  flex-shrink: 0;
+  margin-top: 3px;
 }
 .timeline-placeholder {
   display: flex;

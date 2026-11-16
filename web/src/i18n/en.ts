@@ -29,6 +29,7 @@ export default {
     imageFailed: "Image could not be loaded",
     label: "Message timeline",
     loading: "Loading discussion...",
+    refreshing: "Updating discussion...",
     unavailable: "Could not load messages. Try again.",
     noMatches: "No matching messages",
     empty: "No messages",

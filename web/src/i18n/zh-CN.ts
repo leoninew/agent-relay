@@ -29,6 +29,7 @@ export default {
     imageFailed: "图片加载失败",
     label: "消息时间线",
     loading: "正在加载讨论…",
+    refreshing: "正在更新讨论…",
     unavailable: "暂时无法加载消息，请重试。",
     noMatches: "未找到匹配的消息",
     empty: "暂无消息",

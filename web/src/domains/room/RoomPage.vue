@@ -1,11 +1,7 @@
 <template>
-  <div v-if="!snapshot" class="room-initial-state">
-    <template v-if="loading">
-      <AppIcon name="relay" />
-      <h1>{{ t("room.connecting") }}</h1>
-      <AppLoading>{{ t("room.loading") }}</AppLoading>
-    </template>
-    <template v-else-if="loadError">
+  <RoomLoadingSkeleton v-if="!snapshot && loading" :visible="skeletonVisible" />
+  <div v-else-if="!snapshot" class="room-initial-state">
+    <template v-if="loadError">
       <AppIcon name="chat" />
       <h1>{{ t("room.unavailable") }}</h1>
       <p role="alert">{{ translateMessage(loadError) }}</p>
@@ -136,18 +132,20 @@
         </div>
         <MessageTimeline
           ref="timeline"
-          :messages="visibleMessages"
+          :messages="messagesCurrent ? visibleMessages : []"
           :has-more="snapshot.hasMore"
           :has-newer="snapshot.hasNewer"
           :loading-older="loadingOlder"
-          :unavailable="loadError !== null"
+          :unavailable="loadError !== null && !messagesCurrent"
           :members="snapshot.members"
           :sessions="snapshot.sessions"
           :topics="snapshot.topics"
           :skill-descriptions="skillDescriptions"
           :selected-message-id="detailMessage?.id"
           :details-open="drawerOpen"
-          :loading="loading"
+          :loading="loading && !messagesCurrent"
+          :skeleton-visible="skeletonVisible"
+          :refreshing="loading && messagesCurrent"
           :searching="Boolean(keyword)"
           @load-older="loadOlder"
           @latest="loadLatest"
@@ -170,7 +168,7 @@
         :sessions="snapshot.sessions"
         :reply-to="replyTo"
         :sending="sending || clearing"
-        :ready="!loading"
+        :ready="true"
         :locked="Boolean(pendingPublication)"
         :error="sendError"
         :catalog="capabilities.catalog.value"
@@ -298,7 +296,6 @@
   import AppButton from "@/components/AppButton.vue";
   import AppIcon from "@/components/AppIcon.vue";
   import AppInput from "@/components/AppInput.vue";
-  import AppLoading from "@/components/AppLoading.vue";
   import ChannelBar from "@/domains/channel/ChannelBar.vue";
   import ChannelCreateDialog from "@/domains/channel/ChannelCreateDialog.vue";
   import ChannelEditDialog from "@/domains/channel/ChannelEditDialog.vue";
@@ -312,6 +309,7 @@
   import RoomClearDialog from "@/domains/room/RoomClearDialog.vue";
   import RoomDeleteDialog from "@/domains/room/RoomDeleteDialog.vue";
   import type { DeleteTarget } from "@/domains/room/RoomDeleteDialog.vue";
+  import RoomLoadingSkeleton from "@/domains/room/RoomLoadingSkeleton.vue";
   import RoomSetupDialog from "@/domains/room/RoomSetupDialog.vue";
   import RoomWorkbench from "@/domains/room/RoomWorkbench.vue";
   import TopicSidebar from "@/domains/room/TopicSidebar.vue";
@@ -321,6 +319,8 @@
   import { useRoomCapabilities } from "@/domains/room/useRoomCapabilities";
   import { useRoomDraft } from "@/domains/room/useRoomDraft";
   import { useRoomResourceOrder } from "@/domains/room/useRoomResourceOrder";
+  import { messageQueryKey, mergeRefreshedSnapshot } from "@/domains/room/roomMessageQuery";
+  import { useDelayedSkeleton } from "@/domains/room/useDelayedSkeleton";
   import { ApiClientError, describeApiError } from "@/services/api";
   import {
     addRoomMember,
@@ -411,6 +411,13 @@
     drawerOpen,
     queueScope,
   } = roomPanel;
+  const loadedQueryKey = ref<string>();
+  const currentQueryKey = computed(() =>
+    messageQueryKey(currentRoomId.value, currentChannelId.value, filters()),
+  );
+  const messagesCurrent = computed(
+    () => Boolean(snapshot.value) && loadedQueryKey.value === currentQueryKey.value,
+  );
   const requestScope = computed(() =>
     active.value && currentRoomId.value && currentChannelId.value
       ? draftScope(currentRoomId.value, currentChannelId.value)
@@ -458,6 +465,10 @@
       : undefined;
   });
   const loading = ref(true);
+  const skeletonVisible = useDelayedSkeleton(
+    () => active.value && loading.value && !messagesCurrent.value,
+    () => currentQueryKey.value,
+  );
   const refreshingSessions = ref(false);
   const loadingOlder = ref(false);
   const sending = ref(false);
@@ -624,24 +635,43 @@
     return changed;
   }
 
-  async function loadRoom(beforeSeq?: number): Promise<boolean> {
+  async function loadRoom(
+    options: { beforeSeq?: number; preservePosition?: boolean } = {},
+  ): Promise<boolean> {
     const roomId = currentRoomId.value;
     const channelId = currentChannelId.value;
     if (!roomId || !channelId || !active.value) return false;
     const scope = roomsStore.snapshotKey(roomId, channelId);
+    const query = filters();
+    const queryKey = messageQueryKey(roomId, channelId, query);
+    const previous =
+      options.beforeSeq === undefined && options.preservePosition !== false && messagesCurrent.value
+        ? snapshot.value
+        : undefined;
+    const endSeq = previous?.messages.at(-1)?.seq;
+    const beforeSeq =
+      options.beforeSeq ??
+      (endSeq !== undefined && !timeline.value?.isAtEnd() ? endSeq + 1 : undefined);
     const version = cancelQueries();
     loading.value = true;
     loadError.value = null;
     try {
       const result = await fetchRoom(
         roomId,
-        { ...filters(), beforeSeq },
+        { ...query, beforeSeq },
         queryController?.signal,
         channelId,
       );
       if (version !== loadVersion) return false;
-      roomsStore.sync(result, channelId);
+      const position = previous ? timeline.value?.capturePosition() : undefined;
+      roomsStore.sync(previous ? mergeRefreshedSnapshot(previous, result) : result, channelId);
+      loadedQueryKey.value = queryKey;
       roomPanel.syncMessages(result.messages);
+      if (position) {
+        await nextTick();
+        if (version !== loadVersion) return false;
+        timeline.value?.restorePosition(position);
+      }
       if (clearDeletedFilters()) return await loadRoom();
       await refreshDetailMessage(roomId, version);
       await refreshReplyTo(roomId, version);
@@ -703,7 +733,7 @@
   }
 
   async function loadLatest(): Promise<void> {
-    if (!(await loadRoom())) return;
+    if (!(await loadRoom({ preservePosition: false }))) return;
     await nextTick();
     timeline.value?.scrollToEnd();
   }
@@ -763,6 +793,10 @@
   }
 
   async function openRoom(roomId: string, requestedChannelId: string): Promise<void> {
+    initializationVersion++;
+    const version = cancelQueries();
+    loading.value = true;
+    loadError.value = null;
     const previouslySelectedChannel = channelsStore.preferredChannel(roomId);
     resetSearch();
     roomPanel.reset();
@@ -773,12 +807,12 @@
     try {
       await channelsStore.load(roomId);
     } catch {
-      if (currentRoomId.value === roomId)
-        loadError.value = channelsStore.errors[roomId] ?? { key: "errors.channelLoad" };
+      if (version !== loadVersion || !active.value) return;
+      loadError.value = channelsStore.errors[roomId] ?? { key: "errors.channelLoad" };
       loading.value = false;
       return;
     }
-    if (currentRoomId.value !== roomId || !active.value) return;
+    if (version !== loadVersion || !active.value) return;
     const requested = channelsStore.resolveChannelId(roomId, requestedChannelId);
     const cachedFallback =
       requestedChannelId === previouslySelectedChannel
@@ -808,6 +842,7 @@
     channelsStore.remember(roomId, channelId);
     cancelQueries();
     const scope = roomsStore.snapshotKey(roomId, channelId);
+    loadedQueryKey.value = undefined;
     delete roomsStore.snapshots[scope];
     setupMode.value = undefined;
     editingMember.value = undefined;
@@ -828,9 +863,10 @@
     const saved = sessionStorage.getItem(`conflua-publication:${scope}`);
     pendingPublication.value = saved ? (JSON.parse(saved) as CreateMessage) : undefined;
     openDraft(scope, pendingPublication.value);
-    await loadRoom();
+    if (!(await loadRoom())) return;
     await nextTick();
-    timeline.value?.scrollToEnd();
+    if (currentRoomId.value === roomId && currentChannelId.value === channelId)
+      timeline.value?.scrollToEnd();
   }
 
   async function retry(): Promise<void> {
@@ -954,7 +990,7 @@
     if (selectedTopicId.value && !request.topicIds.includes(selectedTopicId.value)) {
       selectedTopicId.value = request.topicIds[0];
     }
-    await loadRoom();
+    await loadRoom({ preservePosition: false });
     sending.value = false;
     await nextTick();
     timeline.value?.scrollToEnd();
@@ -1017,11 +1053,10 @@
       !active.value ||
       version !== initializationVersion ||
       roomId !== currentRoomId.value ||
+      channelId !== currentChannelId.value ||
       !(await loadRoom())
     )
       return;
-    await nextTick();
-    if (roomId === currentRoomId.value) timeline.value?.scrollToEnd();
   }
 
   function editChannel(channel: Channel): void {
@@ -1253,7 +1288,7 @@
         selectedTopicId.value = undefined;
         selectedMemberId.value = undefined;
         resetSearch();
-        if (!(await loadRoom(message.seq + 1))) return;
+        if (!(await loadRoom({ beforeSeq: message.seq + 1 }))) return;
       } catch (caught) {
         if (version === loadVersion) toasts.error(describeApiError(caught, "errors.reference"));
         return;
@@ -1349,7 +1384,10 @@
     (channelId) => {
       const roomId = props.roomId;
       if (!roomId || !channelId || currentRoomId.value !== roomId) return;
-      if (!channelsStore.loadedRooms[roomId]) return;
+      if (!channelsStore.loadedRooms[roomId]) {
+        void openRoom(roomId, channelId);
+        return;
+      }
       if (
         channelId &&
         !channelsStore.activeChannels(roomId).some((channel) => channel.id === channelId)

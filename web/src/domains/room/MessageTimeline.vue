@@ -1,12 +1,15 @@
 <template>
+  <span v-if="loading || refreshing" class="sr-only" role="status">{{
+    t(loading ? "timeline.loading" : "timeline.refreshing")
+  }}</span>
   <div
     ref="timeline"
     class="message-timeline"
-    :aria-busy="loading"
+    :aria-busy="loading || refreshing || loadingOlder"
     :aria-label="t('timeline.label')"
     @error.capture="onImageError"
   >
-    <AppLoading v-if="loading" class="timeline-placeholder">{{ t("timeline.loading") }}</AppLoading>
+    <MessageTimelineSkeleton v-if="loading" :visible="skeletonVisible" />
     <div v-else-if="unavailable" class="timeline-placeholder">{{ t("timeline.unavailable") }}</div>
     <div v-else-if="messages.length === 0" class="timeline-placeholder">
       <span class="empty-icon"><AppIcon name="chat" /></span>
@@ -35,6 +38,7 @@
         </div>
         <article
           class="message"
+          :data-message-id="message.id"
           :class="{
             'is-selected': message.id === selectedMessageId,
             'is-user': findMember(message.senderId)?.kind === 'human',
@@ -179,7 +183,7 @@
 
   import AppIcon from "@/components/AppIcon.vue";
   import AppButton from "@/components/AppButton.vue";
-  import AppLoading from "@/components/AppLoading.vue";
+  import MessageTimelineSkeleton from "@/domains/room/MessageTimelineSkeleton.vue";
   import MemberIdentity from "@/domains/room/MemberIdentity.vue";
   import { deliveryStage } from "@/domains/room/deliveryStage";
   import { memberSessionName } from "@/domains/room/memberSessionName";
@@ -199,6 +203,8 @@
       selectedMessageId?: string;
       detailsOpen: boolean;
       loading: boolean;
+      skeletonVisible?: boolean;
+      refreshing?: boolean;
       searching?: boolean;
       unavailable: boolean;
       hasMore: boolean;
@@ -208,6 +214,8 @@
     {
       selectedMessageId: undefined,
       searching: false,
+      refreshing: false,
+      skeletonVisible: true,
       skillDescriptions: () => new Map(),
     },
   );
@@ -259,6 +267,37 @@
   function restoreScroll(): void {
     if (timeline.value)
       timeline.value.scrollTop = previousScroll + timeline.value.scrollHeight - previousHeight;
+  }
+
+  function capturePosition() {
+    const element = timeline.value;
+    if (!element) return undefined;
+    const top = element.getBoundingClientRect().top;
+    const anchor = Array.from(element.querySelectorAll<HTMLElement>("article")).find(
+      (article) => article.getBoundingClientRect().bottom > top,
+    );
+    return {
+      messageId: anchor?.dataset.messageId,
+      offset: anchor ? anchor.getBoundingClientRect().top - top : 0,
+      scrollTop: element.scrollTop,
+      atEnd: isAtEnd(),
+    };
+  }
+
+  function restorePosition(position: NonNullable<ReturnType<typeof capturePosition>>): void {
+    const element = timeline.value;
+    if (!element) return;
+    if (position.atEnd) {
+      scrollToEnd();
+      return;
+    }
+    const anchor = Array.from(element.querySelectorAll<HTMLElement>("article")).find(
+      (article) => article.dataset.messageId === position.messageId,
+    );
+    if (anchor)
+      element.scrollTop +=
+        anchor.getBoundingClientRect().top - element.getBoundingClientRect().top - position.offset;
+    else element.scrollTop = position.scrollTop;
   }
 
   function findMember(memberId: string | null): Member | undefined {
@@ -351,5 +390,13 @@
     article?.focus({ preventScroll: true });
   }
 
-  defineExpose({ scrollToEnd, isAtEnd, scrollToMessage, rememberScroll, restoreScroll });
+  defineExpose({
+    scrollToEnd,
+    isAtEnd,
+    scrollToMessage,
+    rememberScroll,
+    restoreScroll,
+    capturePosition,
+    restorePosition,
+  });
 </script>
