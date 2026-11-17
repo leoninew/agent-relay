@@ -78,19 +78,20 @@ def test_join_stores_session_metadata_without_a_directory(
     assert "projectPath" not in member.session.model_dump(by_alias=True)
 
 
-def test_discovery_lists_all_sessions_without_a_directory_filter(
+@pytest.mark.parametrize("working_path", ["d:/project", "d:/worktrees/feature"])
+def test_discovery_queries_sessions_in_the_channel_working_directory(
     room_state: RoomState,
     room_store: MagicMock,
     session_driver: Mock,
+    working_path: str,
 ) -> None:
-    room_state.room.project_path = "/Work/project"
-    room_state.working_path = "/Work/project"
+    room_state.working_path = working_path
     session_driver.list_sessions.return_value = [
-        SessionInfo("first", "codex", "First", "idle"),
-        SessionInfo("second", "codex", "Second", "idle"),
+        SessionInfo("matching", "codex", "Matching", "idle"),
     ]
     candidates = MemberService(room_store, session_driver).candidates("conflua")
-    assert [candidate.id for candidate in candidates] == ["first", "second"]
+    session_driver.list_sessions.assert_called_once_with(working_path)
+    assert [candidate.id for candidate in candidates] == ["matching"]
 
 
 @pytest.mark.parametrize(

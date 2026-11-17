@@ -51,8 +51,8 @@ class MemberService:
 
     def candidates(self, room_id: str) -> list[SessionCandidate]:
         with self.store.read() as rooms:
-            rooms.room(room_id)
-        sessions = self._metadata(self.driver.list_sessions)
+            working_path = rooms.working_path(room_id)
+        sessions = self._metadata(lambda: self.driver.list_sessions(working_path))
         observed_at = datetime.now(UTC)
         self.record_observations(room_id, sessions, observed_at)
         with self.store.read() as rooms:

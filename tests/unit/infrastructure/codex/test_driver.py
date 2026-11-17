@@ -137,6 +137,63 @@ def history_rpc(monkeypatch: MonkeyPatch) -> Mock:
     return rpc
 
 
+@pytest.mark.parametrize("working_path", [None, "D:/Work/project"])
+def test_session_discovery_keeps_directory_filter_across_pages_and_loaded_refresh(
+    history_rpc: Mock, working_path: str | None
+) -> None:
+    active = {
+        "id": "active",
+        "modelProvider": "codex",
+        "name": "Active",
+        "status": {"type": "idle"},
+    }
+    archived = {**active, "id": "archived"}
+    other = {**active, "id": "other"}
+    history_rpc.call.side_effect = [
+        {"data": [active], "nextCursor": "active-page"},
+        {"data": [{**active, "id": "not-loaded"}]},
+        {"data": [], "nextCursor": "archived-page"},
+        {"data": [archived]},
+        {"data": ["active", "other"], "nextCursor": "loaded-page"},
+        {"data": ["archived"]},
+        {"thread": {**active, "name": "Refreshed", "status": {"type": "active"}}},
+        {"thread": archived},
+        {"thread": other},
+    ]
+
+    sessions = CodexDriver(["unused"], 1).list_sessions(working_path)
+
+    expected = {
+        "active": ("active", False),
+        "not-loaded": ("unavailable", False),
+        "archived": ("idle", True),
+    }
+    if working_path is None:
+        expected["other"] = ("idle", False)
+    assert {info.id: (info.status, info.archived) for info in sessions} == expected
+    assert sessions[0].name == "Refreshed"
+    list_requests = [
+        request.args[1]
+        for request in history_rpc.call.call_args_list
+        if request.args[0] == "thread/list"
+    ]
+    assert [(params["archived"], params["cursor"], params["cwd"]) for params in list_requests] == [
+        (False, None, working_path),
+        (False, "active-page", working_path),
+        (True, None, working_path),
+        (True, "archived-page", working_path),
+    ]
+    read_ids = [
+        request.args[1]["threadId"]
+        for request in history_rpc.call.call_args_list
+        if request.args[0] == "thread/read"
+    ]
+    expected_read_ids = ["active", "archived"]
+    if working_path is None:
+        expected_read_ids.append("other")
+    assert read_ids == expected_read_ids
+
+
 def test_input_history_only_returns_correlatable_user_messages(history_rpc: Mock) -> None:
     history_rpc.call.return_value = {
         "data": [

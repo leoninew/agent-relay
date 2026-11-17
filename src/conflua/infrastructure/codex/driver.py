@@ -298,7 +298,7 @@ class CodexDriver:
             reasoning_effort=thread.get("reasoningEffort"),
         )
 
-    def list_sessions(self) -> list[SessionInfo]:
+    def list_sessions(self, working_path: str | None = None) -> list[SessionInfo]:
         result: dict[str, SessionInfo] = {}
         with ProxyRpc(self.command, self.timeout) as rpc:
             for archived in (False, True):
@@ -314,6 +314,7 @@ class CodexDriver:
                             "sourceKinds": SOURCE_KINDS,
                             "archived": archived,
                             "useStateDbOnly": True,
+                            "cwd": working_path,
                         },
                     )
                     data = page.get("data")
@@ -343,6 +344,8 @@ class CodexDriver:
                 if not isinstance(cursor, str) or not cursor or cursor in seen:
                     raise RpcDisconnected("Invalid loaded Codex pagination cursor")
                 seen.add(cursor)
+            if working_path is not None:
+                loaded.intersection_update(result)
             for sid, info in tuple(result.items()):
                 if sid not in loaded:
                     result[sid] = replace(info, status="unavailable")
