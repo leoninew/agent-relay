@@ -1051,6 +1051,7 @@ button.topic-chip:hover:not(:disabled) {
   line-height: var(--line-height-body);
   font-weight: 400;
   text-align: left;
+  font-variant-numeric: tabular-nums;
   transition: background 150ms;
 }
 .sidebar-list-item:hover,

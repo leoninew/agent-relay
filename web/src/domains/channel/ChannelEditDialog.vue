@@ -1,6 +1,6 @@
 <template>
   <AppDialog
-    :open="!!channel"
+    :open="!!channel && !channel.isDefault"
     :title="t('channel.edit')"
     :busy="saving"
     initial-focus="#edit-channel-name"
@@ -16,7 +16,7 @@
             id="edit-channel-name"
             v-model="name"
             maxlength="40"
-            :disabled="saving || channel?.isDefault"
+            :disabled="saving"
             :invalid="nameError"
             :clear-label="t('channel.clearName')"
             :aria-describedby="nameError ? 'edit-channel-name-error' : undefined"
@@ -87,7 +87,7 @@
   );
 
   function submit(): void {
-    if (!props.channel || props.saving) return;
+    if (!props.channel || props.channel.isDefault || props.saving) return;
     attempted.value = true;
     if (nameError.value) return;
     emit("save", props.channel.id, { name: name.value.trim(), description: description.value });

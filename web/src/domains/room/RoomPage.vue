@@ -17,9 +17,11 @@
     <template #sidebar="{ closeNavigation }">
       <aside class="room-sidebar" :aria-label="t('room.navigation')">
         <ChannelBar
-          :channels="availableChannels"
+          v-model:channels="sortableChannels"
+          :default-channel="defaultChannel"
           :channel-id="currentChannelId"
           :disabled="saving || sending || !currentRoomId"
+          @move="moveChannel"
           @create="
             closeNavigation();
             openChannelCreate();
@@ -300,6 +302,7 @@
   import ChannelCreateDialog from "@/domains/channel/ChannelCreateDialog.vue";
   import ChannelEditDialog from "@/domains/channel/ChannelEditDialog.vue";
   import { DEFAULT_CHANNEL_ID, draftScope } from "@/domains/channel/channelRoutes";
+  import { useChannelOrder } from "@/domains/channel/useChannelOrder";
   import MemberEditDialog from "@/domains/room/MemberEditDialog.vue";
   import MemberPanel from "@/domains/room/MemberPanel.vue";
   import MessageDetails from "@/domains/room/MessageDetails.vue";
@@ -377,8 +380,9 @@
       ? roomsStore.snapshots[roomsStore.snapshotKey(currentRoomId.value, currentChannelId.value)]
       : undefined,
   );
-  const availableChannels = computed(() =>
-    currentRoomId.value ? channelsStore.activeChannels(currentRoomId.value) : [],
+  const { defaultChannel, sortableChannels, availableChannels, moveChannel } = useChannelOrder(
+    () => currentRoomId.value,
+    () => (currentRoomId.value ? channelsStore.activeChannels(currentRoomId.value) : []),
   );
   const composerScope = computed(() =>
     currentRoomId.value && currentChannelId.value
@@ -1076,12 +1080,13 @@
   }
 
   function editChannel(channel: Channel): void {
+    if (channel.isDefault) return;
     setupError.value = null;
     editingChannel.value = channel;
   }
 
   async function saveChannel(channelId: string, request: UpdateChannel): Promise<void> {
-    if (!currentRoomId.value) return;
+    if (!currentRoomId.value || channelId === DEFAULT_CHANNEL_ID) return;
     const roomId = currentRoomId.value;
     await saveSetup(async () => {
       await channelsStore.update(roomId, channelId, request);
@@ -1105,6 +1110,7 @@
   }
 
   function openDelete(target: ResourceDeleteTarget): void {
+    if (target.kind === "channel" && target.node.isDefault) return;
     setupMode.value = undefined;
     editingMember.value = undefined;
     setupError.value = null;

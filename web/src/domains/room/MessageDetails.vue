@@ -3,7 +3,10 @@
     <header class="room-panel-heading message-details-heading">
       <div class="detail-heading-title">
         <h2 class="room-panel-title">{{ detailLabel }}</h2>
-        <div v-if="channel && !channel.archivedAt" class="detail-heading-actions">
+        <div
+          v-if="channel && !channel.isDefault && !channel.archivedAt"
+          class="detail-heading-actions"
+        >
           <button
             type="button"
             class="detail-action-link"
@@ -14,7 +17,6 @@
             {{ t("common.edit") }}
           </button>
           <button
-            v-if="!channel.isDefault"
             type="button"
             class="detail-action-link detail-delete-link"
             :disabled="busy"
