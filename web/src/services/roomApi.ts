@@ -184,6 +184,12 @@ export type RoomMetadata = {
   };
 };
 
+export type RoomActivity = Pick<RoomMetadata, "positions" | "summary" | "eventId">;
+export type MessageUpdatesQuery = Pick<MessageQuery, "topicId" | "memberId" | "keyword"> & {
+  messageIds: string[];
+  retainedIds: string[];
+};
+
 export type MessagePage = {
   messages: RoomMessage[];
   hasMore: boolean;
@@ -349,6 +355,32 @@ export async function fetchRoomMessage(
 ): Promise<RoomMessage> {
   const { data } = await apiClient.get<RoomMessage>(
     roomResourcePath(roomId, channelId, `/message/${encodeURIComponent(messageId)}`),
+    { signal },
+  );
+  return data;
+}
+
+export async function fetchRoomMessageUpdates(
+  roomId: string,
+  query: MessageUpdatesQuery,
+  signal: AbortSignal | undefined,
+  channelId: string,
+): Promise<RoomMessage[]> {
+  const { data } = await apiClient.post<RoomMessage[]>(
+    roomResourcePath(roomId, channelId, "/message/updates"),
+    query,
+    { signal },
+  );
+  return data;
+}
+
+export async function fetchRoomActivity(
+  roomId: string,
+  signal: AbortSignal | undefined,
+  channelId: string,
+): Promise<RoomActivity> {
+  const { data } = await apiClient.get<RoomActivity>(
+    roomResourcePath(roomId, channelId, "/activity"),
     { signal },
   );
   return data;

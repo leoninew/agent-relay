@@ -12,6 +12,7 @@ from conflua.domain.rooms.models import RoomState
 
 def test_capability_queries_release_scope_and_pass_exact_room_and_target(
     room_store: MagicMock,
+    room_repository: Mock,
 ) -> None:
     driver = Mock(spec=CapabilityDriver)
     skills = SkillCatalog(skills=[], errors=[])
@@ -32,6 +33,7 @@ def test_capability_queries_release_scope_and_pass_exact_room_and_target(
     assert service.mcp_servers("conflua", "frontend-worker") is servers
     driver.list_skills.assert_called_once_with("d:/project", force_reload=True)
     driver.list_mcp_servers.assert_called_once_with("frontend-worker-session")
+    room_repository.resources.assert_not_called()
 
 
 @pytest.mark.parametrize("case", ["missing", "deleted", "human"])

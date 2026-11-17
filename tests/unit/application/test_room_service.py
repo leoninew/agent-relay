@@ -146,9 +146,14 @@ def test_room_clear_soft_deletes_only_unreachable_members_after_fresh_discovery(
             sessions[0] = replace(sessions[0], archived=True)
         return sessions
 
-    driver.list_sessions.side_effect = discover
+    driver.connected_sessions.side_effect = lambda session_ids: discover()
 
     result = RoomService(room_store).clear_room(room_state.room.id, driver)
+
+    driver.connected_sessions.assert_called_once_with(
+        frozenset(member.session_id for member in room_state.members if member.session_id)
+    )
+    driver.list_sessions.assert_not_called()
 
     assert result.removed_messages == 5 and result.removed_members == 1
     assert target.deleted_at is not None and target.topic_ids == []
@@ -165,7 +170,7 @@ def test_room_clear_does_not_write_when_session_discovery_fails(
     room_store: MagicMock, room_repository: Mock
 ) -> None:
     driver = Mock(spec=SessionDriver)
-    driver.list_sessions.side_effect = TimeoutError("private diagnostic")
+    driver.connected_sessions.side_effect = TimeoutError("private diagnostic")
 
     with pytest.raises(SessionUnavailableError, match="无法核验成员连接状态"):
         RoomService(room_store).clear_room("conflua", driver)
@@ -192,7 +197,7 @@ def test_room_clear_does_not_need_codex_when_only_the_fixed_user_remains(
 def test_room_clear_checks_room_existence_before_contacting_codex(
     room_store: MagicMock, room_repository: Mock
 ) -> None:
-    room_repository.resources.side_effect = RoomNotFoundError("聊天室不存在")
+    room_repository.active_bindings.side_effect = RoomNotFoundError("聊天室不存在")
     driver = Mock(spec=SessionDriver)
 
     with pytest.raises(RoomNotFoundError):

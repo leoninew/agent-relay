@@ -18,12 +18,14 @@ from conflua.application.dto.messages import (
     CreateMessage,
     MessagePage,
     MessageQueuePage,
+    MessageUpdatesQuery,
 )
 from conflua.application.dto.rooms import (
     ChangedTopic,
     ClearedRoom,
     CreateRoom,
     CreateTopic,
+    RoomActivity,
     RoomEventPage,
     RoomMetadata,
     UpdateRoom,
@@ -126,6 +128,23 @@ def list_messages(
         limit=limit,
     )
     return output.page(room_id, page)
+
+
+@channel_router.get("/activity")
+def get_activity(room_id: str, queries: RoomQueriesDependency) -> RoomActivity:
+    return queries.activity(room_id)
+
+
+@channel_router.post("/message/updates")
+def get_message_updates(
+    room_id: str,
+    request: MessageUpdatesQuery,
+    queries: RoomQueriesDependency,
+    output: MessageOutputDependency,
+) -> list[Message]:
+    return [
+        output.message(room_id, message) for message in queries.message_updates(room_id, request)
+    ]
 
 
 @channel_router.get("/queue")

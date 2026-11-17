@@ -90,6 +90,7 @@ class QueueWire:
             return self.skills
         if method == "mcpServerStatus/list":
             assert params["threadId"] == self.thread["id"]
+            assert params["serverName"] == self.server["name"]
             return {"data": [self.server], "nextCursor": None}
         assert method == "thread/queue/add"
         if self.add_error:
@@ -113,7 +114,7 @@ class QueueWire:
             (
                 SkillReference(id=bindings[0].option.id, name="Untrusted display snapshot"),
                 SkillReference(id=bindings[1].option.id, name="Conflua selected by user"),
-                McpServerReference(id=server.id, name="Untrusted MCP snapshot"),
+                McpServerReference(id=server.id, name=server.name),
             ),
         )
 

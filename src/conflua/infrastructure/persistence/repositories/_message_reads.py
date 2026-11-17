@@ -4,7 +4,7 @@ from sqlalchemy import Select, and_, func, or_, select
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement
 
-from conflua.application.dto.messages import MessagePage, MessageQueuePage
+from conflua.application.dto.messages import MessagePage, MessageQueuePage, MessageUpdatesQuery
 from conflua.domain.rooms.delivery import ACTIVE_DELIVERY_STATUSES
 from conflua.domain.rooms.errors import RoomNotFoundError
 from conflua.domain.rooms.models import Delivery, Message
@@ -93,6 +93,26 @@ class SQLAlchemyMessageReads:
         for message_id, target_id in self.session.execute(statement):
             relations.setdefault(message_id, []).append(target_id)
         return relations
+
+    def message_updates(self, room_id: str, request: MessageUpdatesQuery) -> list[Message]:
+        if not request.message_ids:
+            return []
+        matches = self.scope(room_id, topic_id=request.topic_id, member_id=request.member_id)
+        if request.keyword and request.keyword.strip():
+            matches = and_(
+                matches, literal_contains(MessageRecord.content.expression, request.keyword.strip())
+            )
+        return self.read(
+            room_id,
+            self.statement()
+            .where(
+                MessageRecord.room_id == room_id,
+                MessageRecord.channel_id == self.channel_id,
+                MessageRecord.id.in_(request.message_ids),
+                or_(matches, MessageRecord.id.in_(request.retained_ids)),
+            )
+            .order_by(MessageRecord.seq),
+        )
 
     def load(
         self,

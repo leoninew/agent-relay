@@ -22,7 +22,7 @@ from conflua.application.members.sessions import (
     SessionUnavailableError,
 )
 from conflua.application.rooms.ports import RoomStore
-from conflua.domain.rooms.errors import RoomConflictError, RoomNotFoundError
+from conflua.domain.rooms.errors import RoomConflictError
 from conflua.domain.rooms.members import (
     observation_cutoff,
     rename_member,
@@ -81,11 +81,7 @@ class MemberService:
         """Refresh session metadata without changing member names or subscriptions."""
         by_id = {info.id: info for info in sessions}
         with self.store.write() as rooms:
-            state = rooms.resources(room_id)
-            for member in state.members:
-                if member.kind != "agent" or member.deleted_at is not None or not member.session_id:
-                    continue
-                session_id, member_id = member.session_id, member.id
+            for member_id, session_id in rooms.active_bindings(room_id).items():
                 info = by_id.get(session_id)
                 presence = info.presence if info is not None else "unknown"
                 activity = (
@@ -136,17 +132,7 @@ class MemberService:
 
     def interrupt(self, room_id: str, member_id: str) -> MemberInterruptResult:
         with self.store.read() as rooms:
-            state = rooms.resources(room_id)
-            member = next(
-                (
-                    member
-                    for member in state.members
-                    if member.id == member_id and member.deleted_at is None
-                ),
-                None,
-            )
-            if member is None:
-                raise RoomNotFoundError("成员不存在", code="member_not_found")
+            member = rooms.member(room_id, member_id)
             if member.kind != "agent" or not member.session_id:
                 raise RoomConflictError("该成员不支持打断", code="member_interrupt_unsupported")
             session_id = member.session_id
@@ -157,17 +143,7 @@ class MemberService:
 
     def _model_target(self, room_id: str, member_id: str) -> str:
         with self.store.read() as rooms:
-            state = rooms.resources(room_id)
-            member = next(
-                (
-                    member
-                    for member in state.members
-                    if member.id == member_id and member.deleted_at is None
-                ),
-                None,
-            )
-            if member is None:
-                raise RoomNotFoundError("成员不存在", code="member_not_found")
+            member = rooms.member(room_id, member_id)
             if member.kind != "agent" or not member.session_id:
                 raise RoomConflictError("该成员不支持模型切换", code="member_model_unsupported")
             return member.session_id

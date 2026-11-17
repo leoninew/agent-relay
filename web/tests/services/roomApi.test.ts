@@ -13,6 +13,8 @@ import {
   fetchRoomMessage,
   fetchRoomMessages,
   fetchRoomMetadata,
+  fetchRoomMessageUpdates,
+  fetchRoomActivity,
   fetchMessageQueue,
   fetchRoomSessions,
   fetchRooms,
@@ -50,6 +52,24 @@ describe("room API", () => {
   afterEach(() => {
     apiClient.defaults.adapter = originalAdapter;
     vi.clearAllMocks();
+  });
+
+  it("sends a scoped batch body and a separate lightweight activity request", async () => {
+    const signal = new AbortController().signal;
+    const query = { messageIds: ["changed"], retainedIds: [], topicId: "topic", keyword: "needle" };
+    await fetchRoomMessageUpdates("room/a", query, signal, "channel/b");
+    expect(adapterMock.mock.calls[0][0]).toMatchObject({
+      method: "post",
+      url: "/api/room/room%2Fa/channel/channel%2Fb/message/updates",
+      signal,
+    });
+    expect(JSON.parse(adapterMock.mock.calls[0][0].data)).toEqual(query);
+    await fetchRoomActivity("room/a", signal, "channel/b");
+    expect(adapterMock.mock.calls[1][0]).toMatchObject({
+      method: "get",
+      url: "/api/room/room%2Fa/channel/channel%2Fb/activity",
+      signal,
+    });
   });
 
   it("posts a scoped interrupt without forwarding session IDs or queue options", async () => {

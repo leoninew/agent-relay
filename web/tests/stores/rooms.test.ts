@@ -26,6 +26,26 @@ describe("room state", () => {
     setActivePinia(createPinia());
   });
 
+  it("merges activity and resources with independent versions in the selected channel", () => {
+    const store = useRoomsStore();
+    const initial = roomFixture();
+    store.sync(initial, "channel-default");
+    store.sync(roomFixture(), "other");
+    const summary = { ...initial.summary, totalMessages: 100 };
+    store.syncActivity(initial.room.id, { positions: [], summary, eventId: 30 }, "channel-default");
+    store.syncMetadata({ ...initial, topics: [], eventId: 20 }, "channel-default");
+    const snapshot = store.snapshots[store.snapshotKey(initial.room.id, "channel-default")];
+    expect(snapshot.topics).toEqual([]);
+    expect(snapshot.summary.totalMessages).toBe(100);
+    expect(snapshot.positions).toEqual([]);
+    expect(snapshot.eventId).toBe(10);
+    store.syncActivity(initial.room.id, initial, "channel-default");
+    expect(snapshot.summary.totalMessages).toBe(100);
+    expect(store.snapshots[store.snapshotKey(initial.room.id, "other")].summary).toEqual(
+      roomFixture().summary,
+    );
+  });
+
   it("removes a deleted room and its snapshot while retaining other rooms", async () => {
     const store = useRoomsStore();
     const snapshot = roomFixture();

@@ -329,6 +329,8 @@ class CodexDriver:
                     if not isinstance(cursor, str) or not cursor or cursor in seen:
                         raise RpcDisconnected("Invalid Codex pagination cursor")
                     seen.add(cursor)
+            if working_path is not None and not result:
+                return []
             loaded: set[str] = set()
             cursor = None
             seen = set()
@@ -358,6 +360,34 @@ class CodexDriver:
                     replace(info, archived=result[sid].archived) if sid in result else info
                 )
         return list(result.values())
+
+    def connected_sessions(self, session_ids: frozenset[str]) -> list[SessionInfo]:
+        if not session_ids:
+            return []
+        result = []
+        with ProxyRpc(self.command, self.timeout) as rpc:
+            cursor: str | None = None
+            seen: set[str] = set()
+            loaded: set[str] = set()
+            while True:
+                page = rpc.call("thread/loaded/list", {"cursor": cursor, "limit": 100})
+                ids = page.get("data")
+                if not isinstance(ids, list) or any(not isinstance(sid, str) for sid in ids):
+                    raise RpcDisconnected("Invalid loaded Codex session list")
+                loaded.update(session_ids.intersection(ids))
+                cursor = page.get("nextCursor")
+                if cursor is None or loaded == session_ids:
+                    break
+                if not isinstance(cursor, str) or not cursor or cursor in seen:
+                    raise RpcDisconnected("Invalid loaded Codex pagination cursor")
+                seen.add(cursor)
+            for session_id in sorted(loaded):
+                row = rpc.call("thread/read", {"threadId": session_id, "includeTurns": False})
+                info = self._session(row.get("thread"))
+                if info.id != session_id:
+                    raise RpcDisconnected("Loaded Codex session identity mismatch")
+                result.append(info)
+        return result
 
     def inspect(self, thread_id: str) -> SessionInfo:
         with ProxyRpc(self.command, self.timeout) as rpc:
@@ -533,7 +563,10 @@ class CodexDriver:
 
     @staticmethod
     def _mcp_catalog(
-        rpc: ProxyRpc, thread_id: str, required_ids: frozenset[str] = frozenset()
+        rpc: ProxyRpc,
+        thread_id: str,
+        required_ids: frozenset[str] = frozenset(),
+        server_name: str | None = None,
     ) -> McpCatalog:
         servers = []
         cursor: str | None = None
@@ -548,10 +581,13 @@ class CodexDriver:
                         "cursor": cursor,
                         "limit": 100,
                         "detail": "toolsAndAuthOnly",
+                        "serverName": server_name,
                     },
                 )
             )
             for server in page.data:
+                if server_name is not None and server.name != server_name:
+                    raise RpcDisconnected("MCP server does not match the requested name")
                 if server.name in seen_servers:
                     raise RpcDisconnected("Duplicate MCP server identity")
                 seen_servers.add(server.name)
@@ -608,18 +644,14 @@ class CodexDriver:
         ]
         seen = {("skill", required_skill.option.id)}
         skills = {binding.option.id: binding for binding in discovery.bindings}
-        servers = (
-            {
-                server.id: server
-                for server in self._mcp_catalog(
-                    rpc,
-                    thread_id,
-                    frozenset(ref.id for ref in request.capabilities if ref.type == "mcp_server"),
-                ).servers
-            }
-            if any(reference.type == "mcp_server" for reference in request.capabilities)
-            else {}
-        )
+        mcp_references = {ref.name: ref for ref in request.capabilities if ref.type == "mcp_server"}
+        servers = {
+            server.id: server
+            for name, reference in mcp_references.items()
+            for server in self._mcp_catalog(
+                rpc, thread_id, frozenset({reference.id}), server_name=name
+            ).servers
+        }
         for reference in request.capabilities:
             key = (reference.type, reference.id)
             if key in seen:

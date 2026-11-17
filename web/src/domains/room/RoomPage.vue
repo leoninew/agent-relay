@@ -322,6 +322,7 @@
   import { useRoomCapabilities } from "@/domains/room/useRoomCapabilities";
   import { useRoomDraft } from "@/domains/room/useRoomDraft";
   import { useRoomResourceOrder } from "@/domains/room/useRoomResourceOrder";
+  import { loadRoomEventUpdates } from "@/domains/room/roomEventUpdates";
   import { messageQueryKey, mergeRefreshedSnapshot } from "@/domains/room/roomMessageQuery";
   import { useDelayedSkeleton } from "@/domains/room/useDelayedSkeleton";
   import { ApiClientError, describeApiError } from "@/services/api";
@@ -580,17 +581,20 @@
           if (version !== loadVersion) return;
         }
         const signal = queryController?.signal;
-        const ids = [
-          ...new Set(
-            events.map((event) => event.messageId).filter((id): id is string => Boolean(id)),
-          ),
-        ];
-        const [metadata, messages] = await Promise.all([
-          fetchRoomMetadata(roomId, signal, channelId),
-          Promise.all(ids.map((id) => fetchRoomMessage(roomId, id, signal, channelId))),
-        ]);
+        const retainedIds = new Set(current.messages.map((message) => message.id));
+        if (detailMessage.value) retainedIds.add(detailMessage.value.id);
+        if (replyTo.value) retainedIds.add(replyTo.value.id);
+        const { state, messages } = await loadRoomEventUpdates(
+          roomId,
+          channelId,
+          events,
+          filters(),
+          retainedIds,
+          signal,
+        );
         if (version !== loadVersion) return;
-        roomsStore.syncMetadata(metadata, channelId);
+        if ("room" in state) roomsStore.syncMetadata(state, channelId);
+        else roomsStore.syncActivity(roomId, state, channelId);
         if (clearDeletedFilters()) {
           await loadRoom();
           return;
@@ -599,6 +603,8 @@
         const previousSeq = current.messages.at(-1)?.seq ?? 0;
         roomsStore.applyMessages(roomId, messages, filters(), channelId);
         roomPanel.syncMessages(messages);
+        const updatedReply = messages.find((message) => message.id === replyTo.value?.id);
+        if (updatedReply) replyTo.value = updatedReply;
         current.eventId = page.nextEventId;
         const newest = current.messages.at(-1);
         if (wasAtEnd && newest && newest.seq > previousSeq) {

@@ -64,16 +64,13 @@ class RoomService:
 
     def clear_room(self, room_id: str, driver: SessionDriver) -> ClearedRoom:
         with self.store.read() as rooms:
-            state = rooms.resources(room_id)
-            bindings = {
-                member.id: member.session_id
-                for member in state.members
-                if member.kind == "agent" and member.deleted_at is None
-            }
+            bindings = rooms.active_bindings(room_id)
         unavailable: set[str] = set()
         if bindings:
             try:
-                sessions = driver.list_sessions()
+                sessions = driver.connected_sessions(
+                    frozenset(session_id for session_id in bindings.values() if session_id)
+                )
             except Exception as exc:
                 raise SessionUnavailableError(
                     "无法核验成员连接状态，请刷新后重试", code="session_metadata_unavailable"

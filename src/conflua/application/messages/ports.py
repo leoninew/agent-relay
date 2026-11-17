@@ -1,11 +1,17 @@
 from datetime import datetime
 from typing import Protocol
 
-from conflua.application.dto.messages import CodexQueueTarget, MessagePage, MessageQueuePage
+from conflua.application.dto.messages import (
+    CodexQueueTarget,
+    MessagePage,
+    MessageQueuePage,
+    MessageUpdatesQuery,
+)
 from conflua.domain.rooms.models import Message
 
 
 class MessageRepository(Protocol):
+    def message_updates(self, room_id: str, request: MessageUpdatesQuery) -> list[Message]: ...
     def message(self, room_id: str, message_id: str) -> Message: ...
     def page(
         self,

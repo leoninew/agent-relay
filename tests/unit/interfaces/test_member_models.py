@@ -13,6 +13,7 @@ from conflua.application.dto.session_models import (
     UpdateSessionModel,
 )
 from conflua.application.members.sessions import SessionModelRejected, SessionUnavailableError
+from conflua.domain.rooms.errors import RoomNotFoundError
 from conflua.domain.rooms.models import Member, Room, RoomState
 from conflua.interfaces.http.exception_handlers import register_exception_handlers
 from conflua.interfaces.http.rooms.routes import channel_router
@@ -22,7 +23,7 @@ from conflua.interfaces.http.rooms.routes import channel_router
 def model_api() -> tuple[FastAPI, MagicMock, Mock]:
     store = MagicMock()
     repository = store.for_channel.return_value.read.return_value.__enter__.return_value
-    repository.resources.return_value = RoomState(
+    state = RoomState(
         room=Room(
             id="room",
             name="Room",
@@ -46,6 +47,14 @@ def model_api() -> tuple[FastAPI, MagicMock, Mock]:
             )
         ],
     )
+
+    def member(room_id: str, member_id: str) -> Member:
+        if member_id != "member":
+            raise RoomNotFoundError("成员不存在", code="member_not_found")
+        return state.members[0]
+
+    repository.member.side_effect = member
+    repository.resources.side_effect = AssertionError("Single-member reads must be scoped")
     driver = Mock()
     result = SessionModelCatalog(
         session_id="thread",

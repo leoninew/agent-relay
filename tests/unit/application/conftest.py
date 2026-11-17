@@ -4,6 +4,7 @@ import pytest
 
 from conflua.application.dto.rooms import RoomMetadata, RoomSummary
 from conflua.application.rooms.ports import RoomData, RoomStore
+from conflua.domain.rooms.errors import RoomNotFoundError
 from conflua.domain.rooms.models import Member, Room, RoomState, Session, Topic
 
 
@@ -69,6 +70,22 @@ def room_repository(room_state: RoomState) -> Mock:
     repository.room.return_value = room_state.room
     repository.working_path.side_effect = lambda room_id: room_state.working_path
     repository.resources.return_value = room_state
+
+    def member(room_id: str, member_id: str) -> Member:
+        found = next(
+            (item for item in room_state.members if item.id == member_id and not item.deleted_at),
+            None,
+        )
+        if found is None:
+            raise RoomNotFoundError("聊天室成员不存在", code="member_not_found")
+        return found
+
+    repository.member.side_effect = member
+    repository.active_bindings.side_effect = lambda room_id: {
+        item.id: item.session_id
+        for item in room_state.members
+        if item.kind == "agent" and item.session_id and not item.deleted_at
+    }
     repository.project_exists.return_value = False
     repository.publication.return_value = None
     repository.next_message_seq.return_value = 1

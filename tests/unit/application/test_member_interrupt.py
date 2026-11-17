@@ -28,6 +28,8 @@ def test_interrupt_uses_binding_and_releases_database_before_rpc(
     )
     room_store.write.assert_not_called()
     room_repository.save_resources.assert_not_called()
+    room_repository.resources.assert_not_called()
+    room_repository.member.assert_called_once_with(room_state.room.id, "frontend-worker")
 
 
 @pytest.mark.parametrize("target", ["absent", "deleted", "human", "unbound"])

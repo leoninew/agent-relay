@@ -3,7 +3,7 @@ from collections.abc import Callable
 from conflua.application.capabilities.ports import CapabilityDriver, CapabilityUnavailableError
 from conflua.application.dto.capabilities import McpCatalog, SkillCatalog
 from conflua.application.rooms.ports import RoomStore
-from conflua.domain.rooms.errors import RoomInputError, RoomNotFoundError
+from conflua.domain.rooms.errors import RoomInputError
 
 
 class CapabilityService:
@@ -29,13 +29,7 @@ class CapabilityService:
 
     def mcp_servers(self, room_id: str, member_id: str) -> McpCatalog:
         with self.store.read() as rooms:
-            state = rooms.resources(room_id)
-            member = next(
-                (item for item in state.members if item.id == member_id and not item.deleted_at),
-                None,
-            )
-            if member is None:
-                raise RoomNotFoundError("聊天室成员不存在", code="member_not_found")
+            member = rooms.member(room_id, member_id)
             if member.kind != "agent" or member.session_id is None:
                 raise RoomInputError(
                     "仅绑定 Codex 会话的成员支持 MCP 目录", code="member_mcp_unsupported"

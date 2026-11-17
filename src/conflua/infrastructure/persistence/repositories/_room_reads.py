@@ -7,7 +7,13 @@ from sqlalchemy.orm import Session
 
 from conflua.application.dto.desktop import ShutdownNotificationTarget
 from conflua.application.dto.positions import TopicPosition
-from conflua.application.dto.rooms import RoomEvent, RoomEventPage, RoomMetadata, RoomSummary
+from conflua.application.dto.rooms import (
+    RoomActivity,
+    RoomEvent,
+    RoomEventPage,
+    RoomMetadata,
+    RoomSummary,
+)
 from conflua.domain.rooms.errors import RoomConflictError, RoomNotFoundError
 from conflua.domain.rooms.models import (
     USER_MEMBER_ID,
@@ -151,6 +157,16 @@ class SQLAlchemyRoomReads:
             if session_id is not None
         }
 
+    def member(self, room_id: str, member_id: str) -> Member:
+        self.room(room_id)
+        return self.publisher(room_id, member_id)
+
+    def active_bindings(self, room_id: str) -> dict[str, str]:
+        self.room(room_id)
+        return {
+            member_id: session_id for session_id, member_id in self.joined_members(room_id).items()
+        }
+
     def bindings(self) -> list[tuple[str, str, str]]:
         return [
             (room_id, channel_id, session_id)
@@ -207,6 +223,13 @@ class SQLAlchemyRoomReads:
                 select(SessionRecord)
                 .where(
                     SessionRecord.room_id == room_id,
+                    select(MemberRecord.id)
+                    .where(
+                        MemberRecord.room_id == SessionRecord.room_id,
+                        MemberRecord.channel_id == self.channel_id,
+                        MemberRecord.session_id == SessionRecord.id,
+                    )
+                    .exists(),
                 )
                 .order_by(insertion_order("sessions"))
             )
@@ -296,6 +319,16 @@ class SQLAlchemyRoomReads:
 
     def metadata(self, room_id: str) -> RoomMetadata:
         state = self.resources(room_id)
+        return RoomMetadata(
+            room=state.room,
+            topics=state.topics,
+            members=state.members,
+            sessions=state.sessions,
+            **self.activity(room_id).model_dump(),
+        )
+
+    def activity(self, room_id: str) -> RoomActivity:
+        self.room(room_id)
         statuses = {
             status: count
             for status, count in self.session.execute(
@@ -329,11 +362,7 @@ class SQLAlchemyRoomReads:
             )
             or 0
         )
-        return RoomMetadata(
-            room=state.room,
-            topics=state.topics,
-            members=state.members,
-            sessions=state.sessions,
+        return RoomActivity(
             positions=self.positions(room_id),
             summary=RoomSummary(
                 total_messages=total,

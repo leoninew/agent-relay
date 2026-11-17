@@ -15,14 +15,17 @@ class RoomSummary(RoomModel):
     unknown_count: int = 0
 
 
-class RoomMetadata(RoomModel):
+class RoomActivity(RoomModel):
+    positions: list[TopicPosition]
+    summary: RoomSummary
+    event_id: int
+
+
+class RoomMetadata(RoomActivity):
     room: Room
     topics: list[Topic]
     members: list[Member]
     sessions: list[Session]
-    positions: list[TopicPosition]
-    summary: RoomSummary
-    event_id: int
 
 
 class ChangedTopic(Topic):

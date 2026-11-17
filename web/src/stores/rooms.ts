@@ -19,6 +19,7 @@ import type {
   MessagePage,
   MessageQuery,
   Room,
+  RoomActivity,
   RoomMessage,
   RoomMetadata,
   RoomSnapshot,
@@ -39,6 +40,7 @@ export const useRoomsStore = defineStore("rooms", () => {
   const createOpen = ref(false);
   const snapshots = ref<Record<string, RoomSnapshot>>({});
   const metadataVersions: Record<string, number> = {};
+  const activityVersions: Record<string, number> = {};
   let pending: Promise<Room[]> | undefined;
 
   async function load(): Promise<void> {
@@ -68,6 +70,9 @@ export const useRoomsStore = defineStore("rooms", () => {
     }
     for (const key of Object.keys(metadataVersions)) {
       if (key.startsWith(`${roomId}:`)) delete metadataVersions[key];
+    }
+    for (const key of Object.keys(activityVersions)) {
+      if (key.startsWith(`${roomId}:`)) delete activityVersions[key];
     }
     rooms.value = rooms.value.filter((room) => room.id !== roomId);
     if (recentRoomId.value === roomId) recentRoomId.value = undefined;
@@ -105,6 +110,7 @@ export const useRoomsStore = defineStore("rooms", () => {
     const scope = snapshotScope(snapshot.room.id, channelId);
     snapshots.value[scope] = snapshot;
     metadataVersions[scope] = snapshot.eventId;
+    activityVersions[scope] = snapshot.eventId;
     updateRoomName(snapshot.room);
   }
 
@@ -122,9 +128,17 @@ export const useRoomsStore = defineStore("rooms", () => {
     snapshot.topics = metadata.topics;
     snapshot.members = metadata.members;
     snapshot.sessions = metadata.sessions;
-    snapshot.positions = metadata.positions;
-    snapshot.summary = metadata.summary;
+    syncActivity(metadata.room.id, metadata, channelId);
     updateRoomName(metadata.room);
+  }
+
+  function syncActivity(roomId: string, activity: RoomActivity, channelId: string): void {
+    const scope = snapshotScope(roomId, channelId);
+    const snapshot = snapshots.value[scope];
+    if (!snapshot || activity.eventId < (activityVersions[scope] ?? 0)) return;
+    activityVersions[scope] = activity.eventId;
+    snapshot.positions = activity.positions;
+    snapshot.summary = activity.summary;
   }
 
   function prependPage(roomId: string, page: MessagePage, channelId: string): void {
@@ -183,6 +197,7 @@ export const useRoomsStore = defineStore("rooms", () => {
     clear,
     sync,
     syncMetadata,
+    syncActivity,
     prependPage,
     applyMessages,
     createTopic,

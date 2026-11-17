@@ -172,6 +172,7 @@ def test_presence_failure_records_unknown_and_continues_other_members(
     assert failed.kwargs["refresh_cutoff"] < failed.args[5]
     assert observations["backend-worker"].args[3] == "available"
     session_driver.list_sessions.assert_not_called()
+    room_repository.resources.assert_not_called()
 
 
 def test_presence_failure_logs_once_until_the_session_recovers(

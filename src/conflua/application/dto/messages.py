@@ -20,6 +20,16 @@ class MessagePage(RoomModel):
     has_newer: bool
 
 
+class MessageUpdatesQuery(RoomModel):
+    model_config = ConfigDict(extra="forbid")
+
+    message_ids: list[str] = Field(max_length=200)
+    retained_ids: list[str] = Field(default_factory=list, max_length=200)
+    topic_id: str | None = None
+    member_id: str | None = None
+    keyword: str | None = Field(default=None, max_length=200)
+
+
 class MessageQueuePage(RoomModel):
     messages: list[Message]
     total_messages: int

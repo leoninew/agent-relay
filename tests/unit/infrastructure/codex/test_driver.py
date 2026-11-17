@@ -194,6 +194,45 @@ def test_session_discovery_keeps_directory_filter_across_pages_and_loaded_refres
     assert read_ids == expected_read_ids
 
 
+def test_empty_directory_query_skips_loaded_session_discovery(
+    history_rpc: Mock,
+) -> None:
+    history_rpc.call.side_effect = [
+        {"data": []},
+        {"data": []},
+    ]
+    assert CodexDriver(["unused"], 1).list_sessions("D:/Work/empty") == []
+    assert [request.args[0] for request in history_rpc.call.call_args_list] == [
+        "thread/list",
+        "thread/list",
+    ]
+
+
+def test_connected_sessions_only_reads_requested_loaded_ids(history_rpc: Mock) -> None:
+    history_rpc.call.side_effect = [
+        {"data": ["other", "bound"], "nextCursor": "more"},
+        {"data": ["another"]},
+        {"thread": {"id": "bound", "modelProvider": "codex", "status": {"type": "idle"}}},
+    ]
+    result = CodexDriver(["unused"], 1).connected_sessions(frozenset({"bound", "offline"}))
+    assert [info.id for info in result] == ["bound"]
+    assert [request.args[0] for request in history_rpc.call.call_args_list] == [
+        "thread/loaded/list",
+        "thread/loaded/list",
+        "thread/read",
+    ]
+    assert history_rpc.call.call_args.args[1]["threadId"] == "bound"
+
+
+def test_connected_sessions_stops_when_all_requested_ids_are_found(history_rpc: Mock) -> None:
+    history_rpc.call.side_effect = [
+        {"data": ["bound"], "nextCursor": "unneeded"},
+        {"thread": {"id": "bound", "modelProvider": "codex", "status": {"type": "idle"}}},
+    ]
+    assert len(CodexDriver(["unused"], 1).connected_sessions(frozenset({"bound"}))) == 1
+    assert history_rpc.call.call_count == 2
+
+
 def test_input_history_only_returns_correlatable_user_messages(history_rpc: Mock) -> None:
     history_rpc.call.return_value = {
         "data": [
