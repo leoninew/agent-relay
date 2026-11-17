@@ -94,7 +94,6 @@ def test_session_display_name_uses_preview_before_an_unnamed_label(
     info = CodexDriver._session(
         {
             "id": "original-id",
-            "cwd": "D:/project",
             "modelProvider": "test-provider",
             "status": {"type": "idle"},
             "name": name,

@@ -265,7 +265,6 @@ export type Session = {
   id: string;
   name: string;
   provider: string;
-  projectPath: string;
   presence: Member["presence"];
   observedAt: string | null;
 };

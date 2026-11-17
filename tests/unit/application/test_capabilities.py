@@ -6,7 +6,7 @@ import pytest
 from conflua.application.capabilities.ports import CapabilityDriver, CapabilityUnavailableError
 from conflua.application.capabilities.service import CapabilityService
 from conflua.application.dto.capabilities import McpCatalog, SkillCatalog
-from conflua.domain.rooms.errors import RoomConflictError, RoomInputError, RoomNotFoundError
+from conflua.domain.rooms.errors import RoomInputError, RoomNotFoundError
 from conflua.domain.rooms.models import RoomState
 
 
@@ -21,7 +21,7 @@ def test_capability_queries_release_scope_and_pass_exact_room_and_target(
         room_store.read.return_value.__exit__.assert_called_once()
         return skills
 
-    def list_mcp_servers(thread_id: str, project_path: str) -> McpCatalog:
+    def list_mcp_servers(thread_id: str) -> McpCatalog:
         assert room_store.read.return_value.__exit__.call_count == 2
         return servers
 
@@ -31,10 +31,10 @@ def test_capability_queries_release_scope_and_pass_exact_room_and_target(
     assert service.skills("conflua", force_reload=True) is skills
     assert service.mcp_servers("conflua", "frontend-worker") is servers
     driver.list_skills.assert_called_once_with("d:/project", force_reload=True)
-    driver.list_mcp_servers.assert_called_once_with("frontend-worker-session", "d:/project")
+    driver.list_mcp_servers.assert_called_once_with("frontend-worker-session")
 
 
-@pytest.mark.parametrize("case", ["missing", "deleted", "human", "session", "directory"])
+@pytest.mark.parametrize("case", ["missing", "deleted", "human"])
 def test_invalid_member_scope_never_queries_codex(
     case: str, room_state: RoomState, room_store: MagicMock
 ) -> None:
@@ -49,16 +49,20 @@ def test_invalid_member_scope_never_queries_codex(
     elif case == "human":
         member_id = "user"
         error = RoomInputError
-    elif case == "session":
-        room_state.sessions.clear()
-        error = RoomConflictError
-    else:
-        session = next(item for item in room_state.sessions if item.id == member.session_id)
-        session.project_path = "D:/other"
-        error = RoomConflictError
     with pytest.raises(error):
         CapabilityService(room_store, driver).mcp_servers("conflua", member_id)
     driver.list_mcp_servers.assert_not_called()
+
+
+def test_mcp_uses_the_member_binding_without_cached_session_metadata(
+    room_state: RoomState, room_store: MagicMock
+) -> None:
+    room_state.sessions.clear()
+    driver = Mock(spec=CapabilityDriver)
+    driver.list_mcp_servers.return_value = McpCatalog(servers=[])
+    result = CapabilityService(room_store, driver).mcp_servers("conflua", "frontend-worker")
+    assert result.servers == []
+    driver.list_mcp_servers.assert_called_once_with("frontend-worker-session")
 
 
 def test_missing_room_does_not_query_codex(room_store: MagicMock, room_repository: Mock) -> None:

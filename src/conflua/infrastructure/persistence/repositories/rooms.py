@@ -42,8 +42,6 @@ class SQLAlchemyRoomRepository(SQLAlchemyRoomReads):
                 id=DEFAULT_CHANNEL_ID,
                 name="默认",
                 description="",
-                working_path=room.project_path,
-                working_path_key=room.project_path,
                 is_default=True,
                 workspace_kind="existing",
             )

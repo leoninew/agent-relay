@@ -49,7 +49,6 @@ def room_state() -> RoomState:
                 id=member.session_id,
                 name=member.name,
                 provider="codex",
-                project_path="D:/project",
                 presence="available",
             )
             for member in members

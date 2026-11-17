@@ -16,9 +16,9 @@ def test_model_calls_use_bound_session_outside_database_scope(room_store: MagicM
         session_id="frontend-worker-session", provider="provider", current_model="old", models=[]
     )
 
-    def read(session_id: str, project_path: str) -> SessionModelCatalog:
+    def read(session_id: str) -> SessionModelCatalog:
         room_store.read.return_value.__exit__.assert_called_once()
-        assert (session_id, project_path) == ("frontend-worker-session", "d:/project")
+        assert session_id == "frontend-worker-session"
         return expected
 
     driver.model_catalog.side_effect = read
@@ -27,7 +27,7 @@ def test_model_calls_use_bound_session_outside_database_scope(room_store: MagicM
     driver.update_model.return_value = expected
     request = UpdateSessionModel(session_id="frontend-worker-session", model="new")
     assert service.update_model("conflua", "frontend-worker", request) == expected
-    driver.update_model.assert_called_once_with("frontend-worker-session", "d:/project", request)
+    driver.update_model.assert_called_once_with("frontend-worker-session", request)
     room_store.write.assert_not_called()
 
 

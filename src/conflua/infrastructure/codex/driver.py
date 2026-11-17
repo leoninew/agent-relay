@@ -42,7 +42,6 @@ from conflua.application.members.sessions import (
     SessionUnavailableError,
 )
 from conflua.domain.rooms.models import SubmissionMethod
-from conflua.domain.rooms.rules import normalize_project_path
 from conflua.infrastructure.codex.catalog import decode_skills, server_option
 from conflua.infrastructure.codex.models import McpPage, SkillBinding, SkillDiscovery
 from conflua.infrastructure.codex.session_models import public_catalog, read_models
@@ -264,7 +263,7 @@ class CodexDriver:
     def _session(thread: Any, *, archived: bool = False) -> SessionInfo:
         if not isinstance(thread, dict):
             raise RpcDisconnected("Missing Codex thread metadata")
-        values = [thread.get(key) for key in ("id", "cwd", "modelProvider")]
+        values = [thread.get(key) for key in ("id", "modelProvider")]
         if any(not isinstance(value, str) or not value for value in values):
             raise RpcDisconnected("Incomplete Codex session identity")
         status = thread.get("status", {}).get("type")
@@ -283,8 +282,7 @@ class CodexDriver:
                 raise RpcDisconnected("Invalid Codex model settings")
         return SessionInfo(
             id=cast(str, values[0]),
-            cwd=cast(str, values[1]),
-            provider=cast(str, values[2]),
+            provider=cast(str, values[1]),
             name=name or "未命名会话",
             status=cast(
                 SessionStatus,
@@ -363,10 +361,10 @@ class CodexDriver:
             result = rpc.call("thread/read", {"threadId": thread_id, "includeTurns": False})
             return self._session(result.get("thread"))
 
-    def model_catalog(self, thread_id: str, project_path: str) -> SessionModelCatalog:
+    def model_catalog(self, thread_id: str) -> SessionModelCatalog:
         try:
             with ProxyRpc(self.command, self.timeout) as rpc:
-                session = self._model_session(rpc, thread_id, project_path)
+                session = self._model_session(rpc, thread_id)
                 return public_catalog(session, read_models(rpc, session.provider))
         except (SessionModelRejected, SessionUnavailableError):
             raise
@@ -375,23 +373,21 @@ class CodexDriver:
                 "无法读取会话模型", code="session_model_unavailable"
             ) from exc
 
-    def _model_session(self, rpc: ProxyRpc, thread_id: str, project_path: str) -> SessionInfo:
+    def _model_session(self, rpc: ProxyRpc, thread_id: str) -> SessionInfo:
         try:
-            return self._target_session(rpc, thread_id, project_path)
+            return self._target_session(rpc, thread_id)
         except QueueRejected as exc:
             raise SessionModelRejected(
-                "会话不可用或不属于当前目录", code="session_model_target_unavailable"
+                "会话当前不可用", code="session_model_target_unavailable"
             ) from exc
 
-    def update_model(
-        self, thread_id: str, project_path: str, request: UpdateSessionModel
-    ) -> SessionModelCatalog:
+    def update_model(self, thread_id: str, request: UpdateSessionModel) -> SessionModelCatalog:
         attempted = False
         try:
             with ProxyRpc(self.command, self.timeout) as rpc:
                 if request.session_id != thread_id:
                     raise SessionModelRejected("成员会话已变化", code="session_binding_changed")
-                session = self._model_session(rpc, thread_id, project_path)
+                session = self._model_session(rpc, thread_id)
                 models = read_models(rpc, session.provider)
                 selected = next((model for model in models if model.model == request.model), None)
                 if selected is None:
@@ -418,7 +414,7 @@ class CodexDriver:
                     raise SessionModelRejected(
                         "模型切换请求未被接受", code="session_model_update_rejected"
                     ) from exc
-                confirmed = self._target_session(rpc, thread_id, project_path)
+                confirmed = self._target_session(rpc, thread_id)
                 if (
                     confirmed.provider != session.provider
                     or confirmed.model != request.model
@@ -434,14 +430,14 @@ class CodexDriver:
                 code="session_model_update_unknown" if attempted else "session_model_unavailable",
             ) from exc
 
-    def interrupt(self, thread_id: str, project_path: str) -> MemberInterruptResult:
+    def interrupt(self, thread_id: str) -> MemberInterruptResult:
         try:
             with ProxyRpc(self.command, self.timeout) as rpc:
                 try:
-                    session = self._target_session(rpc, thread_id, project_path)
+                    session = self._target_session(rpc, thread_id)
                 except QueueRejected as exc:
                     raise SessionInterruptRejected(
-                        "目标会话不可用或不属于当前频道", code="session_unavailable"
+                        "目标会话当前不可用", code="session_unavailable"
                     ) from exc
                 if session.status == "idle":
                     return MemberInterruptResult(status="not_running")
@@ -528,16 +524,8 @@ class CodexDriver:
                 return binding
         raise RpcDisconnected("Selected skill is unavailable")
 
-    def list_mcp_servers(self, thread_id: str, project_path: str) -> McpCatalog:
+    def list_mcp_servers(self, thread_id: str) -> McpCatalog:
         with ProxyRpc(self.command, self.timeout) as rpc:
-            metadata = rpc.call("thread/read", {"threadId": thread_id, "includeTurns": False})
-            session = self._session(metadata.get("thread"))
-            if (
-                session.id != thread_id
-                or not session.usable
-                or normalize_project_path(session.cwd) != normalize_project_path(project_path)
-            ):
-                raise RpcDisconnected("Target Codex session is unavailable or outside this room")
             return self._mcp_catalog(rpc, thread_id)
 
     @staticmethod
@@ -580,13 +568,11 @@ class CodexDriver:
                 raise RpcDisconnected("Invalid MCP pagination cursor")
             seen_cursors.add(cursor)
 
-    def _target_session(self, rpc: ProxyRpc, thread_id: str, project_path: str) -> SessionInfo:
+    def _target_session(self, rpc: ProxyRpc, thread_id: str) -> SessionInfo:
         metadata = rpc.call("thread/read", {"threadId": thread_id, "includeTurns": False})
         session = self._session(metadata.get("thread"))
-        if session.id != thread_id or normalize_project_path(session.cwd) != normalize_project_path(
-            project_path
-        ):
-            raise QueueRejected("目标 Codex 会话标识或工作目录与绑定不符")
+        if session.id != thread_id:
+            raise QueueRejected("目标 Codex 会话标识与绑定不符")
         if not session.usable:
             raise TargetSessionUnavailable("目标 Codex 会话暂时未接入或状态异常，稍后重试")
         return session
@@ -594,9 +580,10 @@ class CodexDriver:
     def _queue_inputs(
         self, rpc: ProxyRpc, thread_id: str, request: QueueRequest
     ) -> list[dict[str, Any]]:
-        session = self._target_session(rpc, thread_id, request.project_path)
+        self._target_session(rpc, thread_id)
         discovery = decode_skills(
-            rpc.call("skills/list", {"cwds": [session.cwd], "forceReload": True}), session.cwd
+            rpc.call("skills/list", {"cwds": [request.project_path], "forceReload": True}),
+            request.project_path,
         )
         required = [
             binding
@@ -721,11 +708,9 @@ class CodexDriver:
             raise RpcDisconnected("Missing Codex active turn identity")
         return turn_id
 
-    def _steer_fallback(
-        self, rpc: ProxyRpc, thread_id: str, project_path: str, expected_turn_id: str
-    ) -> bool:
+    def _steer_fallback(self, rpc: ProxyRpc, thread_id: str, expected_turn_id: str) -> bool:
         try:
-            session = self._target_session(rpc, thread_id, project_path)
+            session = self._target_session(rpc, thread_id)
             if session.status == "idle":
                 return True
             turn_id = self._active_turn(rpc, thread_id)
@@ -740,7 +725,7 @@ class CodexDriver:
         try:
             with ProxyRpc(self.command, self.timeout) as rpc:
                 inputs = self._queue_inputs(rpc, thread_id, request)
-                session = self._target_session(rpc, thread_id, request.project_path)
+                session = self._target_session(rpc, thread_id)
                 turn_id = self._active_turn(rpc, thread_id) if session.status == "active" else None
                 note = None
                 if turn_id is not None:
@@ -759,9 +744,7 @@ class CodexDriver:
                         if exc.code == -32601:
                             note = "当前输入通道不支持即时送达，已入队等待接收"
                         elif exc.code in {-32600, -32602}:
-                            if not self._steer_fallback(
-                                rpc, thread_id, request.project_path, turn_id
-                            ):
+                            if not self._steer_fallback(rpc, thread_id, turn_id):
                                 raise SubmissionRejected(
                                     "Steer request was not accepted", method
                                 ) from exc

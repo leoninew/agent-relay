@@ -44,7 +44,6 @@ def session_from_model(record: SessionRecord) -> Session:
             "id": record.id,
             "name": record.name,
             "provider": record.provider,
-            "project_path": record.project_path,
             "presence": record.presence,
             "observed_at": record.observed_at,
         }

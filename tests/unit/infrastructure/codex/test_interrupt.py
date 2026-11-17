@@ -15,7 +15,6 @@ def metadata(status: str = "active", **changes: Any) -> dict[str, Any]:
     return {
         "thread": {
             "id": "thread",
-            "cwd": "D:/project",
             "modelProvider": "codex",
             "status": {"type": status},
             **changes,
@@ -49,7 +48,7 @@ def test_interrupt_confirms_original_turn_even_when_another_turn_has_started(
             ]
         },
     ]
-    result = CodexDriver(["unused"], 1).interrupt("thread", "d:/project/")
+    result = CodexDriver(["unused"], 1).interrupt("thread")
     assert result.status == "interrupted" and result.turn_id == "target"
     assert interrupt_rpc.call.call_args_list == [
         call("thread/read", {"threadId": "thread", "includeTurns": False}),
@@ -67,28 +66,28 @@ def test_interrupt_confirms_original_turn_even_when_another_turn_has_started(
 
 def test_idle_session_never_sends_interrupt(interrupt_rpc: Mock) -> None:
     interrupt_rpc.call.return_value = metadata("idle")
-    result = CodexDriver(["unused"], 1).interrupt("thread", "D:/project")
+    result = CodexDriver(["unused"], 1).interrupt("thread")
     assert result.status == "not_running" and result.turn_id is None
     assert interrupt_rpc.call.call_count == 1
 
 
 @pytest.mark.parametrize(
     "thread",
-    [metadata(id="other"), metadata(cwd="D:/other"), metadata("notLoaded")],
+    [metadata(id="other"), metadata("notLoaded")],
 )
-def test_identity_directory_and_connection_are_verified_before_interrupt(
+def test_identity_and_connection_are_verified_before_interrupt(
     interrupt_rpc: Mock, thread: dict[str, Any]
 ) -> None:
     interrupt_rpc.call.return_value = thread
     with pytest.raises(SessionInterruptRejected):
-        CodexDriver(["unused"], 1).interrupt("thread", "D:/project")
+        CodexDriver(["unused"], 1).interrupt("thread")
     assert interrupt_rpc.call.call_count == 1
 
 
 def test_active_session_without_resolvable_turn_is_not_interrupted(interrupt_rpc: Mock) -> None:
     interrupt_rpc.call.side_effect = [metadata(), {"data": []}]
     with pytest.raises(SessionInterruptRejected) as caught:
-        CodexDriver(["unused"], 1).interrupt("thread", "D:/project")
+        CodexDriver(["unused"], 1).interrupt("thread")
     assert caught.value.code == "session_interrupt_turn_unavailable"
     assert interrupt_rpc.call.call_count == 2
 
@@ -102,7 +101,7 @@ def test_explicit_rejection_is_safe_and_never_retried(
 ) -> None:
     interrupt_rpc.call.side_effect = [metadata(), turns("inProgress"), RpcRejected("private", code)]
     with pytest.raises(SessionInterruptRejected) as caught:
-        CodexDriver(["unused"], 1).interrupt("thread", "D:/project")
+        CodexDriver(["unused"], 1).interrupt("thread")
     assert caught.value.code == expected
     assert "private" not in str(caught.value)
     assert interrupt_rpc.call.call_count == 3
@@ -118,7 +117,7 @@ def test_dependency_failure_preserves_whether_interrupt_was_attempted(
     responses.append(TimeoutError("private diagnostic"))
     interrupt_rpc.call.side_effect = responses
     with pytest.raises(SessionUnavailableError) as caught:
-        CodexDriver(["unused"], 1).interrupt("thread", "D:/project")
+        CodexDriver(["unused"], 1).interrupt("thread")
     assert caught.value.code == (
         "session_metadata_unavailable" if failed_at == "metadata" else "session_interrupt_unknown"
     )
@@ -133,7 +132,7 @@ def test_naturally_finished_target_is_not_reported_as_interrupted(
     interrupt_rpc: Mock, status: str
 ) -> None:
     interrupt_rpc.call.side_effect = [metadata(), turns("inProgress"), {}, turns(status)]
-    result = CodexDriver(["unused"], 1).interrupt("thread", "D:/project")
+    result = CodexDriver(["unused"], 1).interrupt("thread")
     assert result.status == "not_running" and result.turn_id == "target"
 
 
@@ -148,7 +147,7 @@ def test_synchronous_confirmation_waits_for_target_without_resending(
         turns("inProgress"),
         turns("interrupted"),
     ]
-    result = CodexDriver(["unused"], 1).interrupt("thread", "D:/project")
+    result = CodexDriver(["unused"], 1).interrupt("thread")
     assert result.status == "interrupted"
     assert (
         sum(entry.args[0] == "turn/interrupt" for entry in interrupt_rpc.call.call_args_list) == 1
@@ -169,5 +168,5 @@ def test_missing_target_cannot_turn_an_acknowledgement_into_success(
         turns("interrupted", "other"),
     ]
     with pytest.raises(SessionUnavailableError) as caught:
-        CodexDriver(["unused"], 1).interrupt("thread", "D:/project")
+        CodexDriver(["unused"], 1).interrupt("thread")
     assert caught.value.code == "session_interrupt_unknown"

@@ -73,15 +73,12 @@ def test_session_reasons(
     archived: bool,
     code: str | None,
 ) -> None:
-    info = SessionInfo(
-        id="id", cwd="/project", provider="codex", name="name", status=status, archived=archived
-    )
+    info = SessionInfo(id="id", provider="codex", name="name", status=status, archived=archived)
     assert info.unavailable_reason_code == code
     candidate = SessionCandidate(
         id=info.id,
         name=info.name,
         provider=info.provider,
-        project_path=info.cwd,
         presence=info.presence,
         observed_at=None,
         archived=info.archived,

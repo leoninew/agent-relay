@@ -72,7 +72,7 @@ def test_http_interrupt_uses_channel_scoped_binding_and_returns_final_result(
     assert response.status_code == 200
     assert response.json() == {"status": "interrupted", "turnId": "turn"}
     store.for_channel.assert_called_once_with("channel")
-    driver.interrupt.assert_called_once_with("thread", "D:/worktree")
+    driver.interrupt.assert_called_once_with("thread")
 
 
 @pytest.mark.parametrize("failure", ["missing", "unsupported", "unknown"])

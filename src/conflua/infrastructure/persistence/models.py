@@ -45,8 +45,7 @@ class ChannelRecord(Base):
     id: Mapped[str] = mapped_column(Text, primary_key=True)
     name: Mapped[str] = mapped_column(Text)
     description: Mapped[str] = mapped_column(Text)
-    working_path: Mapped[str] = mapped_column(Text)
-    working_path_key: Mapped[str | None] = mapped_column(Text)
+    worktree_path: Mapped[str | None] = mapped_column(Text)
     is_default: Mapped[bool]
     workspace_kind: Mapped[str] = mapped_column(Text)
     branch: Mapped[str | None] = mapped_column(Text)
@@ -68,12 +67,6 @@ class ChannelRecord(Base):
             sqlite_where=archived_at.is_(None),
         ),
         Index("channels_default", "room_id", unique=True, sqlite_where=text("is_default = 1")),
-        Index(
-            "channels_active_path",
-            "working_path_key",
-            unique=True,
-            sqlite_where=text("archived_at IS NULL AND workspace_kind = 'worktree'"),
-        ),
     )
 
 
@@ -111,7 +104,6 @@ class SessionRecord(Base):
     id: Mapped[str] = mapped_column(Text, primary_key=True)
     name: Mapped[str] = mapped_column(Text)
     provider: Mapped[str] = mapped_column(Text)
-    project_path: Mapped[str] = mapped_column(Text)
     presence: Mapped[str] = mapped_column(Text)
     observed_at: Mapped[datetime | None] = mapped_column(ISODateTime)
 

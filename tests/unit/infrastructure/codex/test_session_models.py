@@ -13,7 +13,6 @@ def metadata(**changes: Any) -> dict[str, Any]:
     return {
         "thread": {
             "id": "thread",
-            "cwd": "D:/project",
             "modelProvider": "provider",
             "model": "old",
             "reasoningEffort": "high",
@@ -45,9 +44,7 @@ def model_rpc(monkeypatch: MonkeyPatch) -> MagicMock:
 
 
 def update(driver: CodexDriver) -> SessionModelCatalog:
-    return driver.update_model(
-        "thread", "d:/project/", UpdateSessionModel(session_id="thread", model="new")
-    )
+    return driver.update_model("thread", UpdateSessionModel(session_id="thread", model="new"))
 
 
 def test_provider_catalog_paginates_filters_hidden_and_keeps_real_current_model(
@@ -58,7 +55,7 @@ def test_provider_catalog_paginates_filters_hidden_and_keeps_real_current_model(
         {"data": [model(), model("hidden", hidden=True)], "nextCursor": "next"},
         {"data": [model("second")]},
     ]
-    result = CodexDriver(["unused"], 1).model_catalog("thread", "D:/project")
+    result = CodexDriver(["unused"], 1).model_catalog("thread")
     assert result.current_model == "unlisted"
     assert [option.model for option in result.models] == ["new", "second"]
     assert result.models[0].id == "catalog-entry-new"
@@ -71,7 +68,7 @@ def test_provider_catalog_paginates_filters_hidden_and_keeps_real_current_model(
 
 def test_empty_catalog_and_unknown_current_model_are_preserved(model_rpc: Mock) -> None:
     model_rpc.call.side_effect = [metadata(model=None), {"data": []}]
-    result = CodexDriver(["unused"], 1).model_catalog("thread", "D:/project")
+    result = CodexDriver(["unused"], 1).model_catalog("thread")
     assert result.current_model is None and result.models == []
 
 
@@ -98,13 +95,11 @@ def test_invalid_catalog_fails_safely(model_rpc: Mock, bad: str) -> None:
     }
     model_rpc.call.side_effect = [metadata(), *cases[bad]]
     with pytest.raises(SessionUnavailableError) as caught:
-        CodexDriver(["unused"], 1).model_catalog("thread", "D:/project")
+        CodexDriver(["unused"], 1).model_catalog("thread")
     assert caught.value.code == "session_model_unavailable"
 
 
-@pytest.mark.parametrize(
-    "changes", [{"id": "wrong"}, {"cwd": "D:/wrong"}, {"status": {"type": "notLoaded"}}]
-)
+@pytest.mark.parametrize("changes", [{"id": "wrong"}, {"status": {"type": "notLoaded"}}])
 def test_invalid_session_never_reads_catalog_or_writes(
     model_rpc: Mock, changes: dict[str, Any]
 ) -> None:
@@ -153,7 +148,7 @@ def test_unavailable_model_never_submits(model_rpc: Mock) -> None:
 def test_rebound_request_never_reaches_rpc(model_rpc: Mock) -> None:
     with pytest.raises(SessionModelRejected):
         CodexDriver(["unused"], 1).update_model(
-            "other", "D:/project", UpdateSessionModel(session_id="thread", model="new")
+            "other", UpdateSessionModel(session_id="thread", model="new")
         )
     model_rpc.call.assert_not_called()
 

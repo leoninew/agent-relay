@@ -15,6 +15,7 @@ from conflua.domain.rooms.models import (
     Room,
     RoomState,
 )
+from conflua.domain.rooms.rules import normalize_project_path
 from conflua.infrastructure.persistence.mappers import (
     member_from_model,
     room_from_model,
@@ -54,15 +55,17 @@ class SQLAlchemyRoomReads:
         return room_from_model(record)
 
     def working_path(self, room_id: str) -> str:
-        self.room(room_id)
+        room = self.room(room_id)
         channel = self.session.get(ChannelRecord, (room_id, self.channel_id))
         if channel is None:
             raise RoomNotFoundError("频道不存在", code="channel_not_found")
         if channel.archived_at is not None:
             raise RoomConflictError("频道当前不可用", code="channel_unavailable")
-        if channel.workspace_kind == "worktree" and not Path(channel.working_path).is_dir():
+        if channel.workspace_kind == "existing":
+            return room.project_path
+        if not channel.worktree_path or not Path(channel.worktree_path).is_dir():
             raise RoomConflictError("频道工作目录不存在", code="channel_directory_missing")
-        return channel.working_path
+        return channel.worktree_path
 
     def rooms(self) -> list[Room]:
         return [
@@ -75,22 +78,21 @@ class SQLAlchemyRoomReads:
         ]
 
     def project_exists(self, project_path: str) -> bool:
-        return (
-            self.session.scalar(
-                select(RoomRecord.id)
-                .where(RoomRecord.project_path == project_path, RoomRecord.archived_at.is_(None))
-                .limit(1)
-            )
-            is not None
-        ) or self.session.scalar(
-            select(ChannelRecord.id)
-            .where(
-                ChannelRecord.working_path_key == project_path,
+        identity = normalize_project_path(project_path)
+        room_paths = self.session.scalars(
+            select(RoomRecord.project_path).where(RoomRecord.archived_at.is_(None))
+        )
+        if any(normalize_project_path(path) == identity for path in room_paths):
+            return True
+        channel_paths = self.session.scalars(
+            select(ChannelRecord.worktree_path).where(
                 ChannelRecord.workspace_kind == "worktree",
                 ChannelRecord.archived_at.is_(None),
             )
-            .limit(1)
-        ) is not None
+        )
+        return any(
+            path is not None and normalize_project_path(path) == identity for path in channel_paths
+        )
 
     def _member(self, record: MemberRecord) -> Member:
         topic_ids = list(

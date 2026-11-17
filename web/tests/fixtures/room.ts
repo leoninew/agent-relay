@@ -100,7 +100,6 @@ export function roomFixture(): RoomSnapshot {
         id: "session-frontend",
         name: "前端会话",
         provider: "codex",
-        projectPath: "D:/work/conflua",
         presence: "busy",
         observedAt: null,
       },

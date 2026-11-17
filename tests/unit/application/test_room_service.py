@@ -20,7 +20,7 @@ def test_room_creation_persists_business_initialization_without_database_default
         CreateRoom(name="Another", project_path="D:/another")
     )
     state, original = room_repository.save_resources.call_args.args
-    assert state.room == room and room.project_path == "d:/another"
+    assert state.room == room and room.project_path == "D:/another"
     assert original.topics == [] and original.members == state.members
     room_repository.insert_room.assert_called_once_with(room, state.members[0])
     room_store.write.return_value.__exit__.assert_called_once_with(None, None, None)
@@ -35,12 +35,12 @@ def test_project_path_conflict_uses_normalized_identity_without_writing(
         RoomService(room_store).create_room(
             CreateRoom(name="Duplicate", project_path="D:\\PROJECT\\")
         )
-    room_repository.project_exists.assert_called_once_with("d:/project")
+    room_repository.project_exists.assert_called_once_with("D:/PROJECT")
     room_repository.insert_room.assert_not_called()
     room_repository.save_resources.assert_not_called()
 
 
-@pytest.mark.parametrize("status", ["unavailable", "error", "archived", "missing", "other-project"])
+@pytest.mark.parametrize("status", ["unavailable", "error", "archived", "missing"])
 def test_room_clear_soft_deletes_only_unreachable_members_after_fresh_discovery(
     room_state: RoomState,
     room_store: MagicMock,
@@ -59,7 +59,6 @@ def test_room_clear_soft_deletes_only_unreachable_members_after_fresh_discovery(
         sessions = [
             SessionInfo(
                 id=member.session_id,
-                cwd="D:/project",
                 provider="codex",
                 name=member.name,
                 status="active",
@@ -75,8 +74,6 @@ def test_room_clear_soft_deletes_only_unreachable_members_after_fresh_discovery(
             )
         elif status == "archived":
             sessions[0] = replace(sessions[0], archived=True)
-        else:
-            sessions[0] = replace(sessions[0], cwd="D:/other")
         return sessions
 
     driver.list_sessions.side_effect = discover

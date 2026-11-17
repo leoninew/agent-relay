@@ -3,8 +3,7 @@ from collections.abc import Callable
 from conflua.application.capabilities.ports import CapabilityDriver, CapabilityUnavailableError
 from conflua.application.dto.capabilities import McpCatalog, SkillCatalog
 from conflua.application.rooms.ports import RoomStore
-from conflua.domain.rooms.errors import RoomConflictError, RoomInputError, RoomNotFoundError
-from conflua.domain.rooms.rules import normalize_project_path
+from conflua.domain.rooms.errors import RoomInputError, RoomNotFoundError
 
 
 class CapabilityService:
@@ -41,15 +40,5 @@ class CapabilityService:
                 raise RoomInputError(
                     "仅绑定 Codex 会话的成员支持 MCP 目录", code="member_mcp_unsupported"
                 )
-            session = next((item for item in state.sessions if item.id == member.session_id), None)
-            if session is None:
-                raise RoomConflictError(
-                    "成员绑定的 Codex 会话不存在", code="session_binding_not_found"
-                )
-            project_path = state.working_path
-            if normalize_project_path(session.project_path) != normalize_project_path(project_path):
-                raise RoomConflictError(
-                    "成员会话不属于当前聊天室项目目录", code="session_project_mismatch"
-                )
-            thread_id = session.id
-        return self._catalog(lambda: self.driver.list_mcp_servers(thread_id, project_path))
+            thread_id = member.session_id
+        return self._catalog(lambda: self.driver.list_mcp_servers(thread_id))

@@ -53,7 +53,6 @@ def store(tmp_path: Path) -> Iterator[SQLAlchemyDeliveryStore]:
                     id="channel-default",
                     name="Default",
                     description="",
-                    working_path=room_id,
                     is_default=True,
                     workspace_kind="existing",
                 )
@@ -65,7 +64,6 @@ def store(tmp_path: Path) -> Iterator[SQLAlchemyDeliveryStore]:
                         id=f"{room_id}-session-{number}",
                         name=str(number),
                         provider="codex",
-                        project_path=room_id,
                         presence="available",
                     )
                 )
@@ -379,7 +377,6 @@ def test_invalid_earlier_target_does_not_block_valid_same_session_work(
                 id="first-session-1",
                 name="shared",
                 provider="codex",
-                project_path="second",
                 presence="available",
             )
         )
@@ -389,7 +386,6 @@ def test_invalid_earlier_target_does_not_block_valid_same_session_work(
                 id="replacement-session",
                 name="replacement",
                 provider="codex",
-                project_path="first",
                 presence="available",
             )
         )

@@ -27,7 +27,6 @@ class Channel(RoomModel):
     name: str
     description: str = ""
     working_path: str
-    working_path_key: str | None = None
     is_default: bool
     workspace_kind: Literal["existing", "worktree"] = "existing"
     branch: str | None = None
@@ -70,7 +69,6 @@ class Session(RoomModel):
     id: str
     name: str
     provider: str
-    project_path: str
     presence: Literal["available", "busy", "offline", "unknown"]
     observed_at: datetime | None = None
 

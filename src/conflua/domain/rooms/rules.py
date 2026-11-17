@@ -1,6 +1,9 @@
 from collections.abc import Sequence
 from datetime import datetime
+from ntpath import normcase as windows_normcase
+from ntpath import normpath as windows_normpath
 from pathlib import PurePosixPath, PureWindowsPath
+from posixpath import normpath as posix_normpath
 from uuid import uuid4
 
 from conflua.domain.rooms.errors import RoomConflictError, RoomInputError
@@ -14,16 +17,23 @@ from conflua.domain.rooms.models import (
 )
 
 
-def normalize_project_path(value: str) -> str:
+def normalize_stored_path(value: str) -> str:
     windows_path = PureWindowsPath(value)
     if windows_path.drive:
         if not windows_path.is_absolute():
             raise RoomInputError("请输入项目的绝对路径", code="project_path_not_absolute")
-        return windows_path.as_posix().casefold()
+        return PureWindowsPath(windows_normpath(value)).as_posix()
     posix_path = PurePosixPath(value)
     if not posix_path.is_absolute():
         raise RoomInputError("请输入项目的绝对路径", code="project_path_not_absolute")
-    return posix_path.as_posix()
+    return posix_normpath(value)
+
+
+def normalize_project_path(value: str) -> str:
+    path = normalize_stored_path(value)
+    if PureWindowsPath(path).drive:
+        return PureWindowsPath(windows_normcase(path)).as_posix()
+    return path
 
 
 def validate_member(

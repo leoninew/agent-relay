@@ -7,7 +7,11 @@ import httpx2
 import pytest
 from fastapi import FastAPI
 
-from conflua.application.dto.session_models import SessionModelCatalog, SessionModelOption
+from conflua.application.dto.session_models import (
+    SessionModelCatalog,
+    SessionModelOption,
+    UpdateSessionModel,
+)
 from conflua.application.members.sessions import SessionModelRejected, SessionUnavailableError
 from conflua.domain.rooms.models import Member, Room, RoomState
 from conflua.interfaces.http.exception_handlers import register_exception_handlers
@@ -97,9 +101,11 @@ def test_model_api_uses_channel_scope_and_camel_case(
         ],
     }
     store.for_channel.assert_called_once_with("channel")
-    driver.model_catalog.assert_called_once_with("thread", "D:/worktree")
+    driver.model_catalog.assert_called_once_with("thread")
     assert request(app, "PATCH", body={"sessionId": "thread", "model": "model"}).status_code == 200
-    assert driver.update_model.call_args.args[:2] == ("thread", "D:/worktree")
+    driver.update_model.assert_called_once_with(
+        "thread", UpdateSessionModel(session_id="thread", model="model")
+    )
 
 
 @pytest.mark.parametrize("failure", ["missing", "rejected", "unknown", "validation", "rebound"])

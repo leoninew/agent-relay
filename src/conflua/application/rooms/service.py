@@ -20,7 +20,7 @@ from conflua.domain.rooms.resources import (
     retire_topic,
     validate_topic_name,
 )
-from conflua.domain.rooms.rules import normalize_project_path
+from conflua.domain.rooms.rules import normalize_stored_path
 
 
 class RoomService:
@@ -28,7 +28,7 @@ class RoomService:
         self.store = store
 
     def create_room(self, request: CreateRoom) -> Room:
-        project_path = normalize_project_path(request.project_path)
+        project_path = normalize_stored_path(request.project_path)
         with self.store.write() as rooms:
             if rooms.project_exists(project_path):
                 raise RoomConflictError("该项目已有聊天室，请直接打开", code="project_room_exists")
@@ -69,7 +69,6 @@ class RoomService:
                 for member in state.members
                 if member.kind == "agent" and member.deleted_at is None
             }
-            project_path = normalize_project_path(state.working_path)
         unavailable: set[str] = set()
         if bindings:
             try:
@@ -78,11 +77,7 @@ class RoomService:
                 raise SessionUnavailableError(
                     "无法核验成员连接状态，请刷新后重试", code="session_metadata_unavailable"
                 ) from exc
-            reachable = {
-                info.id
-                for info in sessions
-                if info.usable and normalize_project_path(info.cwd) == project_path
-            }
+            reachable = {info.id for info in sessions if info.usable}
             unavailable = {
                 member_id
                 for member_id, session_id in bindings.items()

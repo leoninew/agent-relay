@@ -12,7 +12,6 @@ type SessionStatus = Literal["unavailable", "idle", "active", "error"]
 @dataclass(frozen=True)
 class SessionInfo:
     id: str
-    cwd: str
     provider: str
     name: str
     status: SessionStatus

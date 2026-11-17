@@ -33,7 +33,7 @@ def test_join_releases_read_scope_and_validates_current_resources_before_saving(
         room_store.read.return_value.__exit__.assert_called_once()
         if changed_facts:
             room_state.members[0].name = "New member"
-        return SessionInfo(thread_id, "D:/project", "codex", "Original", "idle")
+        return SessionInfo(thread_id, "codex", "Original", "idle")
 
     session_driver.inspect.side_effect = inspect
     service = MemberService(room_store, session_driver)
@@ -66,7 +66,19 @@ def test_empty_sessions_and_driver_failure_do_not_create_members(
     room_repository.save_resources.assert_not_called()
 
 
-def test_discovery_keeps_posix_paths_case_sensitive(
+def test_join_stores_session_metadata_without_a_directory(
+    room_store: MagicMock,
+    session_driver: Mock,
+) -> None:
+    session_driver.inspect.return_value = SessionInfo("fresh", "codex", "Original", "idle")
+    member = MemberService(room_store, session_driver).add(
+        "conflua", CreateMember(name="New member", session_id="fresh", topic_ids=[])
+    )
+    assert member.session.id == "fresh" and member.session.name == "Original"
+    assert "projectPath" not in member.session.model_dump(by_alias=True)
+
+
+def test_discovery_lists_all_sessions_without_a_directory_filter(
     room_state: RoomState,
     room_store: MagicMock,
     session_driver: Mock,
@@ -74,31 +86,24 @@ def test_discovery_keeps_posix_paths_case_sensitive(
     room_state.room.project_path = "/Work/project"
     room_state.working_path = "/Work/project"
     session_driver.list_sessions.return_value = [
-        SessionInfo("exact", "/Work/project/", "codex", "Exact", "idle"),
-        SessionInfo("wrong-case", "/work/project", "codex", "Wrong", "idle"),
+        SessionInfo("first", "codex", "First", "idle"),
+        SessionInfo("second", "codex", "Second", "idle"),
     ]
     candidates = MemberService(room_store, session_driver).candidates("conflua")
-    assert [candidate.id for candidate in candidates] == ["exact"]
+    assert [candidate.id for candidate in candidates] == ["first", "second"]
 
 
 @pytest.mark.parametrize(
     ("info", "topics", "error", "message"),
     [
-        (SessionInfo("one", "D:/other", "codex", "Other", "idle"), [], RoomInputError, "不属于"),
         (
-            SessionInfo("one", "D:/project/subdir", "codex", "Child", "idle"),
-            [],
-            RoomInputError,
-            "不属于",
-        ),
-        (
-            SessionInfo("other", "D:/project", "codex", "Other", "idle"),
+            SessionInfo("other", "codex", "Other", "idle"),
             [],
             SessionUnavailableError,
             "身份不匹配",
         ),
         (
-            SessionInfo("one", "D:/project", "codex", "One", "idle"),
+            SessionInfo("one", "codex", "One", "idle"),
             ["missing"],
             RoomInputError,
             "话题不存在",
@@ -124,7 +129,7 @@ def test_invalid_join_does_not_save_resources(
         session_driver.inspect.assert_not_called()
 
 
-@pytest.mark.parametrize("failure", ["unavailable", "identity", "directory"])
+@pytest.mark.parametrize("failure", ["unavailable", "identity"])
 def test_presence_failure_records_unknown_and_continues_other_members(
     failure: str,
     room_state: RoomState,
@@ -144,14 +149,12 @@ def test_presence_failure_records_unknown_and_continues_other_members(
 
     def inspect(session_id: str) -> SessionInfo:
         room_store.read.return_value.__exit__.assert_called_once()
-        info = SessionInfo(session_id, "D:/project", "codex", "Original", "idle")
+        info = SessionInfo(session_id, "codex", "Original", "idle")
         if session_id == "backend-worker-session":
             return info
         if failure == "unavailable":
             raise TimeoutError("upstream unavailable")
-        if failure == "identity":
-            return replace(info, id="different")
-        return replace(info, cwd="D:/other")
+        return replace(info, id="different")
 
     session_driver.inspect.side_effect = inspect
     MemberService(room_store, session_driver).refresh_presence(
@@ -182,7 +185,7 @@ def test_presence_failure_logs_once_until_the_session_recovers(
     session_driver.inspect.side_effect = [
         first_error,
         TimeoutError("still unavailable"),
-        SessionInfo("frontend-worker-session", "D:/project", "codex", "Original", "idle"),
+        SessionInfo("frontend-worker-session", "codex", "Original", "idle"),
     ]
     logger = Mock(spec=logging.Logger)
     service = MemberService(room_store, session_driver)
@@ -206,7 +209,7 @@ def test_candidates_explain_unavailable_sessions_and_record_presence(
     room_repository: Mock,
     session_driver: Mock,
 ) -> None:
-    info = SessionInfo("frontend-worker-session", "D:/project", "codex", "Existing", "idle")
+    info = SessionInfo("frontend-worker-session", "codex", "Existing", "idle")
     if status == "unavailable":
         info = replace(info, status="unavailable")
     session_driver.list_sessions.return_value = [info]

@@ -16,9 +16,9 @@ def test_interrupt_uses_binding_and_releases_database_before_rpc(
     driver = Mock(spec=SessionDriver)
     expected = MemberInterruptResult(status="interrupted", turn_id="original-turn")
 
-    def interrupt(thread_id: str, project_path: str) -> MemberInterruptResult:
+    def interrupt(thread_id: str) -> MemberInterruptResult:
         room_store.read.return_value.__exit__.assert_called_once()
-        assert (thread_id, project_path) == ("frontend-worker-session", "d:/project")
+        assert thread_id == "frontend-worker-session"
         return expected
 
     driver.interrupt.side_effect = interrupt

@@ -6,7 +6,7 @@ import pytest
 from conflua.application.channels.ports import ChannelData, ChannelStore, WorktreeDriver
 from conflua.application.channels.service import ChannelService
 from conflua.application.dto.channels import CreateChannel
-from conflua.domain.rooms.errors import RoomNotFoundError
+from conflua.domain.rooms.errors import RoomConflictError, RoomNotFoundError
 from conflua.domain.rooms.models import RoomState
 
 
@@ -17,6 +17,7 @@ def test_channel_creation_supplies_initial_resources_to_persistence(
     repository = Mock(spec=ChannelData)
     repository.room.return_value = room_state.room
     repository.channel.side_effect = RoomNotFoundError("频道不存在", code="channel_not_found")
+    repository.project_exists.return_value = False
     store = MagicMock(spec=ChannelStore)
     store.write.return_value.__enter__.return_value = repository
     driver = Mock(spec=WorktreeDriver)
@@ -43,7 +44,7 @@ def test_channel_creation_supplies_initial_resources_to_persistence(
     assert state.topics
     assert all(topic.created_at == channel.created_at for topic in state.topics)
     if use_worktree:
-        assert channel.working_path == str(tmp_path / room_state.room.id / channel.id)
+        assert channel.working_path == (tmp_path / room_state.room.id / channel.id).as_posix()
         driver.inspect.assert_called_once_with(room_state.room.project_path)
         driver.create.assert_called_once_with(
             room_state.room.project_path, channel.working_path, channel.branch, "current-head"
@@ -54,3 +55,23 @@ def test_channel_creation_supplies_initial_resources_to_persistence(
     else:
         assert channel.working_path == room_state.room.project_path
         assert driver.mock_calls == []
+
+
+def test_worktree_path_collision_is_rejected_before_git(
+    room_state: RoomState, tmp_path: Path
+) -> None:
+    repository = Mock(spec=ChannelData)
+    repository.room.return_value = room_state.room
+    repository.channel.side_effect = RoomNotFoundError("频道不存在", code="channel_not_found")
+    repository.project_exists.return_value = True
+    store = MagicMock(spec=ChannelStore)
+    store.write.return_value.__enter__.return_value = repository
+    driver = Mock(spec=WorktreeDriver)
+
+    with pytest.raises(RoomConflictError) as error:
+        ChannelService(store, driver, tmp_path).create(
+            room_state.room.id, CreateChannel(name="API", use_worktree=True)
+        )
+    assert error.value.code == "worktree_path_exists"
+    repository.insert.assert_not_called()
+    driver.inspect.assert_not_called()

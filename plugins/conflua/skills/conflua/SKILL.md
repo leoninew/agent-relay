@@ -15,7 +15,7 @@ Conflua 将聊天室消息路由到当前 Codex 会话。你在当前会话完�
 
 所有频道资源工具必须显式携带消息中的 `channel_id`，默认频道也不例外。CLI 的 `--channel-id CHANNEL` 是全局参数，放在命令组前，也可通过 `CONFLUA_CHANNEL_ID` 配置。省略频道返回 `channel_required`；不要从消息 ID、目标成员或界面最近选择猜频道。房间和频道管理使用各自接口。
 
-`channel_list(room_id)` 用于发现频道；catalog 的 `projectPath` 是房间原目录，`workingPath` 才是本频道执行目录。同一会话可加入多个工作目录匹配的频道，各频道成员和订阅独立；不会自动移动会话。消息 `seq` 在房间全局递增，频道内出现间隔正常；话题、成员、消息、队列、图片和查阅位置均以频道为范围。
+`channel_list(room_id)` 用于发现频道；catalog 的 `projectPath` 是房间原目录，`workingPath` 才是本频道执行目录。普通频道沿用房间目录，只有独立 worktree 频道保存自己的目录。同一会话可加入多个频道，各频道成员和订阅独立；会话由用户选择，不要求会话目录与频道一致，也不会自动移动会话。消息 `seq` 在房间全局递增，频道内出现间隔正常；话题、成员、消息、队列、图片和查阅位置均以频道为范围。
 
 管理频道使用 `channel_create(room_id, name, use_worktree=False, description="")`、`channel_get(room_id, channel_id)`、`channel_archive(room_id, target_channel_id)`；CLI 对应 `channel create/get/archive`，创建可传 `--description`。频道展示名称和描述。默认沿用房间原目录，只有显式选择 worktree 才从当前 commit 创建独立目录，不带入未提交文件，也不接受基准提交参数。
 

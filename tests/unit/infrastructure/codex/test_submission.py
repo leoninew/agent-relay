@@ -86,7 +86,7 @@ class QueueWire:
                 raise self.steer_error
             return self.steer_reply
         if method == "skills/list":
-            assert params == {"cwds": ["D:/project"], "forceReload": True}
+            assert params == {"cwds": ["d:/PROJECT"], "forceReload": True}
             return self.skills
         if method == "mcpServerStatus/list":
             assert params["threadId"] == self.thread["id"]
@@ -173,7 +173,6 @@ def test_native_inputs_resolve_current_bindings_and_include_required_skill_once(
         "mcp",
         "auth",
         "thread",
-        "cwd",
         "unloaded",
     ],
 )
@@ -193,13 +192,24 @@ def test_failed_capability_preflight_never_submits(wire: QueueWire, failure: str
         wire.server["authStatus"] = "notLoggedIn"
     elif failure == "thread":
         wire.thread["id"] = "other"
-    elif failure == "cwd":
-        wire.thread["cwd"] = "D:/other"
     else:
         wire.thread["status"] = {"type": "notLoaded"}
     with pytest.raises(QueueRejected):
         runtime().enqueue("original", "client", request)
     assert "thread/queue/add" not in [method for method, _ in wire.calls]
+
+
+@pytest.mark.parametrize("cwd", ["D:/other", None])
+def test_delivery_uses_the_bound_session_and_channel_skills_without_session_cwd(
+    wire: QueueWire, cwd: str | None
+) -> None:
+    if cwd is None:
+        wire.thread.pop("cwd")
+    else:
+        wire.thread["cwd"] = cwd
+    result = runtime().submit("original", "client", wire.request())
+    assert isinstance(result, QueueReceipt) and result.id == "queued"
+    assert ("skills/list", {"cwds": ["d:/PROJECT"], "forceReload": True}) in wire.calls
 
 
 @pytest.mark.parametrize("failure", ["timeout", "receipt", "rejected"])
