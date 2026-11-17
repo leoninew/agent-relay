@@ -77,11 +77,12 @@ class SQLAlchemyRoomReads:
             )
         ]
 
-    def project_exists(self, project_path: str) -> bool:
+    def project_exists(self, project_path: str, *, exclude_room_id: str | None = None) -> bool:
         identity = normalize_project_path(project_path)
-        room_paths = self.session.scalars(
-            select(RoomRecord.project_path).where(RoomRecord.archived_at.is_(None))
-        )
+        statement = select(RoomRecord.project_path).where(RoomRecord.archived_at.is_(None))
+        if exclude_room_id is not None:
+            statement = statement.where(RoomRecord.id != exclude_room_id)
+        room_paths = self.session.scalars(statement)
         if any(normalize_project_path(path) == identity for path in room_paths):
             return True
         channel_paths = self.session.scalars(

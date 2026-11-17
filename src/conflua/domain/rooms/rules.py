@@ -18,6 +18,7 @@ from conflua.domain.rooms.models import (
 
 
 def normalize_stored_path(value: str) -> str:
+    value = value.strip()
     windows_path = PureWindowsPath(value)
     if windows_path.drive:
         if not windows_path.is_absolute():

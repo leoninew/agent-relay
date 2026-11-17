@@ -130,7 +130,7 @@ describe("room state", () => {
     store.sync(snapshot, "channel-default");
     vi.mocked(updateRoom).mockResolvedValue({ ...snapshot.room, name: "Renamed" });
 
-    await store.rename(snapshot.room.id, "Renamed");
+    await store.update(snapshot.room.id, { name: "Renamed" });
 
     expect(updateRoom).toHaveBeenCalledWith(snapshot.room.id, { name: "Renamed" });
     expect(store.rooms[0]).toEqual({
@@ -138,6 +138,31 @@ describe("room state", () => {
       name: "Renamed",
     });
     expect(store.rooms[0].projectPath).toBe(snapshot.room.projectPath);
+  });
+
+  it("preserves the input path and refreshes cached room paths across channels", async () => {
+    const store = useRoomsStore();
+    const snapshot = roomFixture();
+    store.rooms = [snapshot.room];
+    store.sync(snapshot, "channel-default");
+    store.sync(roomFixture(), "other");
+    const request = { name: "Moved", projectPath: " D:\\Other\\Project\\ " };
+    const updated = {
+      ...snapshot.room,
+      name: request.name,
+      rawProjectPath: request.projectPath,
+      projectPath: "D:/Other/Project",
+    };
+    vi.mocked(updateRoom).mockResolvedValue(updated);
+
+    await store.update(snapshot.room.id, request);
+
+    expect(updateRoom).toHaveBeenCalledWith(snapshot.room.id, request);
+    expect(store.rooms[0]).toEqual(updated);
+    expect(store.snapshots[store.snapshotKey(snapshot.room.id, "channel-default")].room).toEqual(
+      updated,
+    );
+    expect(store.snapshots[store.snapshotKey(snapshot.room.id, "other")].room).toEqual(updated);
   });
 
   it("applies saved resources in one room while keeping messages and the applied cursor", async () => {

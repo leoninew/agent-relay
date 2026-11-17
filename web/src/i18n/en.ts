@@ -99,7 +99,7 @@ export default {
     topicDescription: "Topic description",
     clearDescription: "Clear topic description",
     saveTopic: "Save topic",
-    saveName: "Save name",
+    saveName: "Save project",
     editRoom: "Edit room",
     createRoom: "New room",
     editTopic: "Edit topic",
@@ -232,7 +232,7 @@ export default {
   },
   notice: {
     roomCreated: "Room created.",
-    roomRenamed: "Room name updated.",
+    roomRenamed: "Project updated.",
     roomDeleted: "Room deleted.",
     channelCreated: "Channel created.",
     channelSaved: "Channel saved.",

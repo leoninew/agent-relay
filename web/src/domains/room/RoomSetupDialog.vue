@@ -29,13 +29,12 @@
         </div>
         <div v-if="mode === 'room'" class="setup-field">
           <label for="setup-path"
-            >{{ t("setup.projectPath") }} <span v-if="!room" class="required-mark">*</span></label
+            >{{ t("setup.projectPath") }} <span class="required-mark">*</span></label
           >
           <AppInput
             id="setup-path"
             v-model="projectPath"
             maxlength="500"
-            :readonly="!!room"
             :disabled="saving"
             :invalid="!!errors.projectPath"
             :clear-label="t('setup.clearPath')"
@@ -298,7 +297,7 @@
   const sessionId = ref("");
   const sessionChoices = ref<InstanceType<typeof RadioGroupRoot>>();
   const unavailableOpen = ref(false);
-  const projectPath = ref(props.room?.projectPath ?? "");
+  const projectPath = ref(props.room?.rawProjectPath ?? "");
   const description = ref("");
   const topicIds = ref<string[]>([]);
   const topicSaving = ref(false);
@@ -348,7 +347,7 @@
     name.value = props.room?.name ?? props.topic?.name ?? "";
     sessionId.value = "";
     unavailableOpen.value = false;
-    projectPath.value = props.room?.projectPath ?? "";
+    projectPath.value = props.room?.rawProjectPath ?? "";
     description.value = props.topic?.description ?? "";
     topicIds.value = [];
     errors.value = {};
@@ -396,7 +395,7 @@
     if (props.mode === "member" && (props.sessionsLoading || props.sessionsError)) return;
     errors.value = {};
     if (!name.value.trim()) errors.value.name = { key: "validation.name" };
-    if (props.mode === "room" && !props.room) {
+    if (props.mode === "room") {
       if (!projectPath.value.trim()) errors.value.projectPath = { key: "validation.path" };
       else if (!/^([a-zA-Z]:[\\/]|\/|\\\\)/.test(projectPath.value.trim()))
         errors.value.projectPath = { key: "validation.absolutePath" };
@@ -410,9 +409,10 @@
         errors.value.session = { key: "validation.session" };
     }
     if (Object.keys(errors.value).length) return;
-    if (props.mode === "room" && props.room) emit("updateRoom", { name: name.value.trim() });
+    if (props.mode === "room" && props.room)
+      emit("updateRoom", { name: name.value.trim(), projectPath: projectPath.value });
     else if (props.mode === "room")
-      emit("createRoom", { name: name.value.trim(), projectPath: projectPath.value.trim() });
+      emit("createRoom", { name: name.value.trim(), projectPath: projectPath.value });
     if (props.mode === "member") {
       const request = {
         name: name.value.trim(),

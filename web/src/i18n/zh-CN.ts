@@ -99,7 +99,7 @@ export default {
     topicDescription: "话题说明",
     clearDescription: "清空话题说明",
     saveTopic: "保存话题",
-    saveName: "保存名称",
+    saveName: "保存项目",
     editRoom: "编辑聊天室",
     createRoom: "新建聊天室",
     editTopic: "编辑话题",
@@ -229,7 +229,7 @@ export default {
   },
   notice: {
     roomCreated: "聊天室已创建",
-    roomRenamed: "聊天室名称已更新",
+    roomRenamed: "项目信息已更新",
     roomDeleted: "聊天室已删除",
     channelCreated: "频道已创建",
     channelSaved: "频道已保存",

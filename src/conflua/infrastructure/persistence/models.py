@@ -29,6 +29,7 @@ class RoomRecord(Base):
 
     id: Mapped[str] = mapped_column(Text, primary_key=True)
     project_path: Mapped[str] = mapped_column(Text)
+    raw_project_path: Mapped[str] = mapped_column(Text)
     name: Mapped[str] = mapped_column(Text)
     description: Mapped[str] = mapped_column(Text)
     archived_at: Mapped[datetime | None] = mapped_column(ISODateTime)

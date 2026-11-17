@@ -23,6 +23,7 @@ import type {
   RoomMetadata,
   RoomSnapshot,
   Topic,
+  UpdateRoom,
 } from "@/services/roomApi";
 
 function orderedMessages(messages: RoomMessage[]): RoomMessage[] {
@@ -72,8 +73,8 @@ export const useRoomsStore = defineStore("rooms", () => {
     if (recentRoomId.value === roomId) recentRoomId.value = undefined;
   }
 
-  async function rename(roomId: string, name: string): Promise<Room> {
-    const room = await updateRoom(roomId, { name });
+  async function update(roomId: string, request: UpdateRoom): Promise<Room> {
+    const room = await updateRoom(roomId, request);
     updateRoomName(room);
     for (const [scope, snapshot] of Object.entries(snapshots.value)) {
       if (scope.startsWith(`${room.id}:`)) snapshot.room = room;
@@ -177,7 +178,7 @@ export const useRoomsStore = defineStore("rooms", () => {
     snapshotKey,
     load,
     create,
-    rename,
+    update,
     remove,
     clear,
     sync,

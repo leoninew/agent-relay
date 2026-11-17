@@ -17,7 +17,13 @@ from conflua.domain.rooms.resources import (
 @pytest.fixture
 def state() -> RoomState:
     return new_room_state(
-        Room(id="room", name="Room", project_path="d:/project", description=""),
+        Room(
+            id="room",
+            name="Room",
+            project_path="d:/project",
+            raw_project_path="d:/project",
+            description="",
+        ),
         datetime.now(UTC),
         channel_id="channel-default",
         working_path="d:/project",

@@ -246,7 +246,8 @@
     saving.value = true;
     renameError.value = null;
     try {
-      await roomsStore.rename(room.id, request.name);
+      const updated = await roomsStore.update(room.id, request);
+      if (updated.projectPath !== room.projectPath) await channelsStore.load(room.id, true);
       editingRoom.value = undefined;
       toasts.success({ key: "notice.roomRenamed" });
     } catch (caught) {

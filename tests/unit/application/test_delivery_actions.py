@@ -52,7 +52,13 @@ def work() -> ClaimedDelivery:
         created_at=now,
         deliveries=[delivery],
     )
-    room = Room(id="room", name="Room", project_path="d:/project", description="")
+    room = Room(
+        id="room",
+        name="Room",
+        project_path="d:/project",
+        raw_project_path="d:/project",
+        description="",
+    )
     return ClaimedDelivery(
         room.id, room, message, delivery, "channel-default", room.project_path, "接收成员"
     )

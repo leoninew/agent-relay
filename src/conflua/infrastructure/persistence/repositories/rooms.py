@@ -67,6 +67,7 @@ class SQLAlchemyRoomRepository(SQLAlchemyRoomReads):
                 .where(RoomRecord.id == room_id)
                 .values(
                     project_path=state.room.project_path,
+                    raw_project_path=state.room.raw_project_path,
                     name=state.room.name,
                     description=state.room.description,
                 )

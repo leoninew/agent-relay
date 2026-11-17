@@ -57,7 +57,7 @@ class CreateRoom(RoomModel):
     name: str = Field(min_length=1, max_length=80)
     project_path: str = Field(min_length=1, max_length=500)
 
-    @field_validator("name", "project_path")
+    @field_validator("name")
     @classmethod
     def strip_required(cls, value: str) -> str:
         value = value.strip()
@@ -70,6 +70,7 @@ class UpdateRoom(RoomModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(min_length=1, max_length=80)
+    project_path: str | None = Field(default=None, min_length=1, max_length=500)
 
     @field_validator("name")
     @classmethod

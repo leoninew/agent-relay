@@ -23,7 +23,13 @@ def model_api() -> tuple[FastAPI, MagicMock, Mock]:
     store = MagicMock()
     repository = store.for_channel.return_value.read.return_value.__enter__.return_value
     repository.resources.return_value = RoomState(
-        room=Room(id="room", name="Room", project_path="D:/project", description=""),
+        room=Room(
+            id="room",
+            name="Room",
+            project_path="D:/project",
+            raw_project_path="D:/project",
+            description="",
+        ),
         channel_id="channel",
         working_path="D:/worktree",
         topics=[],

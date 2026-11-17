@@ -39,7 +39,13 @@ def room_state() -> RoomState:
         ],
     ]
     return RoomState(
-        room=Room(id="conflua", name="Room", project_path="d:/project", description=""),
+        room=Room(
+            id="conflua",
+            name="Room",
+            project_path="d:/project",
+            raw_project_path="d:/project",
+            description="",
+        ),
         channel_id="channel-default",
         working_path="d:/project",
         topics=[Topic(id=topic, name=topic, description="") for topic in ["frontend", "backend"]],

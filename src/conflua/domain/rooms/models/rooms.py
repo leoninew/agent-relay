@@ -17,6 +17,7 @@ class Room(RoomModel):
     id: str
     name: str
     project_path: str
+    raw_project_path: str
     description: str
     archived_at: datetime | None = None
 

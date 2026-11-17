@@ -1,4 +1,4 @@
-"""Keep room paths and independent worktree paths only."""
+"""Keep raw and normalized room paths and independent worktree paths."""
 
 from pathlib import Path
 

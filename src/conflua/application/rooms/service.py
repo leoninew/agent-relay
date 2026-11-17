@@ -36,6 +36,7 @@ class RoomService:
                 id=f"room-{uuid4().hex[:12]}",
                 name=request.name,
                 project_path=project_path,
+                raw_project_path=request.project_path,
                 description="",
             )
             state = new_room_state(
@@ -101,9 +102,17 @@ class RoomService:
             )
 
     def update_room(self, room_id: str, request: UpdateRoom) -> Room:
-        with self.store.write() as rooms:
+        with self.store.guard(room_id), self.store.write() as rooms:
             state = rooms.resources(room_id)
             original = deepcopy(state)
+            if request.project_path is not None:
+                project_path = normalize_stored_path(request.project_path)
+                if rooms.project_exists(project_path, exclude_room_id=room_id):
+                    raise RoomConflictError(
+                        "该项目已有聊天室，请直接打开", code="project_room_exists"
+                    )
+                state.room.raw_project_path = request.project_path
+                state.room.project_path = project_path
             state.room.name = request.name
             rooms.save_resources(state, original)
             return state.room.model_copy(deep=True)
