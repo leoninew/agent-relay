@@ -64,7 +64,7 @@ export function useRoomCapabilities(
       const result = await cached(
         skillCache,
         channelCacheKey(current.id, currentChannel, "skills"),
-        current.projectPath,
+        current.workspacePath,
         () => request((signal) => fetchRoomSkills(current.id, force, signal, currentChannel)),
         force,
       );
@@ -77,7 +77,7 @@ export function useRoomCapabilities(
   }
 
   watch(
-    () => JSON.stringify([room()?.id, room()?.projectPath, channelId()]),
+    () => JSON.stringify([room()?.id, room()?.workspacePath, channelId()]),
     () => void loadSkills(),
     { immediate: true },
   );

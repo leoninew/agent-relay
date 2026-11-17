@@ -11,7 +11,7 @@ from conflua.application.dto.capabilities import (
     McpToolOption,
     SkillOption,
 )
-from conflua.domain.rooms.rules import normalize_project_path
+from conflua.domain.rooms.rules import normalize_workspace_identity
 from conflua.infrastructure.codex.models import (
     SkillBinding,
     SkillDiscovery,
@@ -20,12 +20,12 @@ from conflua.infrastructure.codex.models import (
 )
 
 
-def decode_skills(payload: dict[str, Any], project_path: str) -> SkillDiscovery:
-    cwd = normalize_project_path(project_path)
+def decode_skills(payload: dict[str, Any], workspace_path: str) -> SkillDiscovery:
+    cwd = normalize_workspace_identity(workspace_path)
     entries = [
         entry
         for entry in _SkillsResponse.model_validate(payload).data
-        if normalize_project_path(entry.cwd) == cwd
+        if normalize_workspace_identity(entry.cwd) == cwd
     ]
     if len(entries) != 1:
         raise ValueError("Skill catalog does not match the requested directory")
@@ -33,7 +33,7 @@ def decode_skills(payload: dict[str, Any], project_path: str) -> SkillDiscovery:
     bindings: list[SkillBinding] = []
     seen: set[str] = set()
     for skill in entry.skills:
-        native_path = normalize_project_path(skill.path)
+        native_path = normalize_workspace_identity(skill.path)
         if PureWindowsPath(cwd).drive:
             try:
                 relative = ntpath.relpath(native_path, cwd).replace("\\", "/").casefold()

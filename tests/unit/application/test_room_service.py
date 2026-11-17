@@ -17,11 +17,11 @@ def test_room_creation_persists_business_initialization_without_database_default
     room_repository: Mock,
 ) -> None:
     room = RoomService(room_store).create_room(
-        CreateRoom(name="Another", project_path="D:/another")
+        CreateRoom(name="Another", workspace_path="D:/another")
     )
     state, original = room_repository.save_resources.call_args.args
-    assert state.room == room and room.project_path == "D:/another"
-    assert room.raw_project_path == "D:/another"
+    assert state.room == room and room.workspace_path == "D:/another"
+    assert room.raw_workspace_path == "D:/another"
     assert original.topics == [] and original.members == state.members
     room_repository.insert_room.assert_called_once_with(room, state.members[0])
     room_store.write.return_value.__exit__.assert_called_once_with(None, None, None)
@@ -37,11 +37,11 @@ def test_room_creation_persists_business_initialization_without_database_default
 def test_room_creation_preserves_input_and_uses_normalized_working_path(
     room_store: MagicMock, room_repository: Mock, raw_path: str, normalized_path: str
 ) -> None:
-    room = RoomService(room_store).create_room(CreateRoom(name="Project", project_path=raw_path))
+    room = RoomService(room_store).create_room(CreateRoom(name="Project", workspace_path=raw_path))
     state, _ = room_repository.save_resources.call_args.args
-    assert room.raw_project_path == raw_path
-    assert room.project_path == state.working_path == normalized_path
-    room_repository.project_exists.assert_called_once_with(normalized_path)
+    assert room.raw_workspace_path == raw_path
+    assert room.workspace_path == state.working_path == normalized_path
+    room_repository.workspace_exists.assert_called_once_with(normalized_path)
 
 
 def test_room_edit_updates_both_paths_and_excludes_its_own_identity(
@@ -49,13 +49,13 @@ def test_room_edit_updates_both_paths_and_excludes_its_own_identity(
 ) -> None:
     raw_path = "  D:\\Other\\temp\\..\\Project\\  "
     result = RoomService(room_store).update_room(
-        room_state.room.id, UpdateRoom(name="Updated", project_path=raw_path)
+        room_state.room.id, UpdateRoom(name="Updated", workspace_path=raw_path)
     )
     saved, original = room_repository.save_resources.call_args.args
-    assert result.raw_project_path == raw_path
-    assert result.project_path == "D:/Other/Project"
-    assert saved.room == result and original.room.project_path == "d:/project"
-    room_repository.project_exists.assert_called_once_with(
+    assert result.raw_workspace_path == raw_path
+    assert result.workspace_path == "D:/Other/Project"
+    assert saved.room == result and original.room.workspace_path == "d:/project"
+    room_repository.workspace_exists.assert_called_once_with(
         "D:/Other/Project", exclude_room_id=room_state.room.id
     )
 
@@ -65,9 +65,9 @@ def test_room_name_only_edit_preserves_both_paths(
 ) -> None:
     original = room_state.room.model_copy(deep=True)
     result = RoomService(room_store).update_room(room_state.room.id, UpdateRoom(name="Updated"))
-    assert result.raw_project_path == original.raw_project_path
-    assert result.project_path == original.project_path
-    room_repository.project_exists.assert_not_called()
+    assert result.raw_workspace_path == original.raw_workspace_path
+    assert result.workspace_path == original.workspace_path
+    room_repository.workspace_exists.assert_not_called()
 
 
 @pytest.mark.parametrize("path", ["relative", "D:relative", "   "])
@@ -77,7 +77,7 @@ def test_invalid_room_path_edit_does_not_mutate_resources(
     original = room_state.room.model_copy(deep=True)
     with pytest.raises(RoomInputError):
         RoomService(room_store).update_room(
-            room_state.room.id, UpdateRoom(name="Changed", project_path=path)
+            room_state.room.id, UpdateRoom(name="Changed", workspace_path=path)
         )
     assert room_state.room == original
     room_repository.save_resources.assert_not_called()
@@ -87,25 +87,25 @@ def test_conflicting_room_path_edit_does_not_mutate_resources(
     room_state: RoomState, room_store: MagicMock, room_repository: Mock
 ) -> None:
     original = room_state.room.model_copy(deep=True)
-    room_repository.project_exists.return_value = True
+    room_repository.workspace_exists.return_value = True
     with pytest.raises(RoomConflictError):
         RoomService(room_store).update_room(
-            room_state.room.id, UpdateRoom(name="Changed", project_path="D:/other")
+            room_state.room.id, UpdateRoom(name="Changed", workspace_path="D:/other")
         )
     assert room_state.room == original
     room_repository.save_resources.assert_not_called()
 
 
-def test_project_path_conflict_uses_normalized_identity_without_writing(
+def test_workspace_path_conflict_uses_normalized_identity_without_writing(
     room_store: MagicMock,
     room_repository: Mock,
 ) -> None:
-    room_repository.project_exists.return_value = True
-    with pytest.raises(RoomConflictError, match="该项目已有聊天室"):
+    room_repository.workspace_exists.return_value = True
+    with pytest.raises(RoomConflictError, match="该路径已有聊天室"):
         RoomService(room_store).create_room(
-            CreateRoom(name="Duplicate", project_path="D:\\PROJECT\\")
+            CreateRoom(name="Duplicate", workspace_path="D:\\PROJECT\\")
         )
-    room_repository.project_exists.assert_called_once_with("D:/PROJECT")
+    room_repository.workspace_exists.assert_called_once_with("D:/PROJECT")
     room_repository.insert_room.assert_not_called()
     room_repository.save_resources.assert_not_called()
 

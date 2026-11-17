@@ -29,21 +29,21 @@
         </div>
         <div v-if="mode === 'room'" class="setup-field">
           <label for="setup-path"
-            >{{ t("setup.projectPath") }} <span class="required-mark">*</span></label
+            >{{ t("setup.workspacePath") }} <span class="required-mark">*</span></label
           >
           <AppInput
             id="setup-path"
-            v-model="projectPath"
+            v-model="workspacePath"
             maxlength="500"
             :disabled="saving"
-            :invalid="!!errors.projectPath"
+            :invalid="!!errors.workspacePath"
             :clear-label="t('setup.clearPath')"
             aria-describedby="setup-path-error"
             placeholder=""
             autocomplete="off"
           />
-          <p v-if="errors.projectPath" id="setup-path-error" class="field-error">
-            {{ translateMessage(errors.projectPath) }}
+          <p v-if="errors.workspacePath" id="setup-path-error" class="field-error">
+            {{ translateMessage(errors.workspacePath) }}
           </p>
         </div>
         <MemberTopicsField
@@ -291,7 +291,7 @@
   const sessionId = ref("");
   const sessionChoices = ref<InstanceType<typeof RadioGroupRoot>>();
   const unavailableOpen = ref(false);
-  const projectPath = ref(props.room?.rawProjectPath ?? "");
+  const workspacePath = ref(props.room?.rawWorkspacePath ?? "");
   const description = ref("");
   const topicIds = ref<string[]>([]);
   const topicSaving = ref(false);
@@ -317,7 +317,7 @@
   const nameLabel = computed(() =>
     t(
       props.mode === "room"
-        ? "setup.projectName"
+        ? "setup.roomName"
         : props.mode === "member"
           ? "forms.memberName"
           : "setup.topicName",
@@ -340,7 +340,7 @@
     name.value = props.room?.name ?? props.topic?.name ?? "";
     sessionId.value = "";
     unavailableOpen.value = false;
-    projectPath.value = props.room?.rawProjectPath ?? "";
+    workspacePath.value = props.room?.rawWorkspacePath ?? "";
     description.value = props.topic?.description ?? "";
     topicIds.value = [];
     errors.value = {};
@@ -369,8 +369,8 @@
   watch(name, (value) => {
     if (value.trim()) delete errors.value.name;
   });
-  watch(projectPath, (value) => {
-    if (value.trim()) delete errors.value.projectPath;
+  watch(workspacePath, (value) => {
+    if (value.trim()) delete errors.value.workspacePath;
   });
 
   async function clearSession(): Promise<void> {
@@ -389,9 +389,9 @@
     errors.value = {};
     if (!name.value.trim()) errors.value.name = { key: "validation.name" };
     if (props.mode === "room") {
-      if (!projectPath.value.trim()) errors.value.projectPath = { key: "validation.path" };
-      else if (!/^([a-zA-Z]:[\\/]|\/|\\\\)/.test(projectPath.value.trim()))
-        errors.value.projectPath = { key: "validation.absolutePath" };
+      if (!workspacePath.value.trim()) errors.value.workspacePath = { key: "validation.path" };
+      else if (!/^([a-zA-Z]:[\\/]|\/|\\\\)/.test(workspacePath.value.trim()))
+        errors.value.workspacePath = { key: "validation.absolutePath" };
     }
     if (props.mode === "member") {
       if (
@@ -403,9 +403,9 @@
     }
     if (Object.keys(errors.value).length) return;
     if (props.mode === "room" && props.room)
-      emit("updateRoom", { name: name.value.trim(), projectPath: projectPath.value });
+      emit("updateRoom", { name: name.value.trim(), workspacePath: workspacePath.value });
     else if (props.mode === "room")
-      emit("createRoom", { name: name.value.trim(), projectPath: projectPath.value });
+      emit("createRoom", { name: name.value.trim(), workspacePath: workspacePath.value });
     if (props.mode === "member") {
       const request = {
         name: name.value.trim(),

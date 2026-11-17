@@ -14,8 +14,8 @@ from conflua.domain.rooms.models import (
 )
 from conflua.domain.rooms.rules import (
     build_message,
-    normalize_project_path,
-    normalize_stored_path,
+    normalize_workspace_identity,
+    normalize_workspace_path,
     validate_publication_replay,
     validate_sender_targets,
 )
@@ -26,8 +26,8 @@ def room_state() -> RoomState:
         room=Room(
             id="room",
             name="Room",
-            project_path="d:/project",
-            raw_project_path="d:/project",
+            workspace_path="d:/project",
+            raw_workspace_path="d:/project",
             description="",
         ),
         channel_id="channel-default",
@@ -138,8 +138,8 @@ def test_publication_with_no_other_recipient_is_rejected(
     ("path", "expected"),
     [("D:\\PROJECT\\", "d:/project"), ("/Work/project/", "/Work/project")],
 )
-def test_project_paths_follow_platform_identity(path: str, expected: str) -> None:
-    assert normalize_project_path(path) == expected
+def test_workspace_paths_follow_platform_identity(path: str, expected: str) -> None:
+    assert normalize_workspace_identity(path) == expected
 
 
 @pytest.mark.parametrize(
@@ -153,13 +153,13 @@ def test_project_paths_follow_platform_identity(path: str, expected: str) -> Non
 def test_path_storage_preserves_case_and_comparison_normalizes(
     path: str, stored: str, identity: str
 ) -> None:
-    assert normalize_stored_path(path) == stored
-    assert normalize_project_path(path) == identity
+    assert normalize_workspace_path(path) == stored
+    assert normalize_workspace_identity(path) == identity
 
 
 def test_drive_relative_path_is_not_an_absolute_project() -> None:
     with pytest.raises(RoomInputError, match="绝对路径"):
-        normalize_stored_path("D:project\\")
+        normalize_workspace_path("D:project\\")
 
 
 def test_user_publisher_cannot_address_itself() -> None:

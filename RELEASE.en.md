@@ -19,7 +19,7 @@ Commits: `29d8b40`, `24f4c38`, `6ea5732`, `ef855a1`, `396f703`, `c5ab143`, `4564
 - On narrow screens, navigation and details use drawers, the editor supports a split-pane layout for routing, and touch targets are easier to use.
 - Channel "archive" was renamed to "delete": after confirmation, the channel is removed from selection while its history is retained. The default channel cannot be deleted.
 - An active Codex turn can be interrupted for a member, with session status refreshed afterward.
-- The last selected channel is remembered per project and restored after switching projects or refreshing. Deleting a channel returns to the default channel.
+- The last selected channel is remembered per room and restored after switching rooms or refreshing. Deleting a channel returns to the default channel.
 
 Commits: `a49d588`, `c8bc6ba`, `d9fb388`, `9bb93db`.
 
@@ -85,7 +85,7 @@ Commits: `a71d186`, `e40d313`, `68d601d`.
 
 ## 2026-11-07
 
-- Created project chat rooms with topic, member, message, and routing management.
+- Created chat rooms with topic, member, message, and routing management.
 - Room and routing records are persisted in SQLite, and existing Codex sessions can be discovered and bound.
 - Documented the collaboration architecture and subsequent delivery implementation plan.
 

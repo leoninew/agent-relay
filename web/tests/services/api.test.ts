@@ -111,7 +111,7 @@ describe("apiClient", () => {
     );
 
     await expect(
-      apiClient.post("/api/room", { name: "", projectPath: "D:/project" }),
+      apiClient.post("/api/room", { name: "", workspacePath: "D:/project" }),
     ).rejects.toMatchObject({
       code: "validation_error",
       kind: "http_error",

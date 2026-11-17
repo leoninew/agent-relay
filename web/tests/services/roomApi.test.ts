@@ -359,7 +359,7 @@ describe("room API", () => {
     expect(adapterMock.mock.calls[0][0].params).toBeUndefined();
   });
 
-  it("renames a room without sending its project path", async () => {
+  it("renames a room without sending its workspace path", async () => {
     adapterMock.mockImplementationOnce(async (config: InternalAxiosRequestConfig) => ({
       config,
       data: { ...roomFixture().room, name: "Renamed" },

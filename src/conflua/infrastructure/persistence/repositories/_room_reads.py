@@ -22,7 +22,7 @@ from conflua.domain.rooms.models import (
     Room,
     RoomState,
 )
-from conflua.domain.rooms.rules import normalize_project_path
+from conflua.domain.rooms.rules import normalize_workspace_identity
 from conflua.infrastructure.persistence.mappers import (
     member_from_model,
     room_from_model,
@@ -69,7 +69,7 @@ class SQLAlchemyRoomReads:
         if channel.archived_at is not None and channel.status != "archived":
             raise RoomConflictError("频道当前不可用", code="channel_unavailable")
         if channel.workspace_kind == "existing":
-            return room.project_path
+            return room.workspace_path
         if not channel.worktree_path or not Path(channel.worktree_path).is_dir():
             raise RoomConflictError("频道工作目录不存在", code="channel_directory_missing")
         return channel.worktree_path
@@ -84,13 +84,13 @@ class SQLAlchemyRoomReads:
             )
         ]
 
-    def project_exists(self, project_path: str, *, exclude_room_id: str | None = None) -> bool:
-        identity = normalize_project_path(project_path)
-        statement = select(RoomRecord.project_path).where(RoomRecord.archived_at.is_(None))
+    def workspace_exists(self, workspace_path: str, *, exclude_room_id: str | None = None) -> bool:
+        identity = normalize_workspace_identity(workspace_path)
+        statement = select(RoomRecord.workspace_path).where(RoomRecord.archived_at.is_(None))
         if exclude_room_id is not None:
             statement = statement.where(RoomRecord.id != exclude_room_id)
         room_paths = self.session.scalars(statement)
-        if any(normalize_project_path(path) == identity for path in room_paths):
+        if any(normalize_workspace_identity(path) == identity for path in room_paths):
             return True
         channel_paths = self.session.scalars(
             select(ChannelRecord.worktree_path).where(
@@ -99,7 +99,8 @@ class SQLAlchemyRoomReads:
             )
         )
         return any(
-            path is not None and normalize_project_path(path) == identity for path in channel_paths
+            path is not None and normalize_workspace_identity(path) == identity
+            for path in channel_paths
         )
 
     def _member(self, record: MemberRecord) -> Member:

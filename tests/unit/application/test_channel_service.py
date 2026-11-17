@@ -17,7 +17,7 @@ def test_channel_creation_supplies_initial_resources_to_persistence(
     repository = Mock(spec=ChannelData)
     repository.room.return_value = room_state.room
     repository.channel.side_effect = RoomNotFoundError("频道不存在", code="channel_not_found")
-    repository.project_exists.return_value = False
+    repository.workspace_exists.return_value = False
     store = MagicMock(spec=ChannelStore)
     store.write.return_value.__enter__.return_value = repository
     driver = Mock(spec=WorktreeDriver)
@@ -45,15 +45,15 @@ def test_channel_creation_supplies_initial_resources_to_persistence(
     assert all(topic.created_at == channel.created_at for topic in state.topics)
     if use_worktree:
         assert channel.working_path == (tmp_path / room_state.room.id / channel.id).as_posix()
-        driver.inspect.assert_called_once_with(room_state.room.project_path)
+        driver.inspect.assert_called_once_with(room_state.room.workspace_path)
         driver.create.assert_called_once_with(
-            room_state.room.project_path, channel.working_path, channel.branch, "current-head"
+            room_state.room.workspace_path, channel.working_path, channel.branch, "current-head"
         )
         driver.verify.assert_called_once_with(
-            room_state.room.project_path, channel.working_path, channel.branch, "current-head"
+            room_state.room.workspace_path, channel.working_path, channel.branch, "current-head"
         )
     else:
-        assert channel.working_path == room_state.room.project_path
+        assert channel.working_path == room_state.room.workspace_path
         assert driver.mock_calls == []
 
 
@@ -63,7 +63,7 @@ def test_worktree_path_collision_is_rejected_before_git(
     repository = Mock(spec=ChannelData)
     repository.room.return_value = room_state.room
     repository.channel.side_effect = RoomNotFoundError("频道不存在", code="channel_not_found")
-    repository.project_exists.return_value = True
+    repository.workspace_exists.return_value = True
     store = MagicMock(spec=ChannelStore)
     store.write.return_value.__enter__.return_value = repository
     driver = Mock(spec=WorktreeDriver)

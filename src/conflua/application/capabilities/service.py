@@ -22,9 +22,9 @@ class CapabilityService:
 
     def skills(self, room_id: str, *, force_reload: bool = False) -> SkillCatalog:
         with self.store.read() as rooms:
-            project_path = rooms.working_path(room_id)
+            workspace_path = rooms.working_path(room_id)
         return self._catalog(
-            lambda: self.driver.list_skills(project_path, force_reload=force_reload)
+            lambda: self.driver.list_skills(workspace_path, force_reload=force_reload)
         )
 
     def mcp_servers(self, room_id: str, member_id: str) -> McpCatalog:

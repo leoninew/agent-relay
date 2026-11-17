@@ -28,14 +28,19 @@ class RoomRecord(Base):
     __tablename__ = "rooms"
 
     id: Mapped[str] = mapped_column(Text, primary_key=True)
-    project_path: Mapped[str] = mapped_column(Text)
-    raw_project_path: Mapped[str] = mapped_column(Text)
+    workspace_path: Mapped[str] = mapped_column(Text)
+    raw_workspace_path: Mapped[str] = mapped_column(Text)
     name: Mapped[str] = mapped_column(Text)
     description: Mapped[str] = mapped_column(Text)
     archived_at: Mapped[datetime | None] = mapped_column(ISODateTime)
 
     __table_args__ = (
-        Index("rooms_active_path", "project_path", unique=True, sqlite_where=archived_at.is_(None)),
+        Index(
+            "rooms_active_workspace",
+            "workspace_path",
+            unique=True,
+            sqlite_where=archived_at.is_(None),
+        ),
     )
 
 

@@ -121,7 +121,7 @@ class SQLAlchemyContextRepository:
             room_id=room.id,
             room_name=room.name,
             room_description=room.description,
-            project_path=room.project_path,
+            workspace_path=room.workspace_path,
             channel_id=self.channel_id,
             working_path=self.resources.working_path(room_id),
             member_id=member_id,

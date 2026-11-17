@@ -231,7 +231,7 @@ class ConfluaClient:
         )
 
     def room_list(self) -> ApiResult:
-        """List the available project chatrooms."""
+        """List the available chatrooms."""
         return self.request("GET", "/api/room")
 
     def channel_list(self, room_id: str) -> ApiResult:
@@ -268,9 +268,11 @@ class ConfluaClient:
             "POST", f"{_room_path(room_id)}/channel/{_segment(target_channel_id)}/archive"
         )
 
-    def room_create(self, name: str, project_path: str) -> ApiResult:
-        """Create a chatroom for an absolute project directory."""
-        return self.request("POST", "/api/room", body={"name": name, "projectPath": project_path})
+    def room_create(self, name: str, workspace_path: str) -> ApiResult:
+        """Create a chatroom for an absolute workspace directory."""
+        return self.request(
+            "POST", "/api/room", body={"name": name, "workspacePath": workspace_path}
+        )
 
     def room_get(
         self,

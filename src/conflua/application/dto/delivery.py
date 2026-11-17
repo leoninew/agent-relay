@@ -11,7 +11,7 @@ from conflua.domain.rooms.models import (
 @dataclass(frozen=True)
 class QueueRequest:
     text: str
-    project_path: str
+    workspace_path: str
     capabilities: tuple[CapabilityReference, ...] = ()
 
 

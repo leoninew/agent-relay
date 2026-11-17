@@ -15,8 +15,8 @@ export function roomFixture(): RoomSnapshot {
     room: {
       id: "conflua",
       name: "Conflua 开发室",
-      projectPath: "D:/work/conflua",
-      rawProjectPath: "D:\\work\\conflua",
+      workspacePath: "D:/work/conflua",
+      rawWorkspacePath: "D:\\work\\conflua",
       description: "项目讨论",
     },
     topics: [

@@ -20,8 +20,8 @@ def state() -> RoomState:
         Room(
             id="room",
             name="Room",
-            project_path="d:/project",
-            raw_project_path="d:/project",
+            workspace_path="d:/project",
+            raw_workspace_path="d:/project",
             description="",
         ),
         datetime.now(UTC),
@@ -33,7 +33,9 @@ def state() -> RoomState:
 def test_initial_resources_are_a_business_value_with_a_fixed_human(state: RoomState) -> None:
     room = state.room
     now = datetime.now(UTC)
-    state = new_room_state(room, now, channel_id="channel-default", working_path=room.project_path)
+    state = new_room_state(
+        room, now, channel_id="channel-default", working_path=room.workspace_path
+    )
     assert [topic.name for topic in state.topics] == list(DEFAULT_TOPIC_NAMES)
     assert all(topic.created_at == now for topic in state.topics)
     assert len(state.members) == 1

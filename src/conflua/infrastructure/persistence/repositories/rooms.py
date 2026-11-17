@@ -66,8 +66,8 @@ class SQLAlchemyRoomRepository(SQLAlchemyRoomReads):
                 update(RoomRecord)
                 .where(RoomRecord.id == room_id)
                 .values(
-                    project_path=state.room.project_path,
-                    raw_project_path=state.room.raw_project_path,
+                    workspace_path=state.room.workspace_path,
+                    raw_workspace_path=state.room.raw_workspace_path,
                     name=state.room.name,
                     description=state.room.description,
                 )

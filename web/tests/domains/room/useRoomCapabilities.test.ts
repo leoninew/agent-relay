@@ -59,7 +59,7 @@ describe("room skill loading", () => {
     const { room, capabilities } = setup();
     await setImmediate();
     vi.mocked(fetchRoomSkills).mockResolvedValueOnce({ skills: [], errors: [] });
-    room.value = { ...room.value, id: "other", projectPath: "D:/other" };
+    room.value = { ...room.value, id: "other", workspacePath: "D:/other" };
     await setImmediate();
     expect(capabilities.catalog.value.skills).toEqual([]);
     expect(capabilities.catalog.value.skillsLoading).toBe(false);
@@ -80,11 +80,11 @@ describe("room skill loading", () => {
     expect(capabilities.catalog.value.skills).toHaveLength(3);
   });
 
-  it("reloads a channel catalog when its project path changes", async () => {
+  it("reloads a channel catalog when its workspace path changes", async () => {
     const { room, capabilities } = setup();
     await setImmediate();
     vi.mocked(fetchRoomSkills).mockResolvedValueOnce({ skills: [], errors: [] });
-    room.value = { ...room.value, projectPath: "D:/changed" };
+    room.value = { ...room.value, workspacePath: "D:/changed" };
     await setImmediate();
 
     expect(fetchRoomSkills).toHaveBeenCalledTimes(2);
@@ -95,7 +95,7 @@ describe("room skill loading", () => {
     const { room, capabilities } = setup();
     await setImmediate();
     capabilities.pause();
-    room.value = { ...room.value, id: "other", projectPath: "D:/other" };
+    room.value = { ...room.value, id: "other", workspacePath: "D:/other" };
     await setImmediate();
     expect(fetchRoomSkills).toHaveBeenCalledTimes(1);
     capabilities.resume();

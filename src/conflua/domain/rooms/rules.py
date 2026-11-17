@@ -17,21 +17,21 @@ from conflua.domain.rooms.models import (
 )
 
 
-def normalize_stored_path(value: str) -> str:
+def normalize_workspace_path(value: str) -> str:
     value = value.strip()
     windows_path = PureWindowsPath(value)
     if windows_path.drive:
         if not windows_path.is_absolute():
-            raise RoomInputError("请输入项目的绝对路径", code="project_path_not_absolute")
+            raise RoomInputError("请输入工作目录的绝对路径", code="workspace_path_not_absolute")
         return PureWindowsPath(windows_normpath(value)).as_posix()
     posix_path = PurePosixPath(value)
     if not posix_path.is_absolute():
-        raise RoomInputError("请输入项目的绝对路径", code="project_path_not_absolute")
+        raise RoomInputError("请输入工作目录的绝对路径", code="workspace_path_not_absolute")
     return posix_normpath(value)
 
 
-def normalize_project_path(value: str) -> str:
-    path = normalize_stored_path(value)
+def normalize_workspace_identity(value: str) -> str:
+    path = normalize_workspace_path(value)
     if PureWindowsPath(path).drive:
         return PureWindowsPath(windows_normcase(path)).as_posix()
     return path
@@ -44,7 +44,7 @@ def validate_member(
         not member.deleted_at and member.name == name and member.id != member_id
         for member in state.members
     ):
-        raise RoomConflictError("房间中已有同名成员", code="member_name_conflict")
+        raise RoomConflictError("聊天室中已有同名成员", code="member_name_conflict")
     if not set(topic_ids) <= {topic.id for topic in state.topics if not topic.deleted_at}:
         raise RoomInputError("成员订阅的话题不存在", code="member_topic_not_found")
 

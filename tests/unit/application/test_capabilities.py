@@ -18,7 +18,7 @@ def test_capability_queries_release_scope_and_pass_exact_room_and_target(
     skills = SkillCatalog(skills=[], errors=[])
     servers = McpCatalog(servers=[])
 
-    def list_skills(project_path: str, *, force_reload: bool = False) -> SkillCatalog:
+    def list_skills(workspace_path: str, *, force_reload: bool = False) -> SkillCatalog:
         room_store.read.return_value.__exit__.assert_called_once()
         return skills
 

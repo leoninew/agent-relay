@@ -39,10 +39,10 @@ uv run --locked alembic upgrade head --sql
 
 ## 基线与旧库
 
-`0001_baseline` 创建频道结构，revision 为 `channel_description_20261114`；当前 head 为 `channel_status_20261117`。增量 `0002_delivery_retry` 增加投递尝试计数（旧行默认 0）与下次尝试时间（旧行默认空），保留原消息、回执和状态；历史 unknown 不自动重发或作为新机制的顺序屏障。`0003_member_channels` 将活动会话绑定的唯一范围改为频道；合并后的 `0004_simplify_paths` 删除冗余路径索引键，仅为独立 worktree 保留目录、普通频道从房间目录派生，并删除会话目录字段，保留会话与成员、消息和投递历史。`0005_channel_status` 增加 `active` / `archived` 状态，旧频道默认 `active`；归档只修改状态，不修改原有删除标记或清理成员、消息、投递和目录。已升级到频道基线的数据库可直接增量升级，无需重建。
+`0001_baseline` 创建频道结构，revision 为 `channel_description_20261114`；当前 head 为 `workspace_paths_20261117`。增量 `0002_delivery_retry` 增加投递尝试计数（旧行默认 0）与下次尝试时间（旧行默认空），保留原消息、回执和状态；历史 unknown 不自动重发或作为新机制的顺序屏障。`0003_member_channels` 将活动会话绑定的唯一范围改为频道；合并后的 `0004_simplify_paths` 删除冗余路径索引键，仅为独立 worktree 保留目录、普通频道从房间目录派生，并删除会话目录字段，保留会话与成员、消息和投递历史。`0005_channel_status` 增加 `active` / `archived` 状态，旧频道默认 `active`；归档只修改状态，不修改原有删除标记或清理成员、消息、投递和目录。`0006_workspace_paths` 将房间字段 `project_path` / `raw_project_path` 重命名为 `workspace_path` / `raw_workspace_path`，并把活动路径唯一索引同步改名为 `rooms_active_workspace`。已升级到频道基线的数据库可直接增量升级，无需重建。
 
 更早的 revision 不在合并后的迁移链上，不提供自动升级、旧数据转换或降级。需要保留旧数据时，可先使用合并前的版本升级到 `channel_description_20261114`，并在升级前停止服务及 dispatcher、备份数据库和图片目录。新旧服务不能混跑。
 
-`0004_simplify_paths` 同时保留房间的 `raw_project_path`（用户原始输入，仅展示与编辑）和 `project_path`（规范路径，用于业务执行）。创建和编辑从请求的 `projectPath` 原样保存前者，去除外围空白并规整分隔符及点路径后保存后者，保留大小写。API 房间响应同时返回 `rawProjectPath` 和 `projectPath`。历史房间以现存 `project_path` 回填原始路径，无法恢复已丢失的输入格式。已执行旧版 0004 的开发库需单独补齐这一列和回填，不重放原有删列操作，也不修改版本戳。
+`0004_simplify_paths` 同时保留房间的原始目录输入和规范目录。创建和编辑从请求的 `workspacePath` 原样保存 `raw_workspace_path`，去除外围空白并规整分隔符及点路径后保存 `workspace_path`，保留大小写。API 房间响应同时返回 `rawWorkspacePath` 和 `workspacePath`。`0006_workspace_paths` 只重命名列和索引，不改写已有路径值；历史房间无法恢复已丢失的输入格式。
 
 需要重建时，先停止相关服务、核对路径并按需保留数据，再对空库执行迁移。迁移命令不会自动删除或重建旧库。

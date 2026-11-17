@@ -136,10 +136,10 @@ def room_list(client: ConfluaClient) -> ApiResult:
 
 @room_commands.command("create", help="创建聊天室")
 @click.option("--name", required=True)
-@click.option("--project-path", required=True)
+@click.option("--workspace-path", required=True)
 @click.pass_obj
-def room_create(client: ConfluaClient, name: str, project_path: str) -> ApiResult:
-    return client.room_create(name, project_path)
+def room_create(client: ConfluaClient, name: str, workspace_path: str) -> ApiResult:
+    return client.room_create(name, workspace_path)
 
 
 @room_commands.command("get", help="读取聊天室和消息页")
@@ -270,7 +270,7 @@ def member_delete(client: ConfluaClient, room_id: str, member_id: str) -> ApiRes
     return client.member_delete(room_id, member_id)
 
 
-@member_commands.command("catalog", help="查看聊天室/项目、同伴、话题及自身订阅")
+@member_commands.command("catalog", help="查看聊天室、同伴、话题及自身订阅")
 @click.argument("room_id")
 @click.argument("member_id", required=False)
 @click.pass_obj
@@ -393,7 +393,7 @@ def message_get(client: ConfluaClient, room_id: str, message_id: str) -> ApiResu
 @click.option("--topic-id", multiple=True)
 @click.option("--mention", multiple=True)
 @click.option("--reply-to")
-@click.option("--as-member", help="以此成员发布；省略时使用房间用户身份")
+@click.option("--as-member", help="以此成员发布；省略时使用固定用户身份")
 @click.pass_obj
 def message_publish(
     client: ConfluaClient,
@@ -419,7 +419,7 @@ def message_publish(
 @message_commands.command("publication", help="按稳定编号找回发布")
 @click.argument("room_id")
 @click.argument("publication_id")
-@click.option("--as-member", help="使用发布时的成员身份找回；省略时查询房间用户发布")
+@click.option("--as-member", help="使用发布时的成员身份找回；省略时查询固定用户发布")
 @click.pass_obj
 def publication_get(
     client: ConfluaClient, room_id: str, publication_id: str, as_member: str | None

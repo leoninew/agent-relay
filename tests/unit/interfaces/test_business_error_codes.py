@@ -10,7 +10,7 @@ from starlette.requests import Request
 from conflua.application.dto.members import SessionCandidate, SessionInfo
 from conflua.application.members.sessions import SessionUnavailableError
 from conflua.domain.rooms.errors import RoomConflictError, RoomInputError, RoomNotFoundError
-from conflua.domain.rooms.rules import normalize_project_path
+from conflua.domain.rooms.rules import normalize_workspace_identity
 from conflua.interfaces.http.exception_handlers import (
     room_exception_handler,
     session_unavailable_handler,
@@ -54,9 +54,9 @@ def test_metadata_error_does_not_expose_details() -> None:
 
 def test_domain_raises_explicit_code() -> None:
     with pytest.raises(RoomInputError) as caught:
-        normalize_project_path("relative")
-    assert caught.value.code == "project_path_not_absolute"
-    assert str(caught.value) == "请输入项目的绝对路径"
+        normalize_workspace_identity("relative")
+    assert caught.value.code == "workspace_path_not_absolute"
+    assert str(caught.value) == "请输入工作目录的绝对路径"
 
 
 @pytest.mark.parametrize(

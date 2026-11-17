@@ -12,7 +12,7 @@ from conflua.infrastructure.persistence.models import (
 from conflua.infrastructure.persistence.repositories.rooms import SQLAlchemyRoomRepository
 
 
-def channel_from_record(record: ChannelRecord, project_path: str) -> Channel:
+def channel_from_record(record: ChannelRecord, workspace_path: str) -> Channel:
     return Channel.model_validate(
         {
             **{
@@ -21,7 +21,7 @@ def channel_from_record(record: ChannelRecord, project_path: str) -> Channel:
                 if name != "working_path"
             },
             "working_path": (
-                record.worktree_path if record.workspace_kind == "worktree" else project_path
+                record.worktree_path if record.workspace_kind == "worktree" else workspace_path
             ),
         }
     )
@@ -31,7 +31,7 @@ class SQLAlchemyChannelRepository(SQLAlchemyRoomRepository):
     def channels(self, room_id: str) -> list[Channel]:
         room = self.room(room_id)
         return [
-            channel_from_record(record, room.project_path)
+            channel_from_record(record, room.workspace_path)
             for record in self.session.scalars(
                 select(ChannelRecord)
                 .where(
@@ -50,7 +50,7 @@ class SQLAlchemyChannelRepository(SQLAlchemyRoomRepository):
         record = self.session.get(ChannelRecord, (room_id, channel_id))
         if record is None:
             raise RoomNotFoundError("频道不存在", code="channel_not_found")
-        return channel_from_record(record, room.project_path)
+        return channel_from_record(record, room.workspace_path)
 
     def insert(self, channel: Channel, state: RoomState) -> None:
         room = self.room(channel.room_id)
@@ -118,7 +118,7 @@ class SQLAlchemyChannelRepository(SQLAlchemyRoomRepository):
         self.session.flush()
         scoped = SQLAlchemyRoomRepository(self.session, channel_id)
         scoped._event(room_id, "room", channel_id)
-        return channel_from_record(record, room.project_path)
+        return channel_from_record(record, room.workspace_path)
 
     def archive(self, room_id: str, channel_id: str) -> Channel:
         room = self.room(room_id)
@@ -134,7 +134,7 @@ class SQLAlchemyChannelRepository(SQLAlchemyRoomRepository):
             record.archived_at = record.archived_at or datetime.now(UTC)
             self.session.flush()
             SQLAlchemyRoomRepository(self.session, channel_id)._event(room_id, "room", channel_id)
-        return channel_from_record(record, room.project_path)
+        return channel_from_record(record, room.workspace_path)
 
     def delete(self, room_id: str, channel_id: str) -> None:
         self.room(room_id)

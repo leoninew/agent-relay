@@ -27,7 +27,7 @@ class MemberCatalog(RoomModel):
     room_id: str
     room_name: str
     room_description: str
-    project_path: str
+    workspace_path: str
     member_id: str
     topics: list[CatalogTopic]
     members: list[CatalogMember]

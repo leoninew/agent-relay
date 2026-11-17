@@ -542,16 +542,18 @@ class CodexDriver:
             "无法确认目标轮次已打断，请检查会话状态", code="session_interrupt_unknown"
         )
 
-    def discover_skills(self, project_path: str, *, force_reload: bool = False) -> SkillDiscovery:
+    def discover_skills(self, workspace_path: str, *, force_reload: bool = False) -> SkillDiscovery:
         with ProxyRpc(self.command, self.timeout) as rpc:
-            payload = rpc.call("skills/list", {"cwds": [project_path], "forceReload": force_reload})
-            return decode_skills(payload, project_path)
+            payload = rpc.call(
+                "skills/list", {"cwds": [workspace_path], "forceReload": force_reload}
+            )
+            return decode_skills(payload, workspace_path)
 
-    def list_skills(self, project_path: str, *, force_reload: bool = False) -> SkillCatalog:
-        return self.discover_skills(project_path, force_reload=force_reload).public_catalog()
+    def list_skills(self, workspace_path: str, *, force_reload: bool = False) -> SkillCatalog:
+        return self.discover_skills(workspace_path, force_reload=force_reload).public_catalog()
 
-    def resolve_skill(self, project_path: str, skill_id: str) -> SkillBinding:
-        discovery = self.discover_skills(project_path, force_reload=True)
+    def resolve_skill(self, workspace_path: str, skill_id: str) -> SkillBinding:
+        discovery = self.discover_skills(workspace_path, force_reload=True)
         for binding in discovery.bindings:
             if binding.option.id == skill_id and binding.option.enabled:
                 return binding
@@ -621,8 +623,8 @@ class CodexDriver:
     ) -> list[dict[str, Any]]:
         self._target_session(rpc, thread_id)
         discovery = decode_skills(
-            rpc.call("skills/list", {"cwds": [request.project_path], "forceReload": True}),
-            request.project_path,
+            rpc.call("skills/list", {"cwds": [request.workspace_path], "forceReload": True}),
+            request.workspace_path,
         )
         required = [
             binding

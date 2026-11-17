@@ -17,8 +17,8 @@ RoomChangeKind = Literal[
 class Room(RoomModel):
     id: str
     name: str
-    project_path: str
-    raw_project_path: str
+    workspace_path: str
+    raw_workspace_path: str
     description: str
     archived_at: datetime | None = None
 

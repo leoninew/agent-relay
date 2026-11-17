@@ -32,8 +32,8 @@ def scoped_session() -> Iterator[Session]:
         session.add(
             RoomRecord(
                 id="room",
-                project_path="/project",
-                raw_project_path="/project",
+                workspace_path="/project",
+                raw_workspace_path="/project",
                 name="Room",
                 description="",
             )
@@ -133,8 +133,8 @@ def test_joined_channels_are_room_scoped_and_exclude_inactive_memberships(
     scoped_session.add(
         RoomRecord(
             id="another-room",
-            project_path="/another-project",
-            raw_project_path="/another-project",
+            workspace_path="/another-project",
+            raw_workspace_path="/another-project",
             name="Another room",
             description="",
         )

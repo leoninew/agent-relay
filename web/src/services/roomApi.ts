@@ -259,13 +259,13 @@ export type MessageDraft = Omit<CreateMessage, "publicationId">;
 export type Room = {
   id: string;
   name: string;
-  projectPath: string;
-  rawProjectPath: string;
+  workspacePath: string;
+  rawWorkspacePath: string;
   description: string;
 };
 
-export type CreateRoom = { name: string; projectPath: string };
-export type UpdateRoom = { name: string; projectPath?: string };
+export type CreateRoom = { name: string; workspacePath: string };
+export type UpdateRoom = { name: string; workspacePath?: string };
 export type UpdateMember = { name: string; topicIds: string[] };
 export type CreateMember = UpdateMember & { sessionId: string };
 export type Session = {

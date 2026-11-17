@@ -1,11 +1,11 @@
 <template>
   <div ref="roomNavigation" class="room-navigation">
-    <div class="room-navigation-projects">
+    <div class="room-navigation-rooms">
       <NavigationMenuRoot
         v-if="!loading && !loadError && roomsStore.rooms.length"
         class="room-navigation-menu"
         :disable-hover-trigger="true"
-        :aria-label="t('navigation.projects')"
+        :aria-label="t('navigation.rooms')"
       >
         <NavigationMenuList as-child>
           <VueDraggable
@@ -35,8 +35,8 @@
                     params: { roomId: room.id, channelId: channelForRoom(room.id) },
                   }"
                   class="room-tab"
-                  :aria-label="t('navigation.switchProject', { name: room.name })"
-                  :title="t('navigation.reorderProject', { name: room.name })"
+                  :aria-label="t('navigation.switchRoom', { name: room.name })"
+                  :title="t('navigation.reorderRoom', { name: room.name })"
                   aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight"
                   @keydown.alt.left.prevent.stop="moveRoom(room.id, -1)"
                   @keydown.alt.right.prevent.stop="moveRoom(room.id, 1)"
@@ -49,8 +49,8 @@
                   <button
                     type="button"
                     class="room-tab-menu-button"
-                    :aria-label="t('navigation.manageProject', { name: room.name })"
-                    :title="t('navigation.manageProject', { name: room.name })"
+                    :aria-label="t('navigation.manageRoom', { name: room.name })"
+                    :title="t('navigation.manageRoom', { name: room.name })"
                   >
                     <span aria-hidden="true">...</span>
                   </button>
@@ -58,7 +58,7 @@
                 <DropdownMenuPortal>
                   <DropdownMenuContent
                     class="room-switcher-menu"
-                    :aria-label="t('navigation.manageProject', { name: room.name })"
+                    :aria-label="t('navigation.manageRoom', { name: room.name })"
                     side="bottom"
                     align="start"
                     :side-offset="8"
@@ -248,7 +248,7 @@
     renameError.value = null;
     try {
       const updated = await roomsStore.update(room.id, request);
-      if (updated.projectPath !== room.projectPath) await channelsStore.load(room.id, true);
+      if (updated.workspacePath !== room.workspacePath) await channelsStore.load(room.id, true);
       editingRoom.value = undefined;
       toasts.success({ key: "notice.roomRenamed" });
     } catch (caught) {

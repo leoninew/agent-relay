@@ -7,7 +7,7 @@ from conflua.application.dto.channels import CreateChannel, UpdateChannel
 from conflua.domain.rooms.errors import RoomConflictError, RoomNotFoundError
 from conflua.domain.rooms.models import Channel
 from conflua.domain.rooms.resources import new_room_state
-from conflua.domain.rooms.rules import normalize_stored_path
+from conflua.domain.rooms.rules import normalize_workspace_path
 
 
 class ChannelService(ChannelQueries):
@@ -43,12 +43,12 @@ class ChannelService(ChannelQueries):
                 ):
                     raise RoomConflictError("频道创建参数不一致", code="channel_creation_conflict")
                 return existing
-            source = room.project_path
-            path = normalize_stored_path(
+            source = room.workspace_path
+            path = normalize_workspace_path(
                 str(self.root / room_id / channel_id) if request.use_worktree else source
             )
             branch = f"conflua/{room_id}/{channel_id}" if request.use_worktree else None
-            if branch and channels.project_exists(path):
+            if branch and channels.workspace_exists(path):
                 raise RoomConflictError("该目录已被使用", code="worktree_path_exists")
             commit = self.git.inspect(source) if request.use_worktree else None
             if branch:

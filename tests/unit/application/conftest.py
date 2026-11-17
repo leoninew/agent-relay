@@ -43,8 +43,8 @@ def room_state() -> RoomState:
         room=Room(
             id="conflua",
             name="Room",
-            project_path="d:/project",
-            raw_project_path="d:/project",
+            workspace_path="d:/project",
+            raw_workspace_path="d:/project",
             description="",
         ),
         channel_id="channel-default",
@@ -86,7 +86,7 @@ def room_repository(room_state: RoomState) -> Mock:
         for item in room_state.members
         if item.kind == "agent" and item.session_id and not item.deleted_at
     }
-    repository.project_exists.return_value = False
+    repository.workspace_exists.return_value = False
     repository.publication.return_value = None
     repository.next_message_seq.return_value = 1
     repository.publisher.side_effect = lambda room_id, member_id: next(

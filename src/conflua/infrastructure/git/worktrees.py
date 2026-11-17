@@ -2,7 +2,7 @@ import subprocess
 from pathlib import Path
 
 from conflua.domain.rooms.errors import RoomConflictError, RoomInputError
-from conflua.domain.rooms.rules import normalize_project_path
+from conflua.domain.rooms.rules import normalize_workspace_identity
 
 
 class GitWorktrees:
@@ -30,7 +30,7 @@ class GitWorktrees:
 
     def inspect(self, source: str) -> str:
         root = self.run(source, "rev-parse", "--show-toplevel")
-        if normalize_project_path(str(Path(root).resolve())) != normalize_project_path(
+        if normalize_workspace_identity(str(Path(root).resolve())) != normalize_workspace_identity(
             str(Path(source).resolve())
         ):
             raise RoomInputError(
@@ -53,13 +53,13 @@ class GitWorktrees:
         common = self.run(source, "rev-parse", "--path-format=absolute", "--git-common-dir")
         target_common = self.run(path, "rev-parse", "--path-format=absolute", "--git-common-dir")
         root = self.run(path, "rev-parse", "--show-toplevel")
-        same = normalize_project_path(str(Path(common).resolve())) == normalize_project_path(
-            str(Path(target_common).resolve())
-        )
+        same = normalize_workspace_identity(
+            str(Path(common).resolve())
+        ) == normalize_workspace_identity(str(Path(target_common).resolve()))
         if (
             not same
-            or normalize_project_path(str(Path(root).resolve()))
-            != normalize_project_path(str(Path(path).resolve()))
+            or normalize_workspace_identity(str(Path(root).resolve()))
+            != normalize_workspace_identity(str(Path(path).resolve()))
             or self.run(path, "rev-parse", "HEAD") != commit
             or self.run(path, "symbolic-ref", "--short", "HEAD") != branch
         ):

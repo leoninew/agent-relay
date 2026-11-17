@@ -165,7 +165,7 @@
   width: 100%;
   min-width: 0;
 }
-.room-navigation-projects {
+.room-navigation-rooms {
   display: flex;
   align-items: stretch;
   gap: 8px;
@@ -242,7 +242,10 @@
   text-overflow: ellipsis;
 }
 .room-tab-list .room-tab {
-  cursor: grab;
+  cursor: pointer;
+}
+.room-tab-list .room-tab:active {
+  cursor: grabbing;
 }
 .room-tab-drag-chosen .room-tab {
   cursor: grabbing;

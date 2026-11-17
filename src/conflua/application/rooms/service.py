@@ -20,7 +20,7 @@ from conflua.domain.rooms.resources import (
     retire_topic,
     validate_topic_name,
 )
-from conflua.domain.rooms.rules import normalize_stored_path
+from conflua.domain.rooms.rules import normalize_workspace_path
 
 
 class RoomService:
@@ -28,22 +28,24 @@ class RoomService:
         self.store = store
 
     def create_room(self, request: CreateRoom) -> Room:
-        project_path = normalize_stored_path(request.project_path)
+        workspace_path = normalize_workspace_path(request.workspace_path)
         with self.store.write() as rooms:
-            if rooms.project_exists(project_path):
-                raise RoomConflictError("该项目已有聊天室，请直接打开", code="project_room_exists")
+            if rooms.workspace_exists(workspace_path):
+                raise RoomConflictError(
+                    "该路径已有聊天室，请直接打开", code="workspace_room_exists"
+                )
             room = Room(
                 id=f"room-{uuid4().hex[:12]}",
                 name=request.name,
-                project_path=project_path,
-                raw_project_path=request.project_path,
+                workspace_path=workspace_path,
+                raw_workspace_path=request.workspace_path,
                 description="",
             )
             state = new_room_state(
                 room,
                 datetime.now(UTC),
                 channel_id=DEFAULT_CHANNEL_ID,
-                working_path=room.project_path,
+                working_path=room.workspace_path,
             )
             rooms.insert_room(room, state.members[0])
             rooms.save_resources(
@@ -102,14 +104,14 @@ class RoomService:
         with self.store.guard(room_id), self.store.write() as rooms:
             state = rooms.resources(room_id)
             original = deepcopy(state)
-            if request.project_path is not None:
-                project_path = normalize_stored_path(request.project_path)
-                if rooms.project_exists(project_path, exclude_room_id=room_id):
+            if request.workspace_path is not None:
+                workspace_path = normalize_workspace_path(request.workspace_path)
+                if rooms.workspace_exists(workspace_path, exclude_room_id=room_id):
                     raise RoomConflictError(
-                        "该项目已有聊天室，请直接打开", code="project_room_exists"
+                        "该路径已有聊天室，请直接打开", code="workspace_room_exists"
                     )
-                state.room.raw_project_path = request.project_path
-                state.room.project_path = project_path
+                state.room.raw_workspace_path = request.workspace_path
+                state.room.workspace_path = workspace_path
             state.room.name = request.name
             rooms.save_resources(state, original)
             return state.room.model_copy(deep=True)

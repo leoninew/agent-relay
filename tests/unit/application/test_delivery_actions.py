@@ -55,12 +55,12 @@ def work() -> ClaimedDelivery:
     room = Room(
         id="room",
         name="Room",
-        project_path="d:/project",
-        raw_project_path="d:/project",
+        workspace_path="d:/project",
+        raw_workspace_path="d:/project",
         description="",
     )
     return ClaimedDelivery(
-        room.id, room, message, delivery, "channel-default", room.project_path, "接收成员"
+        room.id, room, message, delivery, "channel-default", room.workspace_path, "接收成员"
     )
 
 
@@ -176,7 +176,7 @@ def test_submission_includes_stable_message_lookup_facts_and_capabilities(
     thread_id, client_id, request = queue_driver.submit.call_args.args
     assert thread_id == work.delivery.target_session_id
     assert client_id == work.delivery.client_message_id
-    assert request.capabilities == references and request.project_path == work.room.project_path
+    assert request.capabilities == references and request.workspace_path == work.room.workspace_path
     created_at = work.message.model_dump(mode="json", by_alias=True)["createdAt"]
     assert request.text == (
         f"roomId: {work.room_id}\n"

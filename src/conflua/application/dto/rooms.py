@@ -58,7 +58,7 @@ class RoomEventPage(RoomModel):
 
 class CreateRoom(RoomModel):
     name: str = Field(min_length=1, max_length=80)
-    project_path: str = Field(min_length=1, max_length=500)
+    workspace_path: str = Field(min_length=1, max_length=500)
 
     @field_validator("name")
     @classmethod
@@ -73,7 +73,7 @@ class UpdateRoom(RoomModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(min_length=1, max_length=80)
-    project_path: str | None = Field(default=None, min_length=1, max_length=500)
+    workspace_path: str | None = Field(default=None, min_length=1, max_length=500)
 
     @field_validator("name")
     @classmethod

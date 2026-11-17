@@ -53,7 +53,7 @@ def validate_topic_name(state: RoomState, name: str, topic_id: str | None = None
         topic.id != topic_id and not topic.deleted_at and topic.name == name
         for topic in state.topics
     ):
-        raise RoomConflictError("房间中已有同名话题", code="topic_name_conflict")
+        raise RoomConflictError("聊天室中已有同名话题", code="topic_name_conflict")
 
 
 def retire_topic(state: RoomState, topic_id: str, deleted_at: datetime) -> Topic:

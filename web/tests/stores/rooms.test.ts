@@ -229,7 +229,7 @@ describe("room state", () => {
       ...snapshot.room,
       name: "Renamed",
     });
-    expect(store.rooms[0].projectPath).toBe(snapshot.room.projectPath);
+    expect(store.rooms[0].workspacePath).toBe(snapshot.room.workspacePath);
   });
 
   it("preserves the input path and refreshes cached room paths across channels", async () => {
@@ -238,12 +238,12 @@ describe("room state", () => {
     store.rooms = [snapshot.room];
     store.sync(snapshot, "channel-default");
     store.sync(roomFixture(), "other");
-    const request = { name: "Moved", projectPath: " D:\\Other\\Project\\ " };
+    const request = { name: "Moved", workspacePath: " D:\\Other\\Project\\ " };
     const updated = {
       ...snapshot.room,
       name: request.name,
-      rawProjectPath: request.projectPath,
-      projectPath: "D:/Other/Project",
+      rawWorkspacePath: request.workspacePath,
+      workspacePath: "D:/Other/Project",
     };
     vi.mocked(updateRoom).mockResolvedValue(updated);
 

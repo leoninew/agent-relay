@@ -27,8 +27,8 @@ def model_api() -> tuple[FastAPI, MagicMock, Mock]:
         room=Room(
             id="room",
             name="Room",
-            project_path="D:/project",
-            raw_project_path="D:/project",
+            workspace_path="D:/project",
+            raw_workspace_path="D:/project",
             description="",
         ),
         channel_id="channel",
