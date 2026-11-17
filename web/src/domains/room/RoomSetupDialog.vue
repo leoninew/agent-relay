@@ -65,7 +65,6 @@
               variant="plain"
               class="session-reload"
               :loading="sessionsLoading"
-              :loading-label="t('setup.refreshing')"
               :disabled="saving || topicSaving"
               @click="$emit('reloadSessions')"
             >
@@ -141,9 +140,6 @@
                 <p class="text-muted-foreground">
                   {{ t(sessions?.length ? "setup.noAvailable" : "setup.noSessions") }}
                 </p>
-                <p class="mt-1 text-xs text-muted-foreground">
-                  {{ t(sessions?.length ? "setup.checkUnavailable" : "setup.openSession") }}
-                </p>
               </div>
               <CollapsibleRoot
                 v-if="unavailableSessions.length"
@@ -177,10 +173,7 @@
                         <span class="min-w-0 flex-1 truncate font-medium" :title="session.name">
                           {{ session.name }}
                         </span>
-                        <AppTooltip
-                          v-if="!session.memberId && !session.archived && !session.usable"
-                          :text="unavailableReason(session)"
-                        >
+                        <AppTooltip v-if="!session.memberId" :text="unavailableReason(session)">
                           <button
                             type="button"
                             class="shrink-0 cursor-help rounded-sm text-xs underline decoration-dotted underline-offset-2 focus-visible:outline-1 focus-visible:outline-dashed focus-visible:outline-muted-foreground"
@@ -191,12 +184,6 @@
                         <span v-else class="shrink-0 text-xs">{{ sessionStatus(session) }}</span>
                       </div>
                       <span class="truncate text-xs" :title="session.id">{{ session.id }}</span>
-                      <p
-                        v-if="session.memberId || session.archived || session.usable"
-                        class="text-xs break-words"
-                      >
-                        {{ unavailableReason(session) }}
-                      </p>
                     </li>
                   </ul>
                 </CollapsibleContent>
@@ -340,7 +327,7 @@
   function unavailableReason(session: SessionCandidate): string {
     const key = `session.${session.unavailableReasonCode}`;
     if (session.unavailableReasonCode && te(key)) return t(key);
-    return t(session.memberId ? "session.joinedReason" : "session.unavailableReason");
+    return t("session.unavailableReason");
   }
 
   watch([() => props.mode, () => props.topic?.id, () => props.roomId, () => props.room?.id], () => {

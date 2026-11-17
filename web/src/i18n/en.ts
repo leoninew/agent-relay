@@ -84,15 +84,12 @@ export default {
   },
   setup: {
     selectSession: "Choose a session",
-    refreshing: "Refreshing...",
     refreshSessions: "Refresh sessions",
     loadingSessions: "Loading sessions...",
     availableSessions: "Available sessions",
     clearSession: "Clear selected session",
     noAvailable: "No sessions available to join",
     noSessions: "No Codex sessions",
-    checkUnavailable: "Refresh sessions or expand the list below for details.",
-    openSession: "Open a Codex session and refresh.",
     unavailableSessions: "Unavailable sessions",
     projectPath: "Project path",
     clearPath: "Clear project path",
@@ -380,7 +377,6 @@ export default {
     unavailable: "Unavailable",
     busy: "Busy",
     idle: "Idle",
-    joinedReason: "This session is already in the room.",
     unavailableReason: "This session cannot be joined. Refresh and try again.",
     session_archived:
       "This session is archived. Restore it in Codex and connect to the shared daemon.",
