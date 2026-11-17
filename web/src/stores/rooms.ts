@@ -1,9 +1,10 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
 
-import { createMessageDraftStorage } from "@/stores/messageDrafts";
+import { useChannelsStore } from "@/stores/channels";
 import { snapshotScope } from "@/domains/channel/channelRoutes";
 import { roomCacheKey } from "@/services/cacheKeys";
+import { removeRoomCacheStorage } from "@/services/cacheStorage";
 
 import {
   addRoomTopic,
@@ -63,7 +64,6 @@ export const useRoomsStore = defineStore("rooms", () => {
     for (const key of Object.keys(snapshots.value)) {
       if (key.startsWith(`${roomCacheKey(roomId)}:channel:`)) {
         delete snapshots.value[key];
-        createMessageDraftStorage().remove(key);
       }
     }
     for (const key of Object.keys(metadataVersions)) {
@@ -72,6 +72,8 @@ export const useRoomsStore = defineStore("rooms", () => {
     for (const key of Object.keys(activityVersions)) {
       if (key.startsWith(`${roomCacheKey(roomId)}:channel:`)) delete activityVersions[key];
     }
+    useChannelsStore().reset(roomId);
+    removeRoomCacheStorage(roomId);
     rooms.value = rooms.value.filter((room) => room.id !== roomId);
     if (recentRoomId.value === roomId) recentRoomId.value = undefined;
   }

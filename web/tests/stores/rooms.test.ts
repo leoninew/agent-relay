@@ -1,15 +1,12 @@
 import { createPinia, setActivePinia } from "pinia";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { addRoomTopic, clearRoom, deleteRoom, fetchRooms, updateRoom } from "@/services/roomApi";
+import { appCacheKey, channelCacheKey, roomCacheKey } from "@/services/cacheKeys";
+import { useChannelsStore } from "@/stores/channels";
 import { useRoomsStore } from "@/stores/rooms";
 
 import { roomFixture } from "../fixtures/room";
-
-const removeDraft = vi.hoisted(() => vi.fn());
-vi.mock("@/stores/messageDrafts", () => ({
-  createMessageDraftStorage: () => ({ remove: removeDraft }),
-}));
 
 vi.mock("@/services/roomApi", () => ({
   addRoomTopic: vi.fn(),
@@ -20,10 +17,34 @@ vi.mock("@/services/roomApi", () => ({
   updateRoom: vi.fn(),
 }));
 
+function storageFixture(): Storage {
+  const values = new Map<string, string>();
+  return {
+    get length() {
+      return values.size;
+    },
+    key: (index) => [...values.keys()][index] ?? null,
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => void values.set(key, value),
+    removeItem: (key) => void values.delete(key),
+    clear: () => values.clear(),
+  };
+}
+
 describe("room state", () => {
+  let local: Storage;
+  let session: Storage;
+
   beforeEach(() => {
     vi.resetAllMocks();
+    local = storageFixture();
+    session = storageFixture();
+    vi.stubGlobal("window", { localStorage: local, sessionStorage: session });
     setActivePinia(createPinia());
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it("merges activity and resources with independent versions in the selected channel", () => {
@@ -71,10 +92,6 @@ describe("room state", () => {
     await store.remove(snapshot.room.id);
 
     expect(deleteRoom).toHaveBeenCalledWith(snapshot.room.id);
-    expect(removeDraft).toHaveBeenCalledOnce();
-    expect(removeDraft).toHaveBeenCalledWith(
-      store.snapshotKey(snapshot.room.id, "channel-default"),
-    );
     expect(store.rooms).toEqual([otherRoom]);
     expect(store.snapshots[store.snapshotKey(snapshot.room.id, "channel-default")]).toBeUndefined();
     expect(store.snapshots[store.snapshotKey(otherRoom.id, "channel-default")].room).toEqual(
@@ -82,15 +99,58 @@ describe("room state", () => {
     );
   });
 
+  it("cleans every channel's stored data and room navigation when a room is deleted", async () => {
+    const store = useRoomsStore();
+    const channels = useChannelsStore();
+    const room = roomFixture().room;
+    const otherId = `${room.id}:other`;
+    store.rooms = [room, { ...room, id: otherId }];
+    for (const roomId of [room.id, otherId]) {
+      local.setItem(roomCacheKey(roomId, "channels-order"), '["unopened"]');
+      channels.remember(roomId, "unopened");
+      channels.loadedRooms[roomCacheKey(roomId, "channels")] = true;
+      channels.byRoom[roomCacheKey(roomId, "channels")] = [];
+      local.setItem(channelCacheKey(roomId, "unopened", "topics-order"), '["topic"]');
+      local.setItem(channelCacheKey(roomId, "unopened", "members-order"), '["member"]');
+      session.setItem(channelCacheKey(roomId, "unopened", "draft"), "draft");
+      session.setItem(channelCacheKey(roomId, "unopened", "publication"), "pending");
+      session.setItem(channelCacheKey(roomId, "unopened", "channel-creation"), "creating");
+    }
+    local.setItem(appCacheKey("panels"), "preference");
+    local.setItem(appCacheKey("rooms-order"), "order");
+    vi.mocked(deleteRoom).mockResolvedValue();
+
+    await store.remove(room.id);
+
+    expect(local.length).toBe(6);
+    expect(session.length).toBe(3);
+    expect(local.getItem(roomCacheKey(room.id, "selected-channel"))).toBeNull();
+    expect(local.getItem(channelCacheKey(room.id, "unopened", "topics-order"))).toBeNull();
+    expect(session.getItem(channelCacheKey(room.id, "unopened", "draft"))).toBeNull();
+    expect(local.getItem(channelCacheKey(otherId, "unopened", "members-order"))).toBe('["member"]');
+    expect(session.getItem(channelCacheKey(otherId, "unopened", "publication"))).toBe("pending");
+    expect(session.getItem(channelCacheKey(otherId, "unopened", "channel-creation"))).toBe(
+      "creating",
+    );
+    expect(local.getItem(appCacheKey("panels"))).toBe("preference");
+    expect(local.getItem(appCacheKey("rooms-order"))).toBe("order");
+    expect(channels.loadedRooms[roomCacheKey(room.id, "channels")]).toBeUndefined();
+    expect(channels.byRoom[roomCacheKey(room.id, "channels")]).toBeUndefined();
+    expect(channels.loadedRooms[roomCacheKey(otherId, "channels")]).toBe(true);
+    expect(channels.preferredChannel(otherId)).toBe("unopened");
+  });
+
   it("retains a room and its snapshot when deletion fails", async () => {
     const store = useRoomsStore();
     const snapshot = roomFixture();
     store.rooms = [snapshot.room];
     store.sync(snapshot, "channel-default");
+    const draftKey = channelCacheKey(snapshot.room.id, "unopened", "draft");
+    session.setItem(draftKey, "keep");
     vi.mocked(deleteRoom).mockRejectedValue(new Error("unavailable"));
 
     await expect(store.remove(snapshot.room.id)).rejects.toThrow("unavailable");
-    expect(removeDraft).not.toHaveBeenCalled();
+    expect(session.getItem(draftKey)).toBe("keep");
     expect(store.rooms).toEqual([snapshot.room]);
     expect(store.snapshots[store.snapshotKey(snapshot.room.id, "channel-default")]).toEqual(
       snapshot,
@@ -128,7 +188,6 @@ describe("room state", () => {
 
     await store.clear(snapshot.room.id, "channel-default");
 
-    expect(removeDraft).not.toHaveBeenCalled();
     expect(store.rooms).toEqual([snapshot.room, other.room]);
     expect(store.snapshots[store.snapshotKey(snapshot.room.id, "channel-default")]).toEqual({
       ...metadata,

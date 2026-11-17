@@ -55,6 +55,7 @@ export const useChannelsStore = defineStore("channels", () => {
     errors.value[key] = null;
     const request = fetchChannels(roomId, controller.signal)
       .then((result) => {
+        if (controllers.get(key) !== controller) return result;
         byRoom.value[key] = result;
         loadedRooms.value[key] = true;
         const stored = recent.value[selectionKey] ?? selectionStorage.load(roomId);
@@ -67,13 +68,16 @@ export const useChannelsStore = defineStore("channels", () => {
         return result;
       })
       .catch((caught: unknown) => {
-        errors.value[key] = describeApiError(caught, "errors.channelLoad");
+        if (controllers.get(key) === controller)
+          errors.value[key] = describeApiError(caught, "errors.channelLoad");
         throw caught;
       })
       .finally(() => {
-        pending.delete(key);
-        controllers.delete(key);
-        loading.value[key] = false;
+        if (controllers.get(key) === controller) {
+          pending.delete(key);
+          controllers.delete(key);
+          loading.value[key] = false;
+        }
       });
     pending.set(key, request);
     return request;
