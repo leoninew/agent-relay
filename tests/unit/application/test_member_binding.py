@@ -94,6 +94,21 @@ def test_discovery_queries_sessions_in_the_channel_working_directory(
     assert [candidate.id for candidate in candidates] == ["matching"]
 
 
+def test_candidates_exclude_archived_sessions(
+    room_store: MagicMock,
+    session_driver: Mock,
+) -> None:
+    session_driver.list_sessions.return_value = [
+        SessionInfo("archived", "codex", "Archived", "idle", archived=True),
+        SessionInfo("unavailable", "codex", "Unavailable", "unavailable"),
+        SessionInfo("available", "codex", "Available", "idle"),
+    ]
+
+    candidates = MemberService(room_store, session_driver).candidates("conflua")
+
+    assert [candidate.id for candidate in candidates] == ["unavailable", "available"]
+
+
 @pytest.mark.parametrize("status", ["idle", "unavailable"])
 def test_candidates_include_joined_channels_without_changing_current_membership(
     room_store: MagicMock,

@@ -55,6 +55,7 @@ class MemberService:
         sessions = self._metadata(lambda: self.driver.list_sessions(working_path))
         observed_at = datetime.now(UTC)
         self.record_observations(room_id, sessions, observed_at)
+        sessions = [info for info in sessions if not info.archived]
         with self.store.read() as rooms:
             joined = rooms.joined_members(room_id)
             joined_channels = rooms.joined_channels(room_id)

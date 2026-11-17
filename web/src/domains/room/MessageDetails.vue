@@ -166,6 +166,15 @@
                 </button>
               </dd>
             </template>
+            <template v-if="member.kind === 'agent'">
+              <dt>{{ t("details.codexSessionName") }}</dt>
+              <dd
+                class="detail-session-name"
+                :title="sessionName(member) ?? t('member.sessionUnavailable')"
+              >
+                {{ sessionName(member) ?? t("member.sessionUnavailable") }}
+              </dd>
+            </template>
           </dl>
         </section>
         <section class="message-detail-section">

@@ -1268,6 +1268,12 @@ button.topic-chip:hover:not(:disabled) {
   font-size: inherit;
   line-height: inherit;
 }
+.detail-session-name {
+  color: hsl(var(--muted-foreground));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .message-details-content {
   min-height: 0;
   overflow-y: auto;

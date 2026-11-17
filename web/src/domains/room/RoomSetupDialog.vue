@@ -62,9 +62,9 @@
               >{{ t("setup.selectSession") }} <span class="required-mark">*</span></label
             >
             <AppButton
+              v-if="!sessionsLoading"
               variant="plain"
               class="session-reload"
-              :loading="sessionsLoading"
               :disabled="saving || topicSaving"
               @click="$emit('reloadSessions')"
             >
@@ -79,34 +79,29 @@
           </p>
           <template v-else>
             <RadioGroupRoot
-              ref="sessionChoices"
               v-model="sessionId"
-              class="grid gap-3 rounded-lg border border-transparent p-0.5 aria-[invalid=true]:border-destructive"
+              class="grid gap-2 rounded-md"
               :disabled="saving"
               aria-labelledby="setup-session-label"
               :aria-invalid="!!errors.session"
               aria-describedby="setup-session-error"
             >
-              <template v-if="availableSessions.length">
-                <p class="text-xs text-muted-foreground">
-                  {{ t("setup.availableSessions") }}
-                  <span class="ml-1 tabular-nums">{{ availableSessions.length }}</span>
-                </p>
-                <div class="grid max-h-64 gap-2 overflow-y-auto rounded-lg p-0.5">
-                  <div v-for="session in availableSessions" :key="session.id" class="relative">
+              <div
+                class="max-h-72 overflow-y-auto rounded-md border border-border bg-card"
+                :class="{ 'border-destructive': !!errors.session }"
+              >
+                <template v-if="availableSessions.length">
+                  <div
+                    v-for="session in availableSessions"
+                    :key="session.id"
+                    class="relative border-b border-border last:border-b-0"
+                  >
                     <RadioGroupItem
                       :value="session.id"
-                      class="group flex w-full items-start gap-3 rounded-lg border border-border bg-card p-3 text-start outline-none transition-colors hover:bg-muted/50 focus-visible:bg-muted disabled:opacity-60 data-[state=checked]:border-input data-[state=checked]:bg-primary/5 motion-reduce:transition-none"
+                      class="group block w-full border-s-2 border-transparent px-3 py-2.5 text-start outline-none transition-colors hover:bg-muted/40 focus-visible:z-10 focus-visible:outline focus-visible:outline-1 focus-visible:outline-dashed focus-visible:outline-muted-foreground disabled:opacity-60 data-[state=checked]:border-s-primary data-[state=checked]:bg-primary/5 motion-reduce:transition-none"
                       :aria-invalid="!!errors.session"
                     >
-                      <span
-                        class="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border border-input group-data-[state=checked]:border-primary group-data-[state=checked]:bg-primary"
-                      >
-                        <RadioGroupIndicator class="flex">
-                          <AppIcon name="check" class="size-3 text-primary-foreground" />
-                        </RadioGroupIndicator>
-                      </span>
-                      <span class="grid min-w-0 flex-1 gap-1">
+                      <span class="grid min-w-0 gap-1">
                         <span class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
                           <span class="min-w-0 flex-1 truncate font-medium" :title="session.name">
                             {{ session.name }}
@@ -116,15 +111,15 @@
                           </span>
                         </span>
                         <span
-                          class="flex flex-wrap items-center gap-1.5 pr-7 text-xs text-muted-foreground"
+                          class="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground"
                         >
                           <span>{{ t("setup.joinedChannels") }}</span>
                           <span
                             v-for="channel in session.joinedChannels"
                             :key="channel.id"
-                            class="max-w-full rounded bg-muted px-1.5 py-0.5 break-all"
+                            class="max-w-full rounded bg-muted px-1.5 py-0.5 break-all group-data-[state=checked]:bg-card"
                           >
-                            # {{ channel.name }}
+                            {{ channel.name }}
                           </span>
                           <span v-if="!session.joinedChannels.length">
                             {{ t("setup.noJoinedChannels") }}
@@ -132,70 +127,56 @@
                         </span>
                       </span>
                     </RadioGroupItem>
-                    <AppClearButton
-                      v-if="sessionId === session.id"
-                      class="absolute right-2 bottom-2"
-                      :label="t('setup.clearSession')"
-                      :disabled="saving"
-                      @clear="clearSession"
-                    />
                   </div>
-                </div>
-              </template>
-              <div
-                v-else
-                class="rounded-lg border border-dashed border-border bg-muted/30 px-4 py-5 text-center"
-              >
-                <p class="text-muted-foreground">
+                </template>
+                <div v-else class="px-3 py-3 text-sm text-muted-foreground">
                   {{ t(sessions?.length ? "setup.noAvailable" : "setup.noSessions") }}
-                </p>
+                </div>
               </div>
-              <CollapsibleRoot
-                v-if="unavailableSessions.length"
-                v-model:open="unavailableOpen"
-                :disabled="saving"
-                class="border-t border-border pt-2"
-              >
-                <CollapsibleTrigger
-                  class="group flex w-full items-center gap-2 rounded-md px-2 py-2 text-start text-xs text-muted-foreground hover:bg-muted/50 focus-visible:bg-muted"
-                >
-                  <AppIcon
-                    name="chevron"
-                    class="size-3.5 shrink-0 transition-transform group-data-[state=open]:rotate-90 motion-reduce:transition-none"
-                  />
-                  <span>{{ t("setup.unavailableSessions") }}</span>
-                  <span class="ml-auto rounded bg-muted px-1.5 py-0.5 tabular-nums">
-                    {{ unavailableSessions.length }}
-                  </span>
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <ul
-                    :aria-label="t('setup.unavailableSessions')"
-                    class="mt-2 grid max-h-48 gap-2 overflow-y-auto rounded-lg"
-                  >
-                    <li
-                      v-for="session in unavailableSessions"
-                      :key="session.id"
-                      class="grid min-w-0 gap-1 rounded-md bg-muted/40 p-3 text-muted-foreground"
-                    >
-                      <div class="flex min-w-0 items-center gap-3">
-                        <span class="min-w-0 flex-1 truncate font-medium" :title="session.name">
-                          {{ session.name }}
-                        </span>
-                        <AppTooltip :text="unavailableReason(session)">
-                          <button
-                            type="button"
-                            class="shrink-0 cursor-help rounded-sm text-xs underline decoration-dotted underline-offset-2 focus-visible:outline-1 focus-visible:outline-dashed focus-visible:outline-muted-foreground"
-                          >
-                            {{ sessionStatus(session) }}
-                          </button>
-                        </AppTooltip>
-                      </div>
-                    </li>
-                  </ul>
-                </CollapsibleContent>
-              </CollapsibleRoot>
             </RadioGroupRoot>
+            <CollapsibleRoot
+              v-if="unavailableSessions.length"
+              v-model:open="unavailableOpen"
+              :disabled="saving"
+              class="mt-2"
+            >
+              <CollapsibleTrigger
+                class="group inline-flex items-center gap-1.5 rounded-sm py-1 text-start text-xs text-muted-foreground hover:text-foreground focus-visible:outline focus-visible:outline-1 focus-visible:outline-dashed focus-visible:outline-muted-foreground"
+              >
+                <AppIcon
+                  name="chevron"
+                  class="size-3.5 shrink-0 transition-transform group-data-[state=open]:rotate-90 motion-reduce:transition-none"
+                />
+                <span>{{ t("setup.unavailableSessions") }}</span>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <ul
+                  :aria-label="t('setup.unavailableSessions')"
+                  class="mt-1 max-h-48 overflow-y-auto rounded-md border border-border bg-card"
+                >
+                  <li
+                    v-for="session in unavailableSessions"
+                    :key="session.id"
+                    class="flex min-w-0 items-center gap-3 border-b border-border px-3 py-2 last:border-b-0"
+                  >
+                    <span
+                      class="min-w-0 flex-1 truncate text-sm text-muted-foreground"
+                      :title="session.name"
+                    >
+                      {{ session.name }}
+                    </span>
+                    <AppTooltip :text="unavailableReason(session)">
+                      <button
+                        type="button"
+                        class="shrink-0 cursor-help rounded-sm text-xs text-muted-foreground underline decoration-dotted underline-offset-2 focus-visible:outline-1 focus-visible:outline-dashed focus-visible:outline-muted-foreground"
+                      >
+                        {{ sessionStatus(session) }}
+                      </button>
+                    </AppTooltip>
+                  </li>
+                </ul>
+              </CollapsibleContent>
+            </CollapsibleRoot>
           </template>
           <p v-if="errors.session" id="setup-session-error" class="field-error">
             {{ translateMessage(errors.session) }}
@@ -238,14 +219,12 @@
     CollapsibleContent,
     CollapsibleRoot,
     CollapsibleTrigger,
-    RadioGroupIndicator,
     RadioGroupItem,
     RadioGroupRoot,
   } from "reka-ui";
-  import { computed, nextTick, ref, watch } from "vue";
+  import { computed, ref, watch } from "vue";
 
   import AppButton from "@/components/AppButton.vue";
-  import AppClearButton from "@/components/AppClearButton.vue";
   import AppDialog from "@/components/AppDialog.vue";
   import AppIcon from "@/components/AppIcon.vue";
   import AppInput from "@/components/AppInput.vue";
@@ -289,7 +268,6 @@
 
   const name = ref("");
   const sessionId = ref("");
-  const sessionChoices = ref<InstanceType<typeof RadioGroupRoot>>();
   const unavailableOpen = ref(false);
   const workspacePath = ref(props.room?.rawWorkspacePath ?? "");
   const description = ref("");
@@ -372,16 +350,6 @@
   watch(workspacePath, (value) => {
     if (value.trim()) delete errors.value.workspacePath;
   });
-
-  async function clearSession(): Promise<void> {
-    const element = sessionChoices.value?.$el as HTMLElement | undefined;
-    const selected = element?.querySelector<HTMLButtonElement>(
-      '[role="radio"][data-state="checked"]',
-    );
-    sessionId.value = "";
-    await nextTick();
-    selected?.focus();
-  }
 
   function submit(): void {
     if (props.saving || topicSaving.value) return;
