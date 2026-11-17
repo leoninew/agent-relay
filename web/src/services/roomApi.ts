@@ -278,6 +278,7 @@ export type Session = {
 export type SessionCandidate = Session & {
   archived: boolean;
   memberId: string | null;
+  joinedChannels: { id: string; name: string }[];
   usable: boolean;
   unavailableReason: string | null;
   unavailableReasonCode?: string | null;

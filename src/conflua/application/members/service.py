@@ -57,6 +57,7 @@ class MemberService:
         self.record_observations(room_id, sessions, observed_at)
         with self.store.read() as rooms:
             joined = rooms.joined_members(room_id)
+            joined_channels = rooms.joined_channels(room_id)
         result: list[SessionCandidate] = []
         for info in sessions:
             result.append(
@@ -68,6 +69,7 @@ class MemberService:
                     archived=info.archived,
                     observed_at=observed_at,
                     member_id=joined.get(info.id),
+                    joined_channels=joined_channels.get(info.id, []),
                     usable=info.usable,
                     unavailable_reason=info.unavailable_reason,
                     unavailable_reason_code=info.unavailable_reason_code,

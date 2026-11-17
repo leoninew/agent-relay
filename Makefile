@@ -20,7 +20,7 @@ help:
 	@printf "  make test             Run backend and frontend unit tests\n"
 	@printf "  make web              Start the Vite development server on port 9080\n"
 	@printf "  make desktop          Build the frontend and start the WebView application\n"
-	@printf "  make binary           Build the Windows GUI and console package and ZIP\n"
+	@printf "  make binary           Build a native Windows x64 or macOS amd64/arm64 desktop ZIP\n"
 	@printf "  make migrate          Upgrade the configured database schema\n"
 	@printf "  make webapi           Start the FastAPI development server on port 9081\n"
 

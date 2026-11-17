@@ -2,7 +2,7 @@ import type { AxiosAdapter, InternalAxiosRequestConfig } from "axios";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { apiClient } from "@/services/api";
-import type { CreateMessage } from "@/services/roomApi";
+import type { CreateMessage, SessionCandidate } from "@/services/roomApi";
 import {
   addRoomMember,
   clearRoom,
@@ -258,7 +258,33 @@ describe("room API", () => {
 
   it("loads project sessions and joins the selected session without creation fields", async () => {
     const signal = new AbortController().signal;
-    await fetchRoomSessions("room/one", signal, "channel-default");
+    const sessions: SessionCandidate[] = [
+      {
+        id: "existing-session",
+        name: "Worker",
+        provider: "codex",
+        presence: "available",
+        observedAt: null,
+        archived: false,
+        memberId: null,
+        joinedChannels: [
+          { id: "channel-api", name: "API" },
+          { id: "channel-web", name: "Web" },
+        ],
+        usable: true,
+        unavailableReason: null,
+      },
+    ];
+    adapterMock.mockImplementationOnce(async (config: InternalAxiosRequestConfig) => ({
+      config,
+      data: sessions,
+      headers: { "content-type": "application/json" },
+      status: 200,
+      statusText: "",
+    }));
+    await expect(fetchRoomSessions("room/one", signal, "channel-default")).resolves.toEqual(
+      sessions,
+    );
     expect(adapterMock).toHaveBeenLastCalledWith(
       expect.objectContaining({
         method: "get",

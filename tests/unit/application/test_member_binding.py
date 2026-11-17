@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, Mock
 
 import pytest
 
-from conflua.application.dto.members import CreateMember, SessionInfo
+from conflua.application.dto.members import CreateMember, SessionChannel, SessionInfo, SessionStatus
 from conflua.application.members.service import MemberService
 from conflua.application.members.sessions import (
     SessionDriver,
@@ -92,6 +92,44 @@ def test_discovery_queries_sessions_in_the_channel_working_directory(
     candidates = MemberService(room_store, session_driver).candidates("conflua")
     session_driver.list_sessions.assert_called_once_with(working_path)
     assert [candidate.id for candidate in candidates] == ["matching"]
+
+
+@pytest.mark.parametrize("status", ["idle", "unavailable"])
+def test_candidates_include_joined_channels_without_changing_current_membership(
+    room_store: MagicMock,
+    room_repository: Mock,
+    session_driver: Mock,
+    status: SessionStatus,
+) -> None:
+    session_driver.list_sessions.return_value = [
+        SessionInfo("shared", "codex", "Shared", status),
+        SessionInfo("current", "codex", "Current", "idle"),
+        SessionInfo("fresh", "codex", "Fresh", "idle"),
+    ]
+    channels = [
+        SessionChannel(id="channel-api", name="API"),
+        SessionChannel(id="channel-web", name="Web"),
+    ]
+    room_repository.joined_members.return_value = {"current": "current-member"}
+    room_repository.joined_channels.return_value = {
+        "shared": channels,
+        "current": [SessionChannel(id="channel-default", name="默认")],
+    }
+
+    shared, current, fresh = MemberService(room_store, session_driver).candidates("conflua")
+
+    assert shared.joined_channels == channels
+    assert shared.member_id is None
+    assert shared.usable == (status == "idle")
+    assert shared.model_dump(by_alias=True)["joinedChannels"] == [
+        {"id": "channel-api", "name": "API"},
+        {"id": "channel-web", "name": "Web"},
+    ]
+    assert current.member_id == "current-member"
+    assert current.joined_channels == [SessionChannel(id="channel-default", name="默认")]
+    assert fresh.joined_channels == []
+    assert fresh.member_id is None
+    room_repository.joined_channels.assert_called_once_with("conflua")
 
 
 @pytest.mark.parametrize(

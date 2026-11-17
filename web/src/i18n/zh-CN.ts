@@ -87,6 +87,8 @@ export default {
     refreshSessions: "刷新会话",
     loadingSessions: "正在加载会话…",
     availableSessions: "可加入会话",
+    joinedChannels: "已加入频道：",
+    noJoinedChannels: "暂无",
     clearSession: "清空所选会话",
     noAvailable: "暂无可加入的会话",
     noSessions: "暂无 Codex 会话",

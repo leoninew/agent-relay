@@ -95,6 +95,7 @@ def room_repository(room_state: RoomState) -> Mock:
     repository.joined_members.return_value = {
         member.session_id: member.id for member in room_state.members if member.session_id
     }
+    repository.joined_channels.return_value = {}
     repository.bindings.return_value = [
         (room_state.room.id, room_state.channel_id, member.session_id)
         for member in room_state.members

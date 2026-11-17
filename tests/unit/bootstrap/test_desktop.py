@@ -4,6 +4,7 @@ import sys
 from collections.abc import Callable
 from datetime import UTC, datetime
 from importlib import import_module
+from io import StringIO
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -129,9 +130,11 @@ def test_local_api_server_releases_listener_when_app_creation_fails(
 
 
 @pytest.mark.parametrize("fail_notification", [False, True])
+@pytest.mark.parametrize("platform_name", ["win32", "darwin"])
 def test_run_desktop_persists_webview_and_confirms_close(
-    tmp_path: Path, monkeypatch: MonkeyPatch, fail_notification: bool
+    tmp_path: Path, monkeypatch: MonkeyPatch, fail_notification: bool, platform_name: str
 ) -> None:
+    monkeypatch.setattr("conflua.bootstrap.desktop.sys.platform", platform_name)
     static_directory = tmp_path / "web" / "dist"
     static_directory.mkdir(parents=True)
     (static_directory / "index.html").write_text("ready", encoding="utf-8")
@@ -185,11 +188,16 @@ def test_run_desktop_persists_webview_and_confirms_close(
     )
 
     assert str(webview.window_options["url"]).endswith("/static/")
-    assert webview.start_options["gui"] == "edgechromium"
+    assert webview.start_options["gui"] == (
+        "cocoa" if platform_name == "darwin" else "edgechromium"
+    )
     assert webview.start_options["private_mode"] is False
     assert Path(str(webview.start_options["storage_path"])) == tmp_path / "user data" / "webview"
     assert Path(str(webview.start_options["icon"])) == (
-        tmp_path / "resources" / "assets" / "conflua.ico"
+        tmp_path
+        / "resources"
+        / "assets"
+        / ("conflua.png" if platform_name == "darwin" else "conflua.ico")
     )
     assert callback_calls == 1
     notifications.assert_called_once()
@@ -360,3 +368,24 @@ def test_desktop_language_falls_back_to_config(monkeypatch: MonkeyPatch) -> None
     preferences = Mock()
     preferences.get.side_effect = OSError("unreadable")
     assert desktop._desktop_language(preferences, settings) == "zh-CN"
+
+
+@pytest.mark.parametrize("has_stderr", [False, True])
+def test_macos_bundle_startup_error(
+    tmp_path: Path, monkeypatch: MonkeyPatch, has_stderr: bool
+) -> None:
+    appkit = Mock()
+    monkeypatch.setattr("conflua.bootstrap.desktop.sys.platform", "darwin")
+    monkeypatch.setattr("conflua.bootstrap.desktop.sys.stderr", StringIO() if has_stderr else None)
+    monkeypatch.setattr("conflua.bootstrap.desktop.sys.frozen", True, raising=False)
+    load_module = Mock(return_value=appkit)
+    monkeypatch.setattr("conflua.bootstrap.desktop.importlib.import_module", load_module)
+
+    desktop._show_startup_error("port unavailable", "en", active_user_root=tmp_path)
+
+    load_module.assert_called_once_with("AppKit")
+    alert = appkit.NSAlert.alloc.return_value.init.return_value
+    text = alert.setInformativeText_.call_args.args[0]
+    assert "port unavailable" in text
+    assert str(tmp_path / "logs" / "conflua.log") in text
+    alert.runModal.assert_called_once_with()

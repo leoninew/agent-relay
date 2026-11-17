@@ -1,8 +1,10 @@
-# Windows 制品发布指南
+# 桌面制品发布指南
 
 ## 本地构建
 
-在 Windows x64 的 GNU Make/Git Bash 环境中运行 `make binary`，生成完整桌面目录和版本化 ZIP。包内容与运行要求见[桌面使用指南](windows-desktop.md)。
+在目标平台运行 `make binary`：Windows x64 使用 GNU Make/Git Bash，macOS 分别使用 x86_64 或 arm64 Python。构建生成完整桌面应用和版本化 ZIP，保留 Windows 原有制品名，并新增 `conflua-<version>-macos-amd64.zip` 与 `conflua-<version>-macos-arm64.zip`。包内容与运行要求见 [Windows 指南](windows-desktop.md)和 [macOS 指南](macos-desktop.md)。
+
+macOS 制品为包含 GUI 与 CLI 的 `Conflua.app`，不是 universal2 通用包；在各架构原生 runner 上分别构建。当前只使用 ad-hoc 签名，不包含 Developer ID 签名、公证或 DMG 安装器。
 
 ## 版本计算与更新
 
@@ -21,13 +23,13 @@ uv run --locked --no-sync python scripts/version-calc.py --no-dry-run
 
 ## GitHub Release
 
-[Build Windows desktop](../../.github/workflows/build-desktop.yml) 支持 `v*` tag push 自动发布，或手动 `workflow_dispatch` 并填写已有版本 tag。工作流检出该 tag，执行 `make deps`、`make check`、`make test`、`make binary`，再将同一个 ZIP 上传到 GitHub Release 的 **Assets**；对应 run 的 **Artifacts** 也保留下载。
+[Build desktop](../../.github/workflows/build-desktop.yml) 支持 `v*` tag push 自动发布，或手动 `workflow_dispatch` 并填写已有版本 tag。工作流分别在 Windows x64、macOS Intel（`macos-15-intel`）和 macOS Apple Silicon（`macos-15`）runner 检出该 tag，执行 `make deps`、`make check`、`make test`、`make binary`。构建验证包含冻结 CLI 的 `--help`，macOS 还检查入口架构及 bundle 元数据。三个构建全部成功后，同一发布 job 将三个已验证 ZIP 上传到 GitHub Release 的 **Assets**；对应 run 的 **Artifacts** 也保留下载。
 
-tag 必须等于 `pyproject.toml` 的版本前加 `v`。首次创建 Release，重跑时复用该 Release 并覆盖同名 ZIP。通用 ZIP 在仓库页的 **Releases** 下载，**Packages** 用于独立的包仓库。
+tag 必须等于 `pyproject.toml` 的版本前加 `v`。首次创建 Release，重跑时复用该 Release 并覆盖同名 ZIP。各平台 ZIP 在仓库页的 **Releases** 下载，**Packages** 用于独立的包仓库。
 
 ## GitLab 项目准备
 
-[.gitlab-ci.yml](../../.gitlab-ci.yml) 使用两个 runner：
+[.gitlab-ci.yml](../../.gitlab-ci.yml) 目前仍只发布 Windows 制品，使用两个 runner：
 
 | Runner tag     | 配置与工具                                                                                                                                                    |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |

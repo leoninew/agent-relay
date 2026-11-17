@@ -5,6 +5,7 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
+from conflua.application.dto.members import SessionChannel
 from conflua.application.dto.messages import MessageUpdatesQuery
 from conflua.domain.rooms.errors import RoomNotFoundError
 from conflua.domain.rooms.models import Member
@@ -94,6 +95,89 @@ def test_channel_sessions_include_history_but_exclude_other_channel(
     for member_id in ("historical", "elsewhere", "missing"):
         with pytest.raises(RoomNotFoundError):
             repository.member("room", member_id)
+
+
+@pytest.mark.parametrize(
+    ("channel_id", "other_state"),
+    [
+        ("channel-default", "active"),
+        ("other", "active"),
+        ("channel-default", "archived"),
+        ("other", "archived"),
+        ("channel-default", "deleted"),
+    ],
+)
+def test_joined_channels_are_room_scoped_and_exclude_inactive_memberships(
+    scoped_session: Session,
+    channel_id: str,
+    other_state: str,
+) -> None:
+    other = scoped_session.get(ChannelRecord, ("room", "other"))
+    assert other is not None
+    if other_state != "active":
+        other.archived_at = datetime.now(UTC)
+        other.status = "archived" if other_state == "archived" else "active"
+    shared = scoped_session.get(MemberRecord, ("room", "current", "channel-default"))
+    assert shared is not None
+    scoped_session.add(
+        MemberRecord(
+            room_id="room",
+            channel_id="other",
+            **{
+                field: getattr(shared, field)
+                for field in Member.model_fields
+                if field != "topic_ids"
+            },
+        )
+    )
+    scoped_session.add(
+        RoomRecord(
+            id="another-room",
+            project_path="/another-project",
+            raw_project_path="/another-project",
+            name="Another room",
+            description="",
+        )
+    )
+    scoped_session.add(
+        ChannelRecord(
+            room_id="another-room",
+            id="channel-default",
+            name="Another room channel",
+            description="",
+            is_default=True,
+            workspace_kind="existing",
+        )
+    )
+    scoped_session.add(
+        SessionRecord(
+            room_id="another-room",
+            id="current",
+            name="Current",
+            provider="codex",
+            presence="available",
+        )
+    )
+    scoped_session.add(
+        MemberRecord(
+            room_id="another-room",
+            channel_id="channel-default",
+            **{
+                field: getattr(shared, field)
+                for field in Member.model_fields
+                if field != "topic_ids"
+            },
+        )
+    )
+    scoped_session.flush()
+
+    result = SQLAlchemyRoomRepository(scoped_session, channel_id).joined_channels("room")
+
+    expected = {"current": [SessionChannel(id="channel-default", name="channel-default")]}
+    if other_state == "active":
+        expected["current"].append(SessionChannel(id="other", name="other"))
+        expected["elsewhere"] = [SessionChannel(id="other", name="other")]
+    assert result == expected
 
 
 @pytest.mark.parametrize("retain", [False, True])

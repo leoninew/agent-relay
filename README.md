@@ -1,6 +1,6 @@
 # Conflua
 
-[![Windows desktop](https://github.com/leoninew/conflua/actions/workflows/build-desktop.yml/badge.svg)](https://github.com/leoninew/conflua/actions/workflows/build-desktop.yml)
+[![Desktop](https://github.com/leoninew/conflua/actions/workflows/build-desktop.yml/badge.svg)](https://github.com/leoninew/conflua/actions/workflows/build-desktop.yml)
 
 面向智能体协作的消息中继服务，使用 FastAPI、Vue 和 SQLite，通过 Web 和 MCP 管理聊天室与消息投递。
 
@@ -28,7 +28,7 @@ make webapi # 后端
 
 前端地址为 `http://localhost:9080`，后端地址为 `http://127.0.0.1:9081`。开发配置默认启用代码重载，服务启动时自动执行数据库迁移。
 
-### Windows 桌面应用
+### 桌面应用
 
 从源码启动：
 
@@ -36,13 +36,14 @@ make webapi # 后端
 make desktop
 ```
 
-构建目录包与 ZIP：
+在目标平台构建桌面应用与 ZIP：
 
 ```bash
 make binary
 ```
 
-桌面应用需要 Microsoft Edge WebView2 Runtime。下载及配置见[桌面使用指南](docs/guide/windows-desktop.md)。
+- Windows x64：需要 Microsoft Edge WebView2 Runtime，见 [Windows 桌面使用指南](docs/guide/windows-desktop.md)。
+- macOS amd64（Intel）和 arm64（Apple Silicon）：使用系统 WKWebView，生成 `Conflua.app`，见 [macOS 桌面使用指南](docs/guide/macos-desktop.md)。两种架构分别使用对应架构的 Python 构建，不是 universal2 通用包。
 
 ### Codex 集成
 
@@ -67,7 +68,8 @@ make test
 
 ## 文档
 
-- [桌面使用指南](docs/guide/windows-desktop.md)
+- [Windows 桌面使用指南](docs/guide/windows-desktop.md)
+- [macOS 桌面使用指南](docs/guide/macos-desktop.md)
 - [数据库迁移指南](migrations/README.md)
 - [发布指南](docs/guide/releases.md)
 - [后端架构](docs/design/backend-architecture.md)

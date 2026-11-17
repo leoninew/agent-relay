@@ -53,9 +53,15 @@ class SessionInfo:
         return "available" if self.status == "idle" else "busy"
 
 
+class SessionChannel(RoomModel):
+    id: str
+    name: str
+
+
 class SessionCandidate(Session):
     archived: bool
     member_id: str | None = None
+    joined_channels: list[SessionChannel] = Field(default_factory=list)
     usable: bool
     unavailable_reason: str | None
     unavailable_reason_code: str | None = None

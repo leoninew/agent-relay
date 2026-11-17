@@ -116,10 +116,19 @@
                           </span>
                         </span>
                         <span
-                          class="truncate pr-7 text-xs text-muted-foreground"
-                          :title="session.id"
+                          class="flex flex-wrap items-center gap-1.5 pr-7 text-xs text-muted-foreground"
                         >
-                          {{ session.id }}
+                          <span>{{ t("setup.joinedChannels") }}</span>
+                          <span
+                            v-for="channel in session.joinedChannels"
+                            :key="channel.id"
+                            class="max-w-full rounded bg-muted px-1.5 py-0.5 break-all"
+                          >
+                            # {{ channel.name }}
+                          </span>
+                          <span v-if="!session.joinedChannels.length">
+                            {{ t("setup.noJoinedChannels") }}
+                          </span>
                         </span>
                       </span>
                     </RadioGroupItem>
@@ -182,7 +191,6 @@
                           </button>
                         </AppTooltip>
                       </div>
-                      <span class="truncate text-xs" :title="session.id">{{ session.id }}</span>
                     </li>
                   </ul>
                 </CollapsibleContent>

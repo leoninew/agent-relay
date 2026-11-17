@@ -1,4 +1,4 @@
-name: Build Windows desktop
+name: Build desktop
 
 on:
   workflow_dispatch:
@@ -22,14 +22,29 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  windows-x64:
-    runs-on: windows-latest
+  build:
+    name: Build ${{ matrix.platform }}-${{ matrix.architecture }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            platform: windows
+            architecture: x64
+            python_architecture: x64
+          - runner: macos-15-intel
+            platform: macos
+            architecture: amd64
+            python_architecture: x64
+          - runner: macos-15
+            platform: macos
+            architecture: arm64
+            python_architecture: arm64
     timeout-minutes: 30
     defaults:
       run:
         shell: bash
-    outputs:
-      artifact_name: ${{ steps.binary.outputs.artifact_name }}
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -50,7 +65,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version-file: .python-version
-          architecture: x64
+          architecture: ${{ matrix.python_architecture }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -63,6 +78,7 @@ jobs:
           enable-cache: true
 
       - name: Set up GNU Make
+        if: runner.os == 'Windows'
         shell: pwsh
         run: choco install make --yes --no-progress
 
@@ -70,9 +86,9 @@ jobs:
         working-directory: web
         run: |
           test -x "$(command -v corepack)" || npm install --global corepack
-          corepack.cmd enable
-          corepack.cmd prepare pnpm@10.34.9 --activate
-          corepack.cmd pnpm --version
+          corepack enable
+          corepack prepare pnpm@10.34.9 --activate
+          corepack pnpm --version
 
       - name: Install locked dependencies
         run: make deps
@@ -91,11 +107,19 @@ jobs:
       - name: Run unit tests
         run: make test
 
-      - name: Build and package Windows binaries
+      - name: Build and package native binaries
         id: binary
         run: make binary
 
-      - name: Upload Windows ZIP
+      - name: Verify artifact platform
+        env:
+          ARTIFACT_NAME: ${{ steps.binary.outputs.artifact_name }}
+          EXPECTED_SUFFIX: ${{ matrix.platform }}-${{ matrix.architecture }}
+        run: |
+          version="$(uv run --locked --no-sync python scripts/binary.py --check-version)"
+          test "$ARTIFACT_NAME" = "conflua-$version-$EXPECTED_SUFFIX"
+
+      - name: Upload desktop ZIP
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.binary.outputs.artifact_name }}
@@ -105,35 +129,42 @@ jobs:
 
   release:
     name: Publish GitHub Release
-    needs: windows-x64
+    needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: write
     env:
       GH_TOKEN: ${{ github.token }}
-      ARTIFACT_NAME: ${{ needs.windows-x64.outputs.artifact_name }}
     steps:
-      - name: Download Windows ZIP
+      - name: Download desktop ZIPs
         uses: actions/download-artifact@v5
         with:
-          name: ${{ env.ARTIFACT_NAME }}
+          pattern: conflua-*
+          merge-multiple: true
           path: dist
 
-      - name: Create Release and upload Windows ZIP
+      - name: Create Release and upload desktop ZIPs
         shell: bash
         run: |
           set -euo pipefail
-          archive="dist/${ARTIFACT_NAME}.zip"
-          test -s "$archive"
+          version="${RELEASE_TAG#v}"
+          archives=(
+            "dist/conflua-$version-windows-x64.zip"
+            "dist/conflua-$version-macos-amd64.zip"
+            "dist/conflua-$version-macos-arm64.zip"
+          )
+          for archive in "${archives[@]}"; do
+            test -s "$archive"
+          done
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" "$archive" \
+            gh release upload "$RELEASE_TAG" "${archives[@]}" \
               --repo "$GITHUB_REPOSITORY" --clobber
           else
-            gh release create "$RELEASE_TAG" "$archive" \
+            gh release create "$RELEASE_TAG" "${archives[@]}" \
               --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes \
               --title "Conflua $RELEASE_TAG" --draft
           fi
           gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false
           release_url="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json url --jq '.url')"
-          printf '## Windows release\n\n[%s](%s)\n' "$RELEASE_TAG" "$release_url" >> "$GITHUB_STEP_SUMMARY"
+          printf '## Desktop release\n\n[%s](%s)\n' "$RELEASE_TAG" "$release_url" >> "$GITHUB_STEP_SUMMARY"

@@ -6,6 +6,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from conflua.application.dto.desktop import ShutdownNotificationTarget
+from conflua.application.dto.members import SessionChannel
 from conflua.application.dto.positions import TopicPosition
 from conflua.application.dto.rooms import (
     RoomActivity,
@@ -160,6 +161,30 @@ class SQLAlchemyRoomReads:
     def member(self, room_id: str, member_id: str) -> Member:
         self.room(room_id)
         return self.publisher(room_id, member_id)
+
+    def joined_channels(self, room_id: str) -> dict[str, list[SessionChannel]]:
+        self.room(room_id)
+        channels: dict[str, list[SessionChannel]] = defaultdict(list)
+        for session_id, channel_id, name in self.session.execute(
+            select(MemberRecord.session_id, ChannelRecord.id, ChannelRecord.name)
+            .join(
+                ChannelRecord,
+                (ChannelRecord.room_id == MemberRecord.room_id)
+                & (ChannelRecord.id == MemberRecord.channel_id),
+            )
+            .where(
+                MemberRecord.room_id == room_id,
+                MemberRecord.kind == "agent",
+                MemberRecord.session_id.is_not(None),
+                MemberRecord.deleted_at.is_(None),
+                ChannelRecord.archived_at.is_(None),
+                ChannelRecord.status == "active",
+            )
+            .order_by(ChannelRecord.is_default.desc(), ChannelRecord.created_at, ChannelRecord.id)
+        ):
+            if session_id is not None:
+                channels[session_id].append(SessionChannel(id=channel_id, name=name))
+        return dict(channels)
 
     def active_bindings(self, room_id: str) -> dict[str, str]:
         self.room(room_id)

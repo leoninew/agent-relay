@@ -87,6 +87,8 @@ export default {
     refreshSessions: "Refresh sessions",
     loadingSessions: "Loading sessions...",
     availableSessions: "Available sessions",
+    joinedChannels: "Joined channels:",
+    noJoinedChannels: "None",
     clearSession: "Clear selected session",
     noAvailable: "No sessions available to join",
     noSessions: "No Codex sessions",

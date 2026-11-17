@@ -238,12 +238,13 @@ def run_desktop(
             return True
 
         window.events.closing += on_closing
+        is_macos = sys.platform == "darwin"
         webview_api.start(
-            gui="edgechromium",
+            gui="cocoa" if is_macos else "edgechromium",
             debug=False,
             private_mode=False,
             storage_path=str(storage_path),
-            icon=str(active_resources / "assets" / "conflua.ico"),
+            icon=str(active_resources / "assets" / ("conflua.png" if is_macos else "conflua.ico")),
         )
     logger.info("Desktop window closed")
 
@@ -327,13 +328,26 @@ def _show_startup_error(
     )
     if sys.stderr is not None:
         print(text, file=sys.stderr)
-        return
+        if not (sys.platform == "darwin" and getattr(sys, "frozen", False)):
+            return
     if sys.platform == "win32":
         import ctypes
 
         windll = getattr(ctypes, "windll", None)
         if windll is not None:
             windll.user32.MessageBoxW(None, text, "Conflua", 0x10)
+    elif sys.platform == "darwin":
+        try:
+            appkit = importlib.import_module("AppKit")
+            app = appkit.NSApplication.sharedApplication()
+            app.setActivationPolicy_(0)
+            app.activateIgnoringOtherApps_(True)
+            alert = appkit.NSAlert.alloc().init()
+            alert.setMessageText_("Conflua")
+            alert.setInformativeText_(text)
+            alert.runModal()
+        except Exception:
+            logger.exception("Unable to display the desktop startup error")
 
 
 def main() -> None:
