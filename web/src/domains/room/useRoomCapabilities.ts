@@ -5,6 +5,7 @@ import en from "@/i18n/en";
 import { describeApiError } from "@/services/api";
 import { fetchRoomSkills } from "@/services/roomApi";
 import type { Room, SkillCatalog } from "@/services/roomApi";
+import { channelCacheKey } from "@/services/cacheKeys";
 
 export type ComposerCatalog = {
   skills: SkillCatalog["skills"];
@@ -12,17 +13,19 @@ export type ComposerCatalog = {
   issues: MessageDescriptor[];
 };
 
-type Cached<Result> = { expires: number; promise: Promise<Result> };
+type Cached<Result> = { expires: number; context: string; promise: Promise<Result> };
 
 function cached<Result>(
   cache: Map<string, Cached<Result>>,
   key: string,
+  context: string,
   load: () => Promise<Result>,
   force: boolean,
 ): Promise<Result> {
   const existing = cache.get(key);
-  if (!force && existing && existing.expires > Date.now()) return existing.promise;
-  const entry = { expires: Date.now() + 60_000, promise: load() };
+  if (!force && existing && existing.context === context && existing.expires > Date.now())
+    return existing.promise;
+  const entry = { expires: Date.now() + 60_000, context, promise: load() };
   cache.set(key, entry);
   void entry.promise.catch(() => {
     if (cache.get(key) === entry) cache.delete(key);
@@ -60,7 +63,8 @@ export function useRoomCapabilities(
     try {
       const result = await cached(
         skillCache,
-        `${current.id}:${currentChannel}:${current.projectPath}`,
+        channelCacheKey(current.id, currentChannel, "skills"),
+        current.projectPath,
         () => request((signal) => fetchRoomSkills(current.id, force, signal, currentChannel)),
         force,
       );

@@ -8,7 +8,7 @@ from sqlalchemy.engine import Connection
 
 from conflua.resources import resource_root
 
-MIGRATION_HEAD = "simplify_paths_20261117"
+MIGRATION_HEAD = "channel_status_20261117"
 
 
 def _configuration(path: Path, *, resources: Path | None = None) -> Config:

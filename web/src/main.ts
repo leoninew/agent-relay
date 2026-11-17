@@ -5,6 +5,7 @@ import "./style.css";
 import App from "./App.vue";
 import { i18n } from "./i18n";
 import { router } from "./router";
+import { upgradeCacheStorage } from "./services/cacheStorageUpgrade";
 import { usePreferencesStore } from "./stores/preferences";
 import { createSystemThemeMediaQuery, createThemeRuntime } from "./theme";
 
@@ -25,6 +26,7 @@ watch(
   { immediate: true },
 );
 async function start(): Promise<void> {
+  upgradeCacheStorage();
   await preferences.load();
   createApp(App).use(pinia).use(i18n).use(router).mount("#app");
 }

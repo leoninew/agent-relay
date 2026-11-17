@@ -15,9 +15,16 @@
       <button type="button" @click="preferences.load">{{ t("common.retry") }}</button>
     </div>
     <main>
-      <RouterView v-slot="{ Component }">
+      <RouterView v-slot="{ Component, route }">
         <KeepAlive :max="1">
-          <component :is="Component" />
+          <component
+            :is="Component"
+            :key="
+              route.name === 'channel'
+                ? channelKey(String(route.params.roomId), String(route.params.channelId))
+                : route.path
+            "
+          />
         </KeepAlive>
       </RouterView>
     </main>
@@ -32,6 +39,7 @@
   import AppMenu from "@/components/AppMenu.vue";
   import AppToasts from "@/components/AppToasts.vue";
   import RoomSwitcher from "@/domains/room/RoomSwitcher.vue";
+  import { channelKey } from "@/domains/channel/channelRoutes";
   import { translateMessage } from "@/i18n";
   import { usePreferencesStore } from "@/stores/preferences";
 

@@ -3,6 +3,7 @@ import { ref } from "vue";
 
 import { createMessageDraftStorage } from "@/stores/messageDrafts";
 import { snapshotScope } from "@/domains/channel/channelRoutes";
+import { roomCacheKey } from "@/services/cacheKeys";
 
 import {
   addRoomTopic,
@@ -35,7 +36,6 @@ function orderedMessages(messages: RoomMessage[]): RoomMessage[] {
 
 export const useRoomsStore = defineStore("rooms", () => {
   const rooms = ref<Room[]>([]);
-  const loaded = ref(false);
   const recentRoomId = ref<string>();
   const createOpen = ref(false);
   const snapshots = ref<Record<string, RoomSnapshot>>({});
@@ -44,11 +44,9 @@ export const useRoomsStore = defineStore("rooms", () => {
   let pending: Promise<Room[]> | undefined;
 
   async function load(): Promise<void> {
-    if (loaded.value) return;
     pending ??= fetchRooms();
     try {
       rooms.value = await pending;
-      loaded.value = true;
     } finally {
       pending = undefined;
     }
@@ -63,16 +61,16 @@ export const useRoomsStore = defineStore("rooms", () => {
   async function remove(roomId: string): Promise<void> {
     await deleteRoom(roomId);
     for (const key of Object.keys(snapshots.value)) {
-      if (key.startsWith(`${roomId}:`)) {
+      if (key.startsWith(`${roomCacheKey(roomId)}:channel:`)) {
         delete snapshots.value[key];
         createMessageDraftStorage().remove(key);
       }
     }
     for (const key of Object.keys(metadataVersions)) {
-      if (key.startsWith(`${roomId}:`)) delete metadataVersions[key];
+      if (key.startsWith(`${roomCacheKey(roomId)}:channel:`)) delete metadataVersions[key];
     }
     for (const key of Object.keys(activityVersions)) {
-      if (key.startsWith(`${roomId}:`)) delete activityVersions[key];
+      if (key.startsWith(`${roomCacheKey(roomId)}:channel:`)) delete activityVersions[key];
     }
     rooms.value = rooms.value.filter((room) => room.id !== roomId);
     if (recentRoomId.value === roomId) recentRoomId.value = undefined;
@@ -82,7 +80,7 @@ export const useRoomsStore = defineStore("rooms", () => {
     const room = await updateRoom(roomId, request);
     updateRoomName(room);
     for (const [scope, snapshot] of Object.entries(snapshots.value)) {
-      if (scope.startsWith(`${room.id}:`)) snapshot.room = room;
+      if (scope.startsWith(`${roomCacheKey(room.id)}:channel:`)) snapshot.room = room;
     }
     return room;
   }
@@ -185,7 +183,6 @@ export const useRoomsStore = defineStore("rooms", () => {
 
   return {
     rooms,
-    loaded,
     recentRoomId,
     createOpen,
     snapshots,

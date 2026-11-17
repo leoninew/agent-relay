@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { usePanelPreferencesStore } from "@/stores/panelPreferences";
 import type * as storage from "@/services/storage";
+import { appCacheKey } from "@/services/cacheKeys";
 
 const saved = vi.hoisted(() => new Map<string, string>());
 vi.mock("@/services/storage", async (importOriginal) => ({
@@ -31,7 +32,7 @@ describe("panel preferences", () => {
   });
 
   it("ignores invalid stored values", () => {
-    saved.set("conflua-panel-preferences", '{"navigation":"false","details":true}');
+    saved.set(appCacheKey("panels"), '{"navigation":"false","details":true}');
     expect(usePanelPreferencesStore().collapsed).toEqual({ navigation: false, details: true });
   });
 });

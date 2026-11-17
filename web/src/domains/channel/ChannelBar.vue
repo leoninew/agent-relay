@@ -39,7 +39,7 @@
         :animation="150"
         :disabled="disabled"
       >
-        <div v-for="item in channels" :key="item.id" class="sidebar-node">
+        <div v-for="item in channels" :key="item.id" class="sidebar-node channel-node">
           <button
             type="button"
             class="sidebar-drag-handle"
@@ -69,6 +69,16 @@
               <span class="sidebar-node-name">{{ item.name }}</span>
             </a>
           </RouterLink>
+          <button
+            v-if="canArchiveChannel(item, channelId)"
+            type="button"
+            class="channel-archive-button"
+            :aria-label="t('channel.archiveNamed', { name: item.name })"
+            :disabled="disabled"
+            @click.stop="$emit('archive', item)"
+          >
+            {{ t("channel.archive") }}
+          </button>
         </div>
       </VueDraggable>
     </nav>
@@ -82,6 +92,7 @@
 
   import AppIcon from "@/components/AppIcon.vue";
   import RoomSidebarSection from "@/domains/room/RoomSidebarSection.vue";
+  import { canArchiveChannel } from "@/domains/channel/useChannelArchive";
   import type { Channel } from "@/services/channelApi";
 
   const { t } = useI18n();
@@ -94,6 +105,7 @@
     create: [];
     select: [channelId: string];
     move: [channelId: string, offset: number];
+    archive: [channel: Channel];
   }>();
   const channels = defineModel<Channel[]>("channels", { required: true });
 </script>
@@ -101,5 +113,33 @@
 <style scoped>
   .channel-item {
     text-decoration: none;
+  }
+  .channel-node:hover > .channel-item {
+    background: hsl(var(--foreground) / 0.04);
+  }
+  .channel-archive-button {
+    position: absolute;
+    top: 50%;
+    right: 8px;
+    height: 28px;
+    padding: 0;
+    color: hsl(var(--muted-foreground));
+    font-size: var(--font-size-caption);
+    line-height: var(--line-height-caption);
+    transform: translateY(-50%);
+    opacity: 0;
+    pointer-events: none;
+  }
+  .channel-node:hover > .channel-archive-button,
+  .channel-archive-button:focus-visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .channel-archive-button:hover:not(:disabled) {
+    color: hsl(var(--foreground));
+  }
+  .channel-node:has(> .channel-archive-button):hover > .channel-item,
+  .channel-node:has(> .channel-archive-button:focus-visible) > .channel-item {
+    padding-right: 44px;
   }
 </style>

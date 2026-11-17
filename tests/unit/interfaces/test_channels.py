@@ -4,7 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from conflua.application.dto.channels import CreateChannel, UpdateChannel
-from conflua.interfaces.http.channels.routes import create_channel, update_channel
+from conflua.interfaces.http.channels.routes import archive_channel, create_channel, update_channel
 
 
 def test_channel_routes_delegate_to_creation_service() -> None:
@@ -12,6 +12,13 @@ def test_channel_routes_delegate_to_creation_service() -> None:
     request = CreateChannel(name="API", description="Backend work")
     assert create_channel("room-1", request, service) is service.create.return_value
     service.create.assert_called_once_with("room-1", request)
+
+
+def test_channel_archive_uses_a_separate_status_operation() -> None:
+    service = Mock()
+    assert archive_channel("room", "channel-api", service) is service.archive.return_value
+    service.archive.assert_called_once_with("room", "channel-api")
+    service.delete.assert_not_called()
 
 
 def test_worktree_request_never_accepts_a_base_override() -> None:

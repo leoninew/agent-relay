@@ -4,6 +4,7 @@ import { ApiClientError, describeApiError } from "@/services/api";
 import type { CreateChannel } from "@/services/channelApi";
 import type { JSONStorage } from "@/services/storage";
 import { readJSON } from "@/services/storage";
+import { channelCacheKey } from "@/services/cacheKeys";
 import { useChannelsStore } from "@/stores/channels";
 
 export type ChannelCreationStep = "form" | "creating" | "unknown";
@@ -12,6 +13,7 @@ type PendingCreation = CreateChannel & { roomId: string };
 
 export function useChannelCreation(
   roomId: () => string | undefined,
+  sourceChannelId: () => string | undefined,
   storage: JSONStorage | undefined = typeof window === "undefined"
     ? undefined
     : window.sessionStorage,
@@ -26,9 +28,9 @@ export function useChannelCreation(
   const checking = ref(false);
   const busy = computed(() => checking.value || step.value === "creating");
 
-  function savePending(room: string, value?: PendingCreation): void {
+  function savePending(room: string, sourceChannel: string, value?: PendingCreation): void {
     if (!storage || !room) return;
-    const key = `conflua-channel-creation:${room}`;
+    const key = channelCacheKey(room, sourceChannel, "channel-creation");
     if (value) storage.setItem(key, JSON.stringify(value));
     else storage.removeItem(key);
   }
@@ -41,11 +43,12 @@ export function useChannelCreation(
     channelId.value = undefined;
     error.value = undefined;
     const room = roomId();
+    const sourceChannel = sourceChannelId();
     const saved =
-      storage && room
+      storage && room && sourceChannel
         ? readJSON<PendingCreation | undefined>(
             storage,
-            `conflua-channel-creation:${room}`,
+            channelCacheKey(room, sourceChannel, "channel-creation"),
             undefined,
           )
         : undefined;
@@ -66,7 +69,8 @@ export function useChannelCreation(
   async function submit(): Promise<boolean> {
     if (busy.value || step.value === "unknown") return false;
     const room = roomId();
-    if (!room || !name.value.trim()) return false;
+    const sourceChannel = sourceChannelId();
+    if (!room || !sourceChannel || !name.value.trim()) return false;
     channelId.value = `channel-${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}`;
     const request: CreateChannel = {
       name: name.value.trim(),
@@ -76,10 +80,10 @@ export function useChannelCreation(
     };
     step.value = "creating";
     error.value = undefined;
-    savePending(room, { roomId: room, ...request });
+    savePending(room, sourceChannel, { roomId: room, ...request });
     try {
       await channels.create(room, request);
-      savePending(room);
+      savePending(room, sourceChannel);
       step.value = "form";
       return true;
     } catch (caught) {
@@ -88,23 +92,24 @@ export function useChannelCreation(
         caught instanceof ApiClientError && caught.status && caught.status < 500
           ? "form"
           : "unknown";
-      if (step.value === "form") savePending(room);
+      if (step.value === "form") savePending(room, sourceChannel);
       return false;
     }
   }
 
   async function lookup(selectedChannelId: string): Promise<boolean> {
     const room = roomId();
-    if (!room || busy.value) return false;
+    const sourceChannel = sourceChannelId();
+    if (!room || !sourceChannel || busy.value) return false;
     checking.value = true;
     error.value = undefined;
     try {
       const channel = await channels.lookup(room, selectedChannelId);
-      if (channel.archivedAt) {
+      if (channel.status === "archived" || channel.archivedAt) {
         error.value = "errors.channel_unavailable";
         return false;
       }
-      savePending(room);
+      savePending(room, sourceChannel);
       step.value = "form";
       return true;
     } catch (caught) {

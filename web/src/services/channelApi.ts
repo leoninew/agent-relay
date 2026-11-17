@@ -2,6 +2,7 @@ import { apiClient } from "@/services/api";
 import type { RoomSnapshot } from "@/services/roomApi";
 
 export type ChannelWorkspaceKind = "existing" | "worktree";
+export type ChannelStatus = "active" | "archived";
 
 export type Channel = {
   id: string;
@@ -11,6 +12,7 @@ export type Channel = {
   workingPath: string;
   workingPathKey?: string | null;
   isDefault: boolean;
+  status: ChannelStatus;
   workspaceKind: ChannelWorkspaceKind;
   branch?: string | null;
   baseCommit?: string | null;
@@ -61,6 +63,11 @@ export async function fetchChannel(
 
 export async function deleteChannel(roomId: string, channelId: string): Promise<void> {
   await apiClient.delete(channelPath(roomId, channelId));
+}
+
+export async function archiveChannel(roomId: string, channelId: string): Promise<Channel> {
+  const { data } = await apiClient.post<Channel>(`${channelPath(roomId, channelId)}/archive`);
+  return data;
 }
 
 export async function updateChannel(

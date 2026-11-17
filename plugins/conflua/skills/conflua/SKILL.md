@@ -19,7 +19,7 @@ Conflua 将聊天室消息路由到当前 Codex 会话。你在当前会话完�
 
 管理频道使用 `channel_create(room_id, name, use_worktree=False, description="")`、`channel_get(room_id, channel_id)`、`channel_archive(room_id, target_channel_id)`；CLI 对应 `channel create/get/archive`，创建可传 `--description`。频道展示名称和描述。默认沿用房间原目录，只有显式选择 worktree 才从当前 commit 创建独立目录，不带入未提交文件，也不接受基准提交参数。
 
-创建客户端内部先生成 ID，再发送一次创建请求；结果未知时保存错误返回的 `channelId`，使用 `channel_get` 查询同一 ID，不再次调用 create。频道、固定用户、话题与事件由请求事务一起提交，失败时回滚数据库写入；错误不授权自动接管或删除遗留的 Git 目录和分支。归档保留目录、分支、历史和已提交的外部输入；默认频道不能单独归档。
+创建客户端内部先生成 ID，再发送一次创建请求；结果未知时保存错误返回的 `channelId`，使用 `channel_get` 查询同一 ID，不再次调用 create。频道、固定用户、话题与事件由请求事务一起提交，失败时回滚数据库写入；错误不授权自动接管或删除遗留的 Git 目录和分支。归档只将频道状态改为 `archived`，默认列表不再展示；保留成员、消息、投递、目录和分支，不取消待投递内容。默认频道不能归档。
 
 | 协作动作 | MCP 工具 | CLI |
 | --- | --- | --- |

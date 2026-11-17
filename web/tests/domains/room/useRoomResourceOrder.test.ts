@@ -6,6 +6,7 @@ import { orderResourceIds } from "@/domains/room/orderResourceIds";
 import { useRoomResourceOrder } from "@/domains/room/useRoomResourceOrder";
 import type * as storage from "@/services/storage";
 import { roomFixture } from "../../fixtures/room";
+import { channelCacheKey } from "@/services/cacheKeys";
 
 const saved = vi.hoisted(() => new Map<string, string>());
 vi.mock("@/services/storage", async (importOriginal) => ({
@@ -60,7 +61,10 @@ describe("room resource order", () => {
   });
 
   it("restores saved room and channel orders without leaking changes between channels", () => {
-    saved.set("conflua-sidebar-order:conflua:channel-a:topics", '["backend","summary","frontend"]');
+    saved.set(
+      channelCacheKey("conflua", "channel-a", "topics-order"),
+      '["backend","summary","frontend"]',
+    );
     const channel = ref("channel-a");
     const snapshot = roomFixture();
     const order = scope.run(() =>

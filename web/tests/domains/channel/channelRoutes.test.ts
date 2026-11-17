@@ -30,9 +30,14 @@ describe("channel scoping", () => {
   });
 
   it("separates non-default snapshot and draft scopes", () => {
-    expect(snapshotScope("room", DEFAULT_CHANNEL_ID)).toBe("room:channel-default");
-    expect(snapshotScope("room", "channel-a")).toBe("room:channel-a");
-    expect(draftScope("room", "channel-a")).toBe("room:channel-a");
+    expect(snapshotScope("room", DEFAULT_CHANNEL_ID)).toBe(
+      "conflua:room:room:channel:channel-default",
+    );
+    expect(snapshotScope("room", "channel-a")).toBe("conflua:room:room:channel:channel-a");
+    expect(draftScope("room", "channel-a")).toBe("conflua:room:room:channel:channel-a");
     expect(draftScope("room", "channel-b")).not.toBe(draftScope("room", "channel-a"));
+    expect(snapshotScope("room:other", "channel-a")).not.toBe(
+      snapshotScope("room", "other:channel-a"),
+    );
   });
 });

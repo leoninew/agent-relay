@@ -48,6 +48,7 @@ class ChannelRecord(Base):
     description: Mapped[str] = mapped_column(Text)
     worktree_path: Mapped[str | None] = mapped_column(Text)
     is_default: Mapped[bool]
+    status: Mapped[str] = mapped_column(Text, default="active", server_default="active")
     workspace_kind: Mapped[str] = mapped_column(Text)
     branch: Mapped[str | None] = mapped_column(Text)
     base_commit: Mapped[str | None] = mapped_column(Text)

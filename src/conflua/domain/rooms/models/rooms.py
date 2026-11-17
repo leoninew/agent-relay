@@ -8,6 +8,7 @@ from conflua.domain.rooms.models.base import RoomModel
 
 USER_MEMBER_ID = "user"
 DEFAULT_CHANNEL_ID = "channel-default"
+type ChannelStatus = Literal["active", "archived"]
 RoomChangeKind = Literal[
     "room", "topic", "member", "session", "message", "delivery", "position", "clear"
 ]
@@ -29,6 +30,7 @@ class Channel(RoomModel):
     description: str = ""
     working_path: str
     is_default: bool
+    status: ChannelStatus = "active"
     workspace_kind: Literal["existing", "worktree"] = "existing"
     branch: str | None = None
     base_commit: str | None = None

@@ -13,15 +13,16 @@ vi.mock("@/services/roomApi", () => ({ fetchRoomSkills: vi.fn() }));
 function harness() {
   const fixture = roomFixture();
   const room = ref(fixture.room);
+  const channel = ref("channel-default");
   let capabilities!: ReturnType<typeof useRoomCapabilities>;
   const scope = effectScope();
   scope.run(() => {
     capabilities = useRoomCapabilities(
       () => room.value,
-      () => "channel-default",
+      () => channel.value,
     );
   });
-  return { scope, room, capabilities };
+  return { scope, room, channel, capabilities };
 }
 
 describe("room skill loading", () => {
@@ -62,6 +63,32 @@ describe("room skill loading", () => {
     await setImmediate();
     expect(capabilities.catalog.value.skills).toEqual([]);
     expect(capabilities.catalog.value.skillsLoading).toBe(false);
+  });
+
+  it("keeps catalogs separate per channel and reuses that channel's cached result", async () => {
+    const { channel, capabilities } = setup();
+    await setImmediate();
+    vi.mocked(fetchRoomSkills).mockResolvedValueOnce({ skills: [], errors: [] });
+    channel.value = "channel-other";
+    await setImmediate();
+    expect(capabilities.catalog.value.skills).toEqual([]);
+
+    channel.value = "channel-default";
+    await setImmediate();
+
+    expect(fetchRoomSkills).toHaveBeenCalledTimes(2);
+    expect(capabilities.catalog.value.skills).toHaveLength(3);
+  });
+
+  it("reloads a channel catalog when its project path changes", async () => {
+    const { room, capabilities } = setup();
+    await setImmediate();
+    vi.mocked(fetchRoomSkills).mockResolvedValueOnce({ skills: [], errors: [] });
+    room.value = { ...room.value, projectPath: "D:/changed" };
+    await setImmediate();
+
+    expect(fetchRoomSkills).toHaveBeenCalledTimes(2);
+    expect(capabilities.catalog.value.skills).toEqual([]);
   });
 
   it("pauses read requests while inactive and reloads on resume", async () => {

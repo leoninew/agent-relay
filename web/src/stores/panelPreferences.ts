@@ -2,8 +2,9 @@ import { defineStore } from "pinia";
 import { ref } from "vue";
 
 import { browserStorage, readJSON, writeJSON } from "@/services/storage";
+import { appCacheKey } from "@/services/cacheKeys";
 
-const storageKey = "conflua-panel-preferences";
+const storageKey = appCacheKey("panels");
 type Panel = "navigation" | "details";
 type PanelPreferences = Record<Panel, boolean>;
 

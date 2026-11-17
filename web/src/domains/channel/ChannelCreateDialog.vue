@@ -86,13 +86,17 @@
   const props = defineProps<{
     open: boolean;
     roomId?: string;
+    sourceChannelId?: string;
   }>();
   const emit = defineEmits<{
     close: [];
     created: [channelId: string];
   }>();
   const { t } = useI18n();
-  const creation = useChannelCreation(() => props.roomId);
+  const creation = useChannelCreation(
+    () => props.roomId,
+    () => props.sourceChannelId,
+  );
   const {
     name,
     description,

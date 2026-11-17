@@ -2,7 +2,7 @@ from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from conflua.application.dto.desktop import ShutdownNotificationTarget
@@ -56,7 +56,7 @@ class SQLAlchemyRoomReads:
         channel = self.session.get(ChannelRecord, (room_id, self.channel_id))
         if channel is None:
             raise RoomNotFoundError("频道不存在", code="channel_not_found")
-        if channel.archived_at is not None:
+        if channel.archived_at is not None and channel.status != "archived":
             raise RoomConflictError("频道当前不可用", code="channel_unavailable")
         return room_from_model(record)
 
@@ -65,7 +65,7 @@ class SQLAlchemyRoomReads:
         channel = self.session.get(ChannelRecord, (room_id, self.channel_id))
         if channel is None:
             raise RoomNotFoundError("频道不存在", code="channel_not_found")
-        if channel.archived_at is not None:
+        if channel.archived_at is not None and channel.status != "archived":
             raise RoomConflictError("频道当前不可用", code="channel_unavailable")
         if channel.workspace_kind == "existing":
             return room.project_path
@@ -94,7 +94,7 @@ class SQLAlchemyRoomReads:
         channel_paths = self.session.scalars(
             select(ChannelRecord.worktree_path).where(
                 ChannelRecord.workspace_kind == "worktree",
-                ChannelRecord.archived_at.is_(None),
+                or_(ChannelRecord.archived_at.is_(None), ChannelRecord.status == "archived"),
             )
         )
         return any(
@@ -458,7 +458,7 @@ class SQLAlchemyRoomReads:
                 ChannelRecord,
                 (ChannelRecord.room_id == MessageRecord.room_id)
                 & (ChannelRecord.id == MessageRecord.channel_id)
-                & ChannelRecord.archived_at.is_(None),
+                & or_(ChannelRecord.archived_at.is_(None), ChannelRecord.status == "archived"),
             )
             .where(
                 MessageRecord.publisher_id == USER_MEMBER_ID,

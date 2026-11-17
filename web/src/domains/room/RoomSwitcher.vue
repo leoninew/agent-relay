@@ -162,6 +162,7 @@
   import { useChannelsStore } from "@/stores/channels";
   import { useRoomsStore } from "@/stores/rooms";
   import { useToastsStore } from "@/stores/toasts";
+  import { appCacheKey } from "@/services/cacheKeys";
 
   const { t } = useI18n();
   const route = useRoute();
@@ -170,7 +171,7 @@
   const roomsStore = useRoomsStore();
   const channelsStore = useChannelsStore();
   const { orderedItems: rooms, moveItem: moveRoom } = useStoredOrder(
-    () => "conflua-room-order",
+    () => appCacheKey("rooms-order"),
     () => roomsStore.rooms,
   );
   const toasts = useToastsStore();
@@ -299,7 +300,7 @@
   }
 
   onMounted(() => {
-    if (!roomsStore.loaded) void load();
+    void load();
   });
   watch(
     [() => route.params.roomId, () => rooms.value.map((room) => room.id).join(",")],

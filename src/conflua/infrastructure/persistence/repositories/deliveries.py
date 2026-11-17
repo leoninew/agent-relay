@@ -91,7 +91,7 @@ class SQLAlchemyDeliveryRepository:
                 MemberRecord.session_id == delivery.target_session_id,
                 MemberRecord.kind == "agent",
                 MemberRecord.deleted_at.is_(None),
-                ChannelRecord.archived_at.is_(None),
+                or_(ChannelRecord.archived_at.is_(None), ChannelRecord.status == "archived"),
                 RoomRecord.archived_at.is_(None),
             )
             .correlate(delivery)
@@ -293,7 +293,9 @@ class SQLAlchemyDeliveryRepository:
                     .where(
                         ChannelRecord.room_id == DeliveryRecord.room_id,
                         ChannelRecord.id == DeliveryRecord.channel_id,
-                        ChannelRecord.archived_at.is_(None),
+                        or_(
+                            ChannelRecord.archived_at.is_(None), ChannelRecord.status == "archived"
+                        ),
                     )
                     .exists(),
                 )

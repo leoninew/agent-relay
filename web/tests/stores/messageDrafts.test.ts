@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import type { MessageDraft } from "@/services/roomApi";
-import { DEFAULT_CHANNEL_ID } from "@/domains/channel/channelRoutes";
+import { channelKey, DEFAULT_CHANNEL_ID } from "@/domains/channel/channelRoutes";
+import { channelResourceKey } from "@/services/cacheKeys";
 import { createMessageDraftStorage } from "@/stores/messageDrafts";
 
 function storageFixture() {
@@ -17,6 +18,7 @@ describe("message drafts", () => {
   it("restores the full editing context without trimming the content", () => {
     const storage = storageFixture();
     const drafts = createMessageDraftStorage(storage);
+    const scope = channelKey("room", DEFAULT_CHANNEL_ID);
     const draft: MessageDraft = {
       content: "  第一行\nsecond line  ",
       topicIds: ["topic"],
@@ -25,10 +27,10 @@ describe("message drafts", () => {
       replyToMessageId: "message",
     };
 
-    drafts.save("room", draft);
+    drafts.save(scope, draft);
     draft.topicIds.push("later-topic");
 
-    expect(createMessageDraftStorage(storage).load("room")).toEqual({
+    expect(createMessageDraftStorage(storage).load(scope)).toEqual({
       ...draft,
       topicIds: ["topic"],
     });
@@ -38,16 +40,19 @@ describe("message drafts", () => {
     const storage = storageFixture();
     const drafts = createMessageDraftStorage(storage);
     const draft: MessageDraft = { content: "first", topicIds: [], mentionedMemberIds: [] };
-    storage.setItem("conflua-publication:first", "pending");
-    drafts.save("first", draft);
-    drafts.save("second", { ...draft, content: "second" });
+    const first = channelKey("room", "channel-first");
+    const second = channelKey("room", "channel-second");
+    const publication = channelResourceKey(first, "publication");
+    storage.setItem(publication, "pending");
+    drafts.save(first, draft);
+    drafts.save(second, { ...draft, content: "second" });
 
-    drafts.remove("first");
+    drafts.remove(first);
 
-    expect(drafts.load("first")).toBeUndefined();
-    expect(drafts.load("second")?.content).toBe("second");
-    expect(storage.getItem("conflua-publication:first")).toBe("pending");
-    expect(createMessageDraftStorage(storageFixture()).load("second")).toBeUndefined();
+    expect(drafts.load(first)).toBeUndefined();
+    expect(drafts.load(second)?.content).toBe("second");
+    expect(storage.getItem(publication)).toBe("pending");
+    expect(createMessageDraftStorage(storageFixture()).load(second)).toBeUndefined();
   });
 
   it("restores channel drafts independently and removes only the selected channel", () => {
@@ -58,15 +63,17 @@ describe("message drafts", () => {
       mentionedMemberIds: [],
     };
     const drafts = createMessageDraftStorage(storage);
-    drafts.save(`room:${DEFAULT_CHANNEL_ID}`, draft);
-    drafts.save("room:channel-api", { ...draft, content: "api" });
+    const defaultScope = channelKey("room", DEFAULT_CHANNEL_ID);
+    const apiScope = channelKey("room", "channel-api");
+    drafts.save(defaultScope, draft);
+    drafts.save(apiScope, { ...draft, content: "api" });
 
     const restored = createMessageDraftStorage(storage);
-    expect(restored.load(`room:${DEFAULT_CHANNEL_ID}`)).toEqual(draft);
-    expect(restored.load("room:channel-api")?.content).toBe("api");
+    expect(restored.load(defaultScope)).toEqual(draft);
+    expect(restored.load(apiScope)?.content).toBe("api");
 
-    restored.remove(`room:${DEFAULT_CHANNEL_ID}`);
-    expect(restored.load(`room:${DEFAULT_CHANNEL_ID}`)).toBeUndefined();
-    expect(restored.load("room:channel-api")?.content).toBe("api");
+    restored.remove(defaultScope);
+    expect(restored.load(defaultScope)).toBeUndefined();
+    expect(restored.load(apiScope)?.content).toBe("api");
   });
 });

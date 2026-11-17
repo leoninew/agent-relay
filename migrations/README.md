@@ -39,7 +39,7 @@ uv run --locked alembic upgrade head --sql
 
 ## 基线与旧库
 
-`0001_baseline` 创建频道结构，revision 为 `channel_description_20261114`；当前 head 为 `simplify_paths_20261117`。增量 `0002_delivery_retry` 增加投递尝试计数（旧行默认 0）与下次尝试时间（旧行默认空），保留原消息、回执和状态；历史 unknown 不自动重发或作为新机制的顺序屏障。`0003_member_channels` 将活动会话绑定的唯一范围改为频道；合并后的 `0004_simplify_paths` 删除冗余路径索引键，仅为独立 worktree 保留目录、普通频道从房间目录派生，并删除会话目录字段，保留会话与成员、消息和投递历史。已升级到频道基线的数据库可直接增量升级，无需重建。
+`0001_baseline` 创建频道结构，revision 为 `channel_description_20261114`；当前 head 为 `channel_status_20261117`。增量 `0002_delivery_retry` 增加投递尝试计数（旧行默认 0）与下次尝试时间（旧行默认空），保留原消息、回执和状态；历史 unknown 不自动重发或作为新机制的顺序屏障。`0003_member_channels` 将活动会话绑定的唯一范围改为频道；合并后的 `0004_simplify_paths` 删除冗余路径索引键，仅为独立 worktree 保留目录、普通频道从房间目录派生，并删除会话目录字段，保留会话与成员、消息和投递历史。`0005_channel_status` 增加 `active` / `archived` 状态，旧频道默认 `active`；归档只修改状态，不修改原有删除标记或清理成员、消息、投递和目录。已升级到频道基线的数据库可直接增量升级，无需重建。
 
 更早的 revision 不在合并后的迁移链上，不提供自动升级、旧数据转换或降级。需要保留旧数据时，可先使用合并前的版本升级到 `channel_description_20261114`，并在升级前停止服务及 dispatcher、备份数据库和图片目录。新旧服务不能混跑。
 

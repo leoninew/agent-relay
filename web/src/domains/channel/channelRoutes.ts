@@ -1,7 +1,9 @@
+import { channelCacheKey } from "@/services/cacheKeys";
+
 export const DEFAULT_CHANNEL_ID = "channel-default";
 
 export function channelKey(roomId: string, channelId: string): string {
-  return `${roomId}:${channelId}`;
+  return channelCacheKey(roomId, channelId);
 }
 
 export function draftScope(roomId: string, channelId: string): string {

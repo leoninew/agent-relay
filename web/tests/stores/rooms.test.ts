@@ -1,7 +1,7 @@
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { addRoomTopic, clearRoom, deleteRoom, updateRoom } from "@/services/roomApi";
+import { addRoomTopic, clearRoom, deleteRoom, fetchRooms, updateRoom } from "@/services/roomApi";
 import { useRoomsStore } from "@/stores/rooms";
 
 import { roomFixture } from "../fixtures/room";
@@ -44,6 +44,19 @@ describe("room state", () => {
     expect(store.snapshots[store.snapshotKey(initial.room.id, "other")].summary).toEqual(
       roomFixture().summary,
     );
+  });
+
+  it("refreshes the project list after it has already been loaded", async () => {
+    const first = roomFixture().room;
+    const second = { ...first, id: "other" };
+    vi.mocked(fetchRooms).mockResolvedValueOnce([first]).mockResolvedValueOnce([first, second]);
+    const store = useRoomsStore();
+
+    await store.load();
+    await store.load();
+
+    expect(fetchRooms).toHaveBeenCalledTimes(2);
+    expect(store.rooms).toEqual([first, second]);
   });
 
   it("removes a deleted room and its snapshot while retaining other rooms", async () => {

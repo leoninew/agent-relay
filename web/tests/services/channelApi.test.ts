@@ -2,7 +2,7 @@ import type { AxiosAdapter, InternalAxiosRequestConfig } from "axios";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { apiClient } from "@/services/api";
-import { deleteChannel, updateChannel } from "@/services/channelApi";
+import { archiveChannel, deleteChannel, updateChannel } from "@/services/channelApi";
 
 describe("channel API", () => {
   const originalAdapter = apiClient.defaults.adapter;
@@ -47,6 +47,28 @@ describe("channel API", () => {
       expect.objectContaining({
         method: "delete",
         url: "/api/room/room%2Fone/channel/channel%2Fapi",
+      }),
+    );
+  });
+
+  it("archives through a separate POST instead of deleting the channel", async () => {
+    const adapter = vi.fn(async (config: InternalAxiosRequestConfig) => ({
+      config,
+      data: { id: "channel/api", status: "archived" },
+      headers: { "content-type": "application/json" },
+      status: 200,
+      statusText: "OK",
+    }));
+    apiClient.defaults.adapter = adapter as AxiosAdapter;
+
+    await expect(archiveChannel("room/one", "channel/api")).resolves.toMatchObject({
+      id: "channel/api",
+      status: "archived",
+    });
+    expect(adapter).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "post",
+        url: "/api/room/room%2Fone/channel/channel%2Fapi/archive",
       }),
     );
   });

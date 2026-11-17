@@ -85,3 +85,7 @@ class ChannelService(ChannelQueries):
     def delete(self, room_id: str, channel_id: str) -> None:
         with self.store.guard(room_id), self.store.write() as channels:
             channels.delete(room_id, channel_id)
+
+    def archive(self, room_id: str, channel_id: str) -> Channel:
+        with self.store.guard(room_id), self.store.write() as channels:
+            return channels.archive(room_id, channel_id)

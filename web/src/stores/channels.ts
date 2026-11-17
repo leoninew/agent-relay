@@ -2,9 +2,11 @@ import { defineStore } from "pinia";
 import { ref } from "vue";
 
 import { createChannelSelectionStorage } from "@/domains/channel/channelSelection";
+import { roomCacheKey } from "@/services/cacheKeys";
 import { describeApiError } from "@/services/api";
 import type { MessageDescriptor } from "@/i18n";
 import {
+  archiveChannel,
   createChannel as createChannelRequest,
   deleteChannel,
   fetchChannel,
@@ -24,11 +26,11 @@ export const useChannelsStore = defineStore("channels", () => {
   const controllers = new Map<string, AbortController>();
 
   function channels(roomId: string): Channel[] {
-    return byRoom.value[roomId] ?? [];
+    return byRoom.value[roomCacheKey(roomId, "channels")] ?? [];
   }
 
   function activeChannels(roomId: string): Channel[] {
-    return channels(roomId).filter((channel) => !channel.archivedAt);
+    return channels(roomId).filter((channel) => channel.status === "active" && !channel.archivedAt);
   }
 
   function channel(roomId: string, channelId: string): Channel | undefined {
@@ -42,51 +44,53 @@ export const useChannelsStore = defineStore("channels", () => {
   }
 
   async function load(roomId: string, force = false): Promise<Channel[]> {
-    if (!force && loadedRooms.value[roomId]) return channels(roomId);
-    const inFlight = pending.get(roomId);
+    const key = roomCacheKey(roomId, "channels");
+    const selectionKey = roomCacheKey(roomId, "selected-channel");
+    if (!force && loadedRooms.value[key]) return channels(roomId);
+    const inFlight = pending.get(key);
     if (inFlight) return inFlight;
     const controller = new AbortController();
-    controllers.set(roomId, controller);
-    loading.value[roomId] = true;
-    errors.value[roomId] = null;
+    controllers.set(key, controller);
+    loading.value[key] = true;
+    errors.value[key] = null;
     const request = fetchChannels(roomId, controller.signal)
       .then((result) => {
-        byRoom.value[roomId] = result;
-        loadedRooms.value[roomId] = true;
-        const stored = recent.value[roomId] ?? selectionStorage.load(roomId);
+        byRoom.value[key] = result;
+        loadedRooms.value[key] = true;
+        const stored = recent.value[selectionKey] ?? selectionStorage.load(roomId);
         const selected = stored ? resolveChannelId(roomId, stored) : undefined;
-        if (selected) recent.value[roomId] = selected;
+        if (selected) recent.value[selectionKey] = selected;
         else {
-          delete recent.value[roomId];
+          delete recent.value[selectionKey];
           if (stored) selectionStorage.remove(roomId);
         }
         return result;
       })
       .catch((caught: unknown) => {
-        errors.value[roomId] = describeApiError(caught, "errors.channelLoad");
+        errors.value[key] = describeApiError(caught, "errors.channelLoad");
         throw caught;
       })
       .finally(() => {
-        pending.delete(roomId);
-        controllers.delete(roomId);
-        loading.value[roomId] = false;
+        pending.delete(key);
+        controllers.delete(key);
+        loading.value[key] = false;
       });
-    pending.set(roomId, request);
+    pending.set(key, request);
     return request;
   }
 
   function remember(roomId: string, channelId: string): void {
-    recent.value[roomId] = channelId;
+    recent.value[roomCacheKey(roomId, "selected-channel")] = channelId;
     selectionStorage.save(roomId, channelId);
   }
 
   function preferredChannel(roomId: string): string | undefined {
-    return recent.value[roomId] ?? selectionStorage.load(roomId);
+    return recent.value[roomCacheKey(roomId, "selected-channel")] ?? selectionStorage.load(roomId);
   }
 
   async function create(roomId: string, request: CreateChannel): Promise<Channel> {
     const channel = await createChannelRequest(roomId, request);
-    byRoom.value[roomId] = [
+    byRoom.value[roomCacheKey(roomId, "channels")] = [
       ...channels(roomId).filter((candidate) => candidate.id !== channel.id),
       channel,
     ];
@@ -96,7 +100,7 @@ export const useChannelsStore = defineStore("channels", () => {
 
   async function lookup(roomId: string, channelId: string): Promise<Channel> {
     const channel = await fetchChannel(roomId, channelId);
-    byRoom.value[roomId] = [
+    byRoom.value[roomCacheKey(roomId, "channels")] = [
       ...channels(roomId).filter((candidate) => candidate.id !== channel.id),
       channel,
     ];
@@ -105,7 +109,7 @@ export const useChannelsStore = defineStore("channels", () => {
 
   async function update(roomId: string, channelId: string, request: UpdateChannel): Promise<void> {
     const updated = await updateChannel(roomId, channelId, request);
-    byRoom.value[roomId] = channels(roomId).map((candidate) =>
+    byRoom.value[roomCacheKey(roomId, "channels")] = channels(roomId).map((candidate) =>
       candidate.id === channelId ? updated : candidate,
     );
   }
@@ -113,23 +117,37 @@ export const useChannelsStore = defineStore("channels", () => {
   async function remove(roomId: string, channelId: string): Promise<void> {
     const wasSelected = preferredChannel(roomId) === channelId;
     await deleteChannel(roomId, channelId);
-    byRoom.value[roomId] = channels(roomId).filter((candidate) => candidate.id !== channelId);
+    byRoom.value[roomCacheKey(roomId, "channels")] = channels(roomId).filter(
+      (candidate) => candidate.id !== channelId,
+    );
     if (wasSelected) {
-      delete recent.value[roomId];
+      delete recent.value[roomCacheKey(roomId, "selected-channel")];
+      selectionStorage.remove(roomId);
+    }
+  }
+
+  async function archive(roomId: string, channelId: string): Promise<void> {
+    const updated = await archiveChannel(roomId, channelId);
+    byRoom.value[roomCacheKey(roomId, "channels")] = channels(roomId).map((candidate) =>
+      candidate.id === channelId ? updated : candidate,
+    );
+    if (preferredChannel(roomId) === channelId) {
+      delete recent.value[roomCacheKey(roomId, "selected-channel")];
       selectionStorage.remove(roomId);
     }
   }
 
   function reset(roomId?: string): void {
     if (roomId) {
-      controllers.get(roomId)?.abort();
-      controllers.delete(roomId);
-      pending.delete(roomId);
-      delete byRoom.value[roomId];
-      delete loadedRooms.value[roomId];
-      delete loading.value[roomId];
-      delete errors.value[roomId];
-      delete recent.value[roomId];
+      const key = roomCacheKey(roomId, "channels");
+      controllers.get(key)?.abort();
+      controllers.delete(key);
+      pending.delete(key);
+      delete byRoom.value[key];
+      delete loadedRooms.value[key];
+      delete loading.value[key];
+      delete errors.value[key];
+      delete recent.value[roomCacheKey(roomId, "selected-channel")];
       return;
     }
     controllers.forEach((controller) => controller.abort());
@@ -159,6 +177,7 @@ export const useChannelsStore = defineStore("channels", () => {
     lookup,
     update,
     remove,
+    archive,
     reset,
   };
 });

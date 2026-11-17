@@ -34,7 +34,11 @@ class SQLAlchemyChannelRepository(SQLAlchemyRoomRepository):
             channel_from_record(record, room.project_path)
             for record in self.session.scalars(
                 select(ChannelRecord)
-                .where(ChannelRecord.room_id == room_id, ChannelRecord.archived_at.is_(None))
+                .where(
+                    ChannelRecord.room_id == room_id,
+                    ChannelRecord.archived_at.is_(None),
+                    ChannelRecord.status == "active",
+                )
                 .order_by(
                     ChannelRecord.is_default.desc(), ChannelRecord.created_at, ChannelRecord.id
                 )
@@ -114,6 +118,22 @@ class SQLAlchemyChannelRepository(SQLAlchemyRoomRepository):
         self.session.flush()
         scoped = SQLAlchemyRoomRepository(self.session, channel_id)
         scoped._event(room_id, "room", channel_id)
+        return channel_from_record(record, room.project_path)
+
+    def archive(self, room_id: str, channel_id: str) -> Channel:
+        room = self.room(room_id)
+        record = self.session.get(ChannelRecord, (room_id, channel_id))
+        if record is None:
+            raise RoomNotFoundError("频道不存在", code="channel_not_found")
+        if record.is_default:
+            raise RoomConflictError("默认频道不能归档", code="default_channel_archive_forbidden")
+        if record.archived_at is not None and record.status != "archived":
+            raise RoomConflictError("频道已删除", code="channel_unavailable")
+        if record.status != "archived" or record.archived_at is None:
+            record.status = "archived"
+            record.archived_at = record.archived_at or datetime.now(UTC)
+            self.session.flush()
+            SQLAlchemyRoomRepository(self.session, channel_id)._event(room_id, "room", channel_id)
         return channel_from_record(record, room.project_path)
 
     def delete(self, room_id: str, channel_id: str) -> None:

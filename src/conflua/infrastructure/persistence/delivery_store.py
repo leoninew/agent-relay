@@ -27,7 +27,7 @@ class SQLAlchemyDeliveryStore:
                 room is not None
                 and room.archived_at is None
                 and channel is not None
-                and channel.archived_at is None
+                and (channel.archived_at is None or channel.status == "archived")
             )
 
     def interrupt_submissions(self) -> None:

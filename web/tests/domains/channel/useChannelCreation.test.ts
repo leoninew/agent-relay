@@ -7,6 +7,7 @@ import type { Channel } from "@/services/channelApi";
 import { createChannel, fetchChannel } from "@/services/channelApi";
 
 vi.mock("@/services/channelApi", () => ({
+  archiveChannel: vi.fn(),
   createChannel: vi.fn(),
   deleteChannel: vi.fn(),
   fetchChannel: vi.fn(),
@@ -21,6 +22,7 @@ function channel(id: string, worktree = false): Channel {
     description: "Backend work",
     workingPath: "D:/work/conflua",
     isDefault: false,
+    status: "active",
     workspaceKind: worktree ? "worktree" : "existing",
     createdAt: null,
   };
@@ -36,7 +38,10 @@ describe("channel creation", () => {
   });
 
   it("creates the name and description in one request with worktree disabled by default", async () => {
-    const creation = useChannelCreation(() => "room-1");
+    const creation = useChannelCreation(
+      () => "room-1",
+      () => "channel-default",
+    );
     creation.name.value = " API ";
     creation.description.value = " Backend work ";
 
@@ -52,7 +57,10 @@ describe("channel creation", () => {
   });
 
   it("creates a worktree channel without a base override", async () => {
-    const creation = useChannelCreation(() => "room-1");
+    const creation = useChannelCreation(
+      () => "room-1",
+      () => "channel-default",
+    );
     creation.name.value = "API";
     creation.useWorktree.value = true;
 
@@ -73,7 +81,10 @@ describe("channel creation", () => {
         status: 409,
       }),
     );
-    const creation = useChannelCreation(() => "room-1");
+    const creation = useChannelCreation(
+      () => "room-1",
+      () => "channel-default",
+    );
     creation.name.value = "API";
 
     expect(await creation.submit()).toBe(false);
@@ -90,7 +101,11 @@ describe("channel creation", () => {
       removeItem: (key: string) => saved.delete(key),
     };
     vi.mocked(createChannel).mockRejectedValue(new Error("timeout"));
-    const first = useChannelCreation(() => "room-1", storage);
+    const first = useChannelCreation(
+      () => "room-1",
+      () => "channel-default",
+      storage,
+    );
     first.name.value = "API";
     first.description.value = "Backend work";
     expect(await first.submit()).toBe(false);
@@ -98,13 +113,30 @@ describe("channel creation", () => {
     const channelId = first.channelId.value!;
 
     setActivePinia(createPinia());
-    const restored = useChannelCreation(() => "room-1", storage);
+    const restored = useChannelCreation(
+      () => "room-1",
+      () => "channel-default",
+      storage,
+    );
     expect(restored.step.value).toBe("unknown");
     expect(restored.description.value).toBe("Backend work");
     expect(restored.channelId.value).toBe(channelId);
     expect(await restored.submit()).toBe(false);
     expect(createChannel).toHaveBeenCalledOnce();
-    expect(useChannelCreation(() => "room-2", storage).step.value).toBe("form");
+    expect(
+      useChannelCreation(
+        () => "room-2",
+        () => "channel-default",
+        storage,
+      ).step.value,
+    ).toBe("form");
+    expect(
+      useChannelCreation(
+        () => "room-1",
+        () => "channel-other",
+        storage,
+      ).step.value,
+    ).toBe("form");
 
     vi.mocked(fetchChannel).mockResolvedValue(channel(channelId));
     expect(await restored.lookup(channelId)).toBe(true);

@@ -6,6 +6,7 @@ import { DEFAULT_CHANNEL_ID } from "@/domains/channel/channelRoutes";
 import { useChannelOrder } from "@/domains/channel/useChannelOrder";
 import type { Channel } from "@/services/channelApi";
 import type * as storage from "@/services/storage";
+import { roomCacheKey } from "@/services/cacheKeys";
 
 const saved = vi.hoisted(() => new Map<string, string>());
 vi.mock("@/services/storage", async (importOriginal) => ({
@@ -25,6 +26,7 @@ function channel(id: string): Channel {
     description: "",
     workingPath: "D:/work/conflua",
     isDefault: id === DEFAULT_CHANNEL_ID,
+    status: "active",
     workspaceKind: "existing",
     createdAt: null,
   };
@@ -40,7 +42,7 @@ describe("channel order", () => {
   afterEach(() => scope.stop());
 
   it("pins the default channel even when the previously saved order moved it", () => {
-    saved.set("conflua-channel-order:room", '["second","channel-default","first"]');
+    saved.set(roomCacheKey("room", "channels-order"), '["second","channel-default","first"]');
     const channels = [channel("first"), channel(DEFAULT_CHANNEL_ID), channel("second")];
     const order = scope.run(() =>
       useChannelOrder(
@@ -58,7 +60,7 @@ describe("channel order", () => {
     ]);
 
     order.sortableChannels.value = order.sortableChannels.value.toReversed();
-    expect(saved.get("conflua-channel-order:room")).toBe('["first","second"]');
+    expect(saved.get(roomCacheKey("room", "channels-order"))).toBe('["first","second"]');
     expect(order.availableChannels.value[0].id).toBe(DEFAULT_CHANNEL_ID);
     expect(channels.map((item) => item.id)).toEqual(["first", DEFAULT_CHANNEL_ID, "second"]);
   });

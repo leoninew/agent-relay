@@ -69,6 +69,21 @@ def test_channel_scope_applies_to_resource_requests_and_preserves_discovery(
     assert urlsplit(calls[-1].full_url).path == f"/api/room/{ROOM}/channel"
 
 
+def test_channel_archive_posts_status_instead_of_deleting(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    calls: list[Request] = []
+
+    def open_request(request: Request, *, timeout: float) -> HttpResponse:
+        calls.append(request)
+        return BufferedResponse(200, {}, b'{"id":"channel-api","status":"archived"}')
+
+    assert main(["channel", "archive", ROOM, "channel-api"], opener=open_request) == 0
+    assert calls[0].get_method() == "POST"
+    assert urlsplit(calls[0].full_url).path == f"/api/room/{ROOM}/channel/channel-api/archive"
+    assert json.loads(capsys.readouterr().out)["data"]["status"] == "archived"
+
+
 @pytest.mark.parametrize(
     "arguments", [["topic", "list"], ["room", "get"], ["member", "catalog"], ["message", "list"]]
 )

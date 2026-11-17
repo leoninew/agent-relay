@@ -263,9 +263,9 @@ class ConfluaClient:
             raise
 
     def channel_archive(self, room_id: str, target_channel_id: str) -> ApiResult:
-        """Archive a non-default channel while retaining its worktree, branch and history."""
+        """Hide a non-default channel by status, preserving all resources and deliveries."""
         return self.request(
-            "DELETE", f"{_room_path(room_id)}/channel/{_segment(target_channel_id)}"
+            "POST", f"{_room_path(room_id)}/channel/{_segment(target_channel_id)}/archive"
         )
 
     def room_create(self, name: str, project_path: str) -> ApiResult:
