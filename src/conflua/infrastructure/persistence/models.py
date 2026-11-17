@@ -154,6 +154,7 @@ class MemberRecord(ChannelScoped, Base):
         Index(
             "members_active_session",
             "room_id",
+            "channel_id",
             "session_id",
             unique=True,
             sqlite_where=deleted_at.is_(None),

@@ -124,14 +124,13 @@ class SQLAlchemyRoomReads:
         record = self.session.scalar(
             select(MemberRecord).where(
                 MemberRecord.room_id == room_id,
+                MemberRecord.channel_id == self.channel_id,
                 MemberRecord.session_id == session_id,
                 MemberRecord.deleted_at.is_(None),
             )
         )
         if record is None:
-            raise RoomNotFoundError("该 Codex 会话尚未加入此聊天室", code="session_not_joined")
-        if record.channel_id != self.channel_id:
-            raise RoomConflictError("请显式选择会话所属频道", code="channel_required")
+            raise RoomNotFoundError("该 Codex 会话尚未加入此频道", code="session_not_joined")
         return self._member(record)
 
     def joined_members(self, room_id: str) -> dict[str, str]:
@@ -140,6 +139,7 @@ class SQLAlchemyRoomReads:
             for session_id, member_id in self.session.execute(
                 select(MemberRecord.session_id, MemberRecord.id).where(
                     MemberRecord.room_id == room_id,
+                    MemberRecord.channel_id == self.channel_id,
                     MemberRecord.deleted_at.is_(None),
                     MemberRecord.session_id.is_not(None),
                     MemberRecord.kind == "agent",

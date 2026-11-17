@@ -102,18 +102,14 @@ class SQLAlchemyRoomRepository(SQLAlchemyRoomReads):
                 existing = self.session.scalar(
                     select(MemberRecord.id).where(
                         MemberRecord.room_id == room_id,
+                        MemberRecord.channel_id == self.channel_id,
                         MemberRecord.session_id == member.session_id,
                         MemberRecord.deleted_at.is_(None),
-                        or_(
-                            MemberRecord.channel_id != self.channel_id,
-                            MemberRecord.id != member.id,
-                        ),
+                        MemberRecord.id != member.id,
                     )
                 )
                 if existing is not None:
-                    raise RoomConflictError(
-                        "该会话已加入此聊天室的频道", code="session_already_joined"
-                    )
+                    raise RoomConflictError("该会话已加入此频道", code="session_already_joined")
             self.session.merge(
                 MemberRecord(
                     room_id=room_id,
