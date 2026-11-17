@@ -173,7 +173,7 @@
                         <span class="min-w-0 flex-1 truncate font-medium" :title="session.name">
                           {{ session.name }}
                         </span>
-                        <AppTooltip v-if="!session.memberId" :text="unavailableReason(session)">
+                        <AppTooltip :text="unavailableReason(session)">
                           <button
                             type="button"
                             class="shrink-0 cursor-help rounded-sm text-xs underline decoration-dotted underline-offset-2 focus-visible:outline-1 focus-visible:outline-dashed focus-visible:outline-muted-foreground"
@@ -181,7 +181,6 @@
                             {{ sessionStatus(session) }}
                           </button>
                         </AppTooltip>
-                        <span v-else class="shrink-0 text-xs">{{ sessionStatus(session) }}</span>
                       </div>
                       <span class="truncate text-xs" :title="session.id">{{ session.id }}</span>
                     </li>
@@ -293,7 +292,7 @@
     (props.sessions ?? []).filter((session) => session.usable && !session.memberId),
   );
   const unavailableSessions = computed(() =>
-    (props.sessions ?? []).filter((session) => !session.usable || session.memberId),
+    (props.sessions ?? []).filter((session) => !session.usable && !session.memberId),
   );
   const { t, te } = useI18n();
   const title = computed(() =>
@@ -318,7 +317,6 @@
   );
 
   function sessionStatus(session: SessionCandidate): string {
-    if (session.memberId) return t("session.joined");
     if (session.archived) return t("session.archived");
     if (!session.usable) return t("session.unavailable");
     return t(session.presence === "busy" ? "session.busy" : "session.idle");

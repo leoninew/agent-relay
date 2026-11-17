@@ -1,3 +1,3 @@
 """Conflua application package."""
 
-__version__ = "0.44.2"
+__version__ = "0.48.2"
