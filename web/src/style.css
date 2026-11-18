@@ -236,6 +236,29 @@
   color: hsl(var(--primary));
   font-weight: 500;
 }
+.room-tab-grip + .room-tab {
+  padding-inline-start: 0;
+}
+.room-tab-grip {
+  display: grid;
+  align-self: stretch;
+  flex: 0 0 16px;
+  place-items: center;
+  color: hsl(var(--muted-foreground));
+  cursor: grab;
+  opacity: 0;
+  pointer-events: none;
+}
+.room-tab-grip svg {
+  width: 14px;
+  height: 14px;
+}
+.room-tab-row:hover > .room-tab-grip,
+.room-tab-grip:focus-visible,
+.room-tab-drag-chosen > .room-tab-grip {
+  opacity: 1;
+  pointer-events: auto;
+}
 .room-tab-name {
   min-width: 0;
   overflow: hidden;
@@ -244,10 +267,8 @@
 .room-tab-list .room-tab {
   cursor: pointer;
 }
-.room-tab-list .room-tab:active {
-  cursor: grabbing;
-}
-.room-tab-drag-chosen .room-tab {
+.room-tab-grip:active,
+.room-tab-drag-chosen > .room-tab-grip {
   cursor: grabbing;
 }
 .room-tab-drag-ghost {
@@ -287,6 +308,7 @@
   opacity: 1;
 }
 .room-tab:focus-visible,
+.room-tab-grip:focus-visible,
 .room-tab-menu-button:focus-visible {
   outline: 1px dashed hsl(var(--muted-foreground) / 0.7);
   outline-offset: -2px;

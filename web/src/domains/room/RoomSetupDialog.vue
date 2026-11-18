@@ -56,7 +56,7 @@
           :channel-id="channelId"
           :disabled="saving"
         />
-        <div v-if="mode === 'member'" class="setup-field">
+        <div v-if="mode === 'member'" class="setup-field grid-cols-1">
           <div class="setup-field-heading">
             <label id="setup-session-label"
               >{{ t("setup.selectSession") }} <span class="required-mark">*</span></label
@@ -80,14 +80,14 @@
           <template v-else>
             <RadioGroupRoot
               v-model="sessionId"
-              class="grid gap-2 rounded-md"
+              class="grid grid-cols-1 gap-2 rounded-md"
               :disabled="saving"
               aria-labelledby="setup-session-label"
               :aria-invalid="!!errors.session"
               aria-describedby="setup-session-error"
             >
               <div
-                class="max-h-72 overflow-y-auto rounded-md border border-border bg-card"
+                class="max-h-72 overflow-x-hidden overflow-y-auto rounded-md border border-border bg-card"
                 :class="{ 'border-destructive': !!errors.session }"
               >
                 <template v-if="availableSessions.length">
@@ -101,8 +101,8 @@
                       class="group block w-full border-s-2 border-transparent px-3 py-2.5 text-start outline-none transition-colors hover:bg-muted/40 focus-visible:z-10 focus-visible:outline focus-visible:outline-1 focus-visible:outline-dashed focus-visible:outline-muted-foreground disabled:opacity-60 data-[state=checked]:border-s-primary data-[state=checked]:bg-primary/5 motion-reduce:transition-none"
                       :aria-invalid="!!errors.session"
                     >
-                      <span class="grid min-w-0 gap-1">
-                        <span class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+                      <span class="grid min-w-0 grid-cols-1 gap-1">
+                        <span class="flex min-w-0 items-center gap-3">
                           <span class="min-w-0 flex-1 truncate font-medium" :title="session.name">
                             {{ session.name }}
                           </span>
@@ -152,7 +152,7 @@
               <CollapsibleContent>
                 <ul
                   :aria-label="t('setup.unavailableSessions')"
-                  class="mt-1 max-h-48 overflow-y-auto rounded-md border border-border bg-card"
+                  class="mt-1 max-h-48 overflow-x-hidden overflow-y-auto rounded-md border border-border bg-card"
                 >
                   <li
                     v-for="session in unavailableSessions"

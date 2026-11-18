@@ -19,11 +19,7 @@
         <KeepAlive :max="1">
           <component
             :is="Component"
-            :key="
-              route.name === 'channel'
-                ? channelKey(String(route.params.roomId), String(route.params.channelId))
-                : route.path
-            "
+            :key="route.name === 'channel' ? roomCacheKey(String(route.params.roomId)) : route.path"
           />
         </KeepAlive>
       </RouterView>
@@ -39,8 +35,8 @@
   import AppMenu from "@/components/AppMenu.vue";
   import AppToasts from "@/components/AppToasts.vue";
   import RoomSwitcher from "@/domains/room/RoomSwitcher.vue";
-  import { channelKey } from "@/domains/channel/channelRoutes";
   import { translateMessage } from "@/i18n";
+  import { roomCacheKey } from "@/services/cacheKeys";
   import { usePreferencesStore } from "@/stores/preferences";
 
   const { t } = useI18n();

@@ -16,6 +16,7 @@
 
 .setup-form-content {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 18px;
   min-height: 0;
   padding: 2px;
@@ -29,6 +30,7 @@
 }
 
 .setup-form .session-options {
+  grid-template-columns: minmax(0, 1fr);
   align-content: start;
   max-height: 456px;
   scrollbar-gutter: stable;

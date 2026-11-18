@@ -13,7 +13,7 @@
             tag="ul"
             class="room-tab-list"
             draggable=".room-tab-row"
-            handle=".room-tab"
+            handle=".room-tab-grip"
             direction="horizontal"
             ghost-class="room-tab-drag-ghost"
             chosen-class="room-tab-drag-chosen"
@@ -28,6 +28,18 @@
               class="room-tab-row"
               :class="{ 'is-current': route.params.roomId === room.id }"
             >
+              <button
+                v-if="rooms.length > 1"
+                type="button"
+                class="room-tab-grip"
+                :aria-label="t('navigation.reorderRoom', { name: room.name })"
+                :title="t('navigation.reorderRoom', { name: room.name })"
+                aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight"
+                @keydown.alt.left.prevent.stop="moveRoom(room.id, -1)"
+                @keydown.alt.right.prevent.stop="moveRoom(room.id, 1)"
+              >
+                <AppIcon name="grip" />
+              </button>
               <NavigationMenuLink as-child :active="route.params.roomId === room.id">
                 <RouterLink
                   :to="{
@@ -36,7 +48,6 @@
                   }"
                   class="room-tab"
                   :aria-label="t('navigation.switchRoom', { name: room.name })"
-                  :title="t('navigation.reorderRoom', { name: room.name })"
                   aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight"
                   @keydown.alt.left.prevent.stop="moveRoom(room.id, -1)"
                   @keydown.alt.right.prevent.stop="moveRoom(room.id, 1)"
