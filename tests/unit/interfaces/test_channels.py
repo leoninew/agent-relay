@@ -1,10 +1,16 @@
+import asyncio
+import logging
 from unittest.mock import Mock
 
+import httpx2
 import pytest
+from fastapi import FastAPI
 from pydantic import ValidationError
 
-from conflua.application.dto.channels import CreateChannel, UpdateChannel
-from conflua.interfaces.http.channels.routes import archive_channel, create_channel, update_channel
+from conflua.application.dto.channels import Channel, CreateChannel, UpdateChannel
+from conflua.interfaces.http.channels.dependencies import get_channel_service
+from conflua.interfaces.http.channels.routes import create_channel, router, update_channel
+from conflua.interfaces.http.exception_handlers import register_exception_handlers
 
 
 def test_channel_routes_delegate_to_creation_service() -> None:
@@ -14,11 +20,49 @@ def test_channel_routes_delegate_to_creation_service() -> None:
     service.create.assert_called_once_with("room-1", request)
 
 
-def test_channel_archive_uses_a_separate_status_operation() -> None:
+@pytest.mark.parametrize(
+    ("body", "name", "status"),
+    [
+        (None, None, 200),
+        ({"name": " Finished API "}, "Finished API", 200),
+        ({"name": "  "}, None, 422),
+        ({"name": "x" * 41}, None, 422),
+    ],
+)
+def test_channel_archive_accepts_an_optional_validated_name(
+    body: dict[str, str] | None, name: str | None, status: int
+) -> None:
     service = Mock()
-    assert archive_channel("room", "channel-api", service) is service.archive.return_value
-    service.archive.assert_called_once_with("room", "channel-api")
-    service.delete.assert_not_called()
+    service.archive.return_value = Channel(
+        id="channel-api",
+        room_id="room",
+        name=name or "API",
+        working_path="/project",
+        is_default=False,
+        status="archived",
+    )
+    app = FastAPI()
+    app.state.logger = logging.getLogger(__name__)
+    app.include_router(router, prefix="/api")
+    app.dependency_overrides[get_channel_service] = lambda: service
+    register_exception_handlers(app)
+
+    async def post() -> httpx2.Response:
+        async with httpx2.AsyncClient(
+            transport=httpx2.ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            return await client.post("/api/room/room/channel/channel-api/archive", json=body)
+
+    response = asyncio.run(post())
+
+    assert response.status_code == status
+    if status == 200:
+        assert response.json()["name"] == (name or "API")
+        assert response.json()["status"] == "archived"
+        service.archive.assert_called_once_with("room", "channel-api", name=name)
+    else:
+        assert response.json()["code"] == "validation_error"
+        service.archive.assert_not_called()
 
 
 def test_worktree_request_never_accepts_a_base_override() -> None:

@@ -3,6 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Query
 
 from conflua.application.dto.channels import (
+    ArchiveChannel,
     Channel,
     ChannelSnapshot,
     CreateChannel,
@@ -80,5 +81,10 @@ def delete_channel(room_id: str, channel_id: str, service: ChannelServiceDepende
 
 
 @router.post("/{channel_id}/archive")
-def archive_channel(room_id: str, channel_id: str, service: ChannelServiceDependency) -> Channel:
-    return service.archive(room_id, channel_id)
+def archive_channel(
+    room_id: str,
+    channel_id: str,
+    service: ChannelServiceDependency,
+    request: ArchiveChannel | None = None,
+) -> Channel:
+    return service.archive(room_id, channel_id, name=request.name if request else None)

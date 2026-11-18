@@ -101,6 +101,15 @@ class SQLAlchemyChannelRepository(SQLAlchemyRoomRepository):
             raise RoomConflictError("频道已删除", code="channel_unavailable")
         if record.is_default:
             raise RoomConflictError("默认频道不能编辑", code="default_channel_read_only")
+        self._check_name_available(room_id, channel_id, name)
+        record.name = name
+        record.description = description
+        self.session.flush()
+        scoped = SQLAlchemyRoomRepository(self.session, channel_id)
+        scoped._event(room_id, "room", channel_id)
+        return channel_from_record(record, room.workspace_path)
+
+    def _check_name_available(self, room_id: str, channel_id: str, name: str) -> None:
         if (
             self.session.scalar(
                 select(ChannelRecord.id).where(
@@ -113,14 +122,8 @@ class SQLAlchemyChannelRepository(SQLAlchemyRoomRepository):
             is not None
         ):
             raise RoomConflictError("频道名称已存在", code="channel_name_conflict")
-        record.name = name
-        record.description = description
-        self.session.flush()
-        scoped = SQLAlchemyRoomRepository(self.session, channel_id)
-        scoped._event(room_id, "room", channel_id)
-        return channel_from_record(record, room.workspace_path)
 
-    def archive(self, room_id: str, channel_id: str) -> Channel:
+    def archive(self, room_id: str, channel_id: str, *, name: str | None = None) -> Channel:
         room = self.room(room_id)
         record = self.session.get(ChannelRecord, (room_id, channel_id))
         if record is None:
@@ -130,10 +133,15 @@ class SQLAlchemyChannelRepository(SQLAlchemyRoomRepository):
         if record.archived_at is not None and record.status != "archived":
             raise RoomConflictError("频道已删除", code="channel_unavailable")
         if record.status != "archived" or record.archived_at is None:
+            if name is not None and name != record.name:
+                self._check_name_available(room_id, channel_id, name)
+                record.name = name
             record.status = "archived"
             record.archived_at = record.archived_at or datetime.now(UTC)
             self.session.flush()
             SQLAlchemyRoomRepository(self.session, channel_id)._event(room_id, "room", channel_id)
+        elif name is not None and name != record.name:
+            raise RoomConflictError("频道已归档", code="channel_unavailable")
         return channel_from_record(record, room.workspace_path)
 
     def delete(self, room_id: str, channel_id: str) -> None:

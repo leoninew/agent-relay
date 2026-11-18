@@ -77,16 +77,19 @@ def test_worktree_path_collision_is_rejected_before_git(
     driver.inspect.assert_not_called()
 
 
-def test_channel_archive_uses_guard_and_status_write_without_git(tmp_path: Path) -> None:
+def test_channel_archive_passes_name_into_one_guarded_write_without_git(tmp_path: Path) -> None:
     repository = Mock(spec=ChannelData)
     store = MagicMock(spec=ChannelStore)
     store.write.return_value.__enter__.return_value = repository
     driver = Mock(spec=WorktreeDriver)
 
-    result = ChannelService(store, driver, tmp_path).archive("room", "channel-api")
+    result = ChannelService(store, driver, tmp_path).archive(
+        "room", "channel-api", name="Finished API"
+    )
 
     assert result is repository.archive.return_value
     store.guard.assert_called_once_with("room")
-    repository.archive.assert_called_once_with("room", "channel-api")
+    repository.archive.assert_called_once_with("room", "channel-api", name="Finished API")
+    repository.update.assert_not_called()
     repository.delete.assert_not_called()
     assert driver.mock_calls == []

@@ -112,7 +112,7 @@ export default {
     archive: "归档",
     archiveNamed: "归档频道：{name}",
     archiveTitle: "归档频道",
-    archiveConfirm: "确认归档频道“{name}”？归档后将从频道列表隐藏，内容仍会保留。",
+    archiveConfirm: "归档后，频道将从列表隐藏，内容仍会保留。",
     archiving: "正在归档…",
     default: "默认",
     create: "新建频道",

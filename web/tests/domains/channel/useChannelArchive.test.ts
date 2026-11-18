@@ -83,7 +83,7 @@ describe("channel archive confirmation", () => {
     expect(archive.target.value?.id).toBe("channel-api");
     expect(archiveChannel).not.toHaveBeenCalled();
     archive.close();
-    expect(await archive.confirm()).toBe(false);
+    expect(await archive.confirm("API")).toBe(false);
     expect(archiveChannel).not.toHaveBeenCalled();
   });
 
@@ -97,15 +97,16 @@ describe("channel archive confirmation", () => {
     );
     const { archive } = controller();
     archive.open(channel());
-    const result = archive.confirm();
+    const result = archive.confirm("Finished API");
     expect(archive.busy.value).toBe(true);
-    expect(await archive.confirm()).toBe(false);
+    expect(await archive.confirm("Finished API")).toBe(false);
     archive.close();
     expect(archive.target.value).toBeDefined();
-    finish(channel({ status: "archived" }));
+    finish(channel({ name: "Finished API", status: "archived" }));
 
     expect(await result).toBe(true);
     expect(archiveChannel).toHaveBeenCalledOnce();
+    expect(archiveChannel).toHaveBeenCalledWith("room", "channel-api", "Finished API");
     expect(archive.busy.value).toBe(false);
     expect(archive.target.value).toBeUndefined();
     expect(
@@ -119,13 +120,13 @@ describe("channel archive confirmation", () => {
     vi.mocked(archiveChannel).mockRejectedValueOnce(new Error("offline"));
     const { archive } = controller();
     archive.open(channel());
-    expect(await archive.confirm()).toBe(false);
+    expect(await archive.confirm("API")).toBe(false);
     expect(archive.error.value?.key).toBe("errors.channelArchive");
     expect(archive.target.value?.id).toBe("channel-api");
     expect(useChannelsStore().activeChannels("room")).toHaveLength(2);
 
     vi.mocked(archiveChannel).mockResolvedValue(channel({ status: "archived" }));
-    expect(await archive.confirm()).toBe(true);
+    expect(await archive.confirm("API")).toBe(true);
     expect(archive.error.value).toBeNull();
   });
 
@@ -134,13 +135,13 @@ describe("channel archive confirmation", () => {
     archive.open(channel());
     current.value = "channel-api";
     expect(archive.target.value).toBeUndefined();
-    expect(await archive.confirm()).toBe(false);
+    expect(await archive.confirm("API")).toBe(false);
     archive.open(channel());
     expect(archive.target.value).toBeUndefined();
     current.value = DEFAULT_CHANNEL_ID;
     archive.open(channel());
     roomId.value = "other-room";
-    expect(await archive.confirm()).toBe(false);
+    expect(await archive.confirm("API")).toBe(false);
     expect(archiveChannel).not.toHaveBeenCalled();
   });
 
@@ -152,10 +153,10 @@ describe("channel archive confirmation", () => {
     locked.value = false;
     archive.open(channel());
     locked.value = true;
-    expect(await archive.confirm()).toBe(false);
+    expect(await archive.confirm("API")).toBe(false);
     locked.value = false;
     useChannelsStore().byRoom[roomCacheKey("room", "channels")][1].status = "archived";
-    expect(await archive.confirm()).toBe(false);
+    expect(await archive.confirm("API")).toBe(false);
     expect(archive.target.value).toBeUndefined();
     expect(archiveChannel).not.toHaveBeenCalled();
   });

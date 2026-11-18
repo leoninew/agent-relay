@@ -2,12 +2,12 @@ from collections.abc import Iterator
 from datetime import UTC, datetime
 
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
 from conflua.application.dto.members import SessionChannel
 from conflua.application.dto.messages import MessageUpdatesQuery
-from conflua.domain.rooms.errors import RoomNotFoundError
+from conflua.domain.rooms.errors import RoomConflictError, RoomNotFoundError
 from conflua.domain.rooms.models import Member
 from conflua.infrastructure.persistence.models import (
     Base,
@@ -16,10 +16,12 @@ from conflua.infrastructure.persistence.models import (
     MessageRecipientRecord,
     MessageRecord,
     MessageTopicRecord,
+    RoomEventRecord,
     RoomRecord,
     SessionRecord,
     TopicRecord,
 )
+from conflua.infrastructure.persistence.repositories.channels import SQLAlchemyChannelRepository
 from conflua.infrastructure.persistence.repositories.messages import SQLAlchemyMessageRepository
 from conflua.infrastructure.persistence.repositories.rooms import SQLAlchemyRoomRepository
 
@@ -95,6 +97,38 @@ def test_channel_sessions_include_history_but_exclude_other_channel(
     for member_id in ("historical", "elsewhere", "missing"):
         with pytest.raises(RoomNotFoundError):
             repository.member("room", member_id)
+
+
+@pytest.mark.parametrize("name", [None, "other", "Finished API"])
+def test_archive_persists_name_and_status_without_removing_channel_history(
+    scoped_session: Session, name: str | None
+) -> None:
+    repository = SQLAlchemyChannelRepository(scoped_session, "other")
+    archived = repository.archive("room", "other", name=name)
+    assert archived.name == (name or "other")
+    assert archived.status == "archived"
+    assert archived.archived_at is not None
+
+    scoped_session.expire_all()
+    assert [channel.id for channel in repository.channels("room")] == ["channel-default"]
+    assert repository.channel("room", "other") == archived
+    assert repository.archive("room", "other", name=name) == archived
+    assert scoped_session.get(MemberRecord, ("room", "elsewhere", "other")) is not None
+    assert [event.entity_id for event in scoped_session.scalars(select(RoomEventRecord))] == [
+        "other"
+    ]
+
+
+def test_archive_does_not_mutate_a_channel_when_its_name_conflicts(scoped_session: Session) -> None:
+    repository = SQLAlchemyChannelRepository(scoped_session, "other")
+    active = repository.channel("room", "other")
+
+    with pytest.raises(RoomConflictError) as error:
+        repository.archive("room", "other", name="channel-default")
+
+    assert error.value.code == "channel_name_conflict"
+    assert repository.channel("room", "other") == active
+    assert scoped_session.scalar(select(RoomEventRecord)) is None
 
 
 @pytest.mark.parametrize(

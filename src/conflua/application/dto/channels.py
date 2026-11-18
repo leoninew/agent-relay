@@ -1,23 +1,35 @@
-from pydantic import ConfigDict, Field, field_validator
+from typing import Annotated
+
+from pydantic import AfterValidator, ConfigDict, Field
 
 from conflua.application.dto.messages import MessagePage
 from conflua.application.dto.rooms import RoomMetadata
 from conflua.domain.rooms.models import Channel, RoomModel
 
 
+def _strip_channel_name(value: str) -> str:
+    value = value.strip()
+    if not value:
+        raise ValueError("Channel name cannot be blank")
+    return value
+
+
+ChannelName = Annotated[
+    str, Field(min_length=1, max_length=40), AfterValidator(_strip_channel_name)
+]
+
+
 class UpdateChannel(RoomModel):
     model_config = ConfigDict(extra="forbid")
 
-    name: str = Field(min_length=1, max_length=40)
+    name: ChannelName
     description: str = Field(default="", max_length=300)
 
-    @field_validator("name")
-    @classmethod
-    def strip_name(cls, value: str) -> str:
-        value = value.strip()
-        if not value:
-            raise ValueError("Channel name cannot be blank")
-        return value
+
+class ArchiveChannel(RoomModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: ChannelName
 
 
 class CreateChannel(UpdateChannel):
@@ -32,4 +44,4 @@ class ChannelSnapshot(RoomMetadata, MessagePage):
     working_path: str
 
 
-__all__ = ["Channel", "ChannelSnapshot", "CreateChannel", "UpdateChannel"]
+__all__ = ["ArchiveChannel", "Channel", "ChannelSnapshot", "CreateChannel", "UpdateChannel"]

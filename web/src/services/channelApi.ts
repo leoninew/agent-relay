@@ -65,8 +65,14 @@ export async function deleteChannel(roomId: string, channelId: string): Promise<
   await apiClient.delete(channelPath(roomId, channelId));
 }
 
-export async function archiveChannel(roomId: string, channelId: string): Promise<Channel> {
-  const { data } = await apiClient.post<Channel>(`${channelPath(roomId, channelId)}/archive`);
+export async function archiveChannel(
+  roomId: string,
+  channelId: string,
+  name: string,
+): Promise<Channel> {
+  const { data } = await apiClient.post<Channel>(`${channelPath(roomId, channelId)}/archive`, {
+    name,
+  });
   return data;
 }
 

@@ -207,12 +207,13 @@ describe("channel state", () => {
     store.byRoom[roomCacheKey("room-1", "channels")] = [channel(), target];
     store.byRoom[roomCacheKey("room-2", "channels")] = [channel({ roomId: "room-2" })];
     store.remember("room-1", DEFAULT_CHANNEL_ID);
-    vi.mocked(archiveChannel).mockResolvedValue({ ...target, status: "archived" });
+    const archived = { ...target, name: "Finished API", status: "archived" } as const;
+    vi.mocked(archiveChannel).mockResolvedValue(archived);
 
-    await store.archive("room-1", target.id);
+    await store.archive("room-1", target.id, archived.name);
 
-    expect(archiveChannel).toHaveBeenCalledWith("room-1", target.id);
-    expect(store.channel("room-1", target.id)).toEqual({ ...target, status: "archived" });
+    expect(archiveChannel).toHaveBeenCalledWith("room-1", target.id, archived.name);
+    expect(store.channel("room-1", target.id)).toEqual(archived);
     expect(store.resolveChannelId("room-1", target.id)).toBeUndefined();
     expect(store.preferredChannel("room-1")).toBe(DEFAULT_CHANNEL_ID);
     expect(store.activeChannels("room-2")).toHaveLength(1);
@@ -225,7 +226,9 @@ describe("channel state", () => {
     store.byRoom[roomCacheKey("room-1", "channels")] = [channel(), target];
     vi.mocked(archiveChannel).mockRejectedValue(new Error("Archive failed"));
 
-    await expect(store.archive("room-1", target.id)).rejects.toThrow("Archive failed");
+    await expect(store.archive("room-1", target.id, "Finished API")).rejects.toThrow(
+      "Archive failed",
+    );
 
     expect(store.resolveChannelId("room-1", target.id)).toBe(target.id);
     expect(store.channel("room-1", target.id)).toEqual(target);

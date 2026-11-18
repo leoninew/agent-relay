@@ -112,8 +112,7 @@ export default {
     archive: "Archive",
     archiveNamed: "Archive channel: {name}",
     archiveTitle: "Archive channel",
-    archiveConfirm:
-      'Archive "{name}"? It will be hidden from the channel list. Its contents will be kept.',
+    archiveConfirm: "The channel will be hidden from the list. Its contents will be kept.",
     archiving: "Archiving...",
     default: "Default",
     create: "New channel",

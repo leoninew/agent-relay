@@ -80,7 +80,15 @@
     if (!props.initialFocus || !(event.target instanceof HTMLElement)) return;
     const target = event.target.querySelector<HTMLElement>(props.initialFocus);
     target?.focus();
-    if (target && target.ownerDocument.activeElement === target) event.preventDefault();
+    if (!target || target.ownerDocument.activeElement !== target) return;
+    event.preventDefault();
+    if (
+      (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) &&
+      target.selectionStart !== null
+    ) {
+      const end = target.value.length;
+      target.setSelectionRange(end, end);
+    }
   }
 
   function restoreFocus(event: Event): void {

@@ -60,6 +60,7 @@
                   <button
                     type="button"
                     class="room-tab-menu-button"
+                    :data-room-id="room.id"
                     :aria-label="t('navigation.manageRoom', { name: room.name })"
                     :title="t('navigation.manageRoom', { name: room.name })"
                   >
@@ -74,8 +75,12 @@
                     align="start"
                     :side-offset="8"
                     :collision-padding="12"
+                    @close-auto-focus="editAfterMenuClose($event, room)"
                   >
-                    <DropdownMenuItem class="room-menu-action" @select="startEdit(room)">
+                    <DropdownMenuItem
+                      class="room-menu-action"
+                      @select="pendingRoomEditId = room.id"
+                    >
                       <AppIcon name="edit" />{{ t("navigation.edit") }}
                     </DropdownMenuItem>
                     <DropdownMenuItem
@@ -191,6 +196,7 @@
   const loadError = ref<MessageDescriptor | null>(null);
   const createError = ref<MessageDescriptor | null>(null);
   const editingRoom = ref<Room>();
+  let pendingRoomEditId: string | undefined;
   const renameError = ref<MessageDescriptor | null>(null);
   const roomToDelete = ref<Room>();
   const deleting = ref(false);
@@ -245,9 +251,17 @@
     }
   }
 
-  async function startEdit(room: Room): Promise<void> {
+  async function editAfterMenuClose(event: Event, room: Room): Promise<void> {
+    if (pendingRoomEditId !== room.id) return;
+    pendingRoomEditId = undefined;
+    event.preventDefault();
     roomsStore.createOpen = false;
     await nextTick();
+    roomNavigation.value
+      ?.querySelector<HTMLButtonElement>(
+        `.room-tab-menu-button[data-room-id="${CSS.escape(room.id)}"]`,
+      )
+      ?.focus();
     renameError.value = null;
     editingRoom.value = room;
   }

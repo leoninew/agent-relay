@@ -1117,8 +1117,8 @@
     editingChannel.value = channel;
   }
 
-  async function archiveChannel(): Promise<void> {
-    if (await confirmArchive()) toasts.success({ key: "notice.channelArchived" });
+  async function archiveChannel(name: string): Promise<void> {
+    if (await confirmArchive(name)) toasts.success({ key: "notice.channelArchived" });
   }
 
   async function saveChannel(channelId: string, request: UpdateChannel): Promise<void> {

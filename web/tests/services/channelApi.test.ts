@@ -51,24 +51,27 @@ describe("channel API", () => {
     );
   });
 
-  it("archives through a separate POST instead of deleting the channel", async () => {
+  it("sends the final name in the archive POST", async () => {
+    const name = "Finished API";
     const adapter = vi.fn(async (config: InternalAxiosRequestConfig) => ({
       config,
-      data: { id: "channel/api", status: "archived" },
+      data: { id: "channel/api", name, status: "archived" },
       headers: { "content-type": "application/json" },
       status: 200,
       statusText: "OK",
     }));
     apiClient.defaults.adapter = adapter as AxiosAdapter;
 
-    await expect(archiveChannel("room/one", "channel/api")).resolves.toMatchObject({
+    await expect(archiveChannel("room/one", "channel/api", name)).resolves.toMatchObject({
       id: "channel/api",
+      name,
       status: "archived",
     });
     expect(adapter).toHaveBeenCalledWith(
       expect.objectContaining({
         method: "post",
         url: "/api/room/room%2Fone/channel/channel%2Fapi/archive",
+        data: JSON.stringify({ name }),
       }),
     );
   });

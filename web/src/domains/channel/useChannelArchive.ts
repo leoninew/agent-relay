@@ -53,7 +53,7 @@ export function useChannelArchive(
     error.value = null;
   }
 
-  async function confirm(): Promise<boolean> {
+  async function confirm(name: string): Promise<boolean> {
     const room = roomId();
     const channel = target.value;
     if (!room || !channel || busy.value || locked() || !currentChannelId()) return false;
@@ -65,7 +65,7 @@ export function useChannelArchive(
     busy.value = true;
     error.value = null;
     try {
-      await channels.archive(room, channel.id);
+      await channels.archive(room, channel.id, name);
       if (target.value?.roomId === room && target.value.id === channel.id) target.value = undefined;
       return true;
     } catch (caught) {

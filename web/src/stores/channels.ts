@@ -130,8 +130,8 @@ export const useChannelsStore = defineStore("channels", () => {
     }
   }
 
-  async function archive(roomId: string, channelId: string): Promise<void> {
-    const updated = await archiveChannel(roomId, channelId);
+  async function archive(roomId: string, channelId: string, name: string): Promise<void> {
+    const updated = await archiveChannel(roomId, channelId, name);
     byRoom.value[roomCacheKey(roomId, "channels")] = channels(roomId).map((candidate) =>
       candidate.id === channelId ? updated : candidate,
     );
