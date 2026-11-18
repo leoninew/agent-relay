@@ -87,9 +87,13 @@
   );
 
   function submit(): void {
-    if (!props.channel || props.channel.isDefault || props.saving) return;
+    if (!props.channel || props.channel.isDefault || props.saving) {
+      return;
+    }
     attempted.value = true;
-    if (nameError.value) return;
+    if (nameError.value) {
+      return;
+    }
     emit("save", props.channel.id, { name: name.value.trim(), description: description.value });
   }
 </script>

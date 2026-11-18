@@ -41,14 +41,17 @@ export function useChannelArchive(
       !currentChannelId() ||
       roomId() !== channel.roomId ||
       !canArchiveChannel(channel, currentChannelId())
-    )
+    ) {
       return;
+    }
     target.value = channel;
     error.value = null;
   }
 
   function close(): void {
-    if (busy.value) return;
+    if (busy.value) {
+      return;
+    }
     target.value = undefined;
     error.value = null;
   }
@@ -56,7 +59,9 @@ export function useChannelArchive(
   async function confirm(name: string): Promise<boolean> {
     const room = roomId();
     const channel = target.value;
-    if (!room || !channel || busy.value || locked() || !currentChannelId()) return false;
+    if (!room || !channel || busy.value || locked() || !currentChannelId()) {
+      return false;
+    }
     const latest = channels.channel(room, channel.id);
     if (room !== channel.roomId || !latest || !canArchiveChannel(latest, currentChannelId())) {
       close();
@@ -66,11 +71,14 @@ export function useChannelArchive(
     error.value = null;
     try {
       await channels.archive(room, channel.id, name);
-      if (target.value?.roomId === room && target.value.id === channel.id) target.value = undefined;
+      if (target.value?.roomId === room && target.value.id === channel.id) {
+        target.value = undefined;
+      }
       return true;
     } catch (caught) {
-      if (target.value?.roomId === room && target.value.id === channel.id)
+      if (target.value?.roomId === room && target.value.id === channel.id) {
         error.value = describeApiError(caught, "errors.channelArchive");
+      }
       return false;
     } finally {
       busy.value = false;

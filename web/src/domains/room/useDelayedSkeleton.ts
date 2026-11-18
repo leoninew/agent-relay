@@ -7,7 +7,9 @@ export function useDelayedSkeleton(pending: () => boolean, queryKey: () => strin
     [pending, queryKey],
     ([loading], _previous, onCleanup) => {
       visible.value = false;
-      if (!loading) return;
+      if (!loading) {
+        return;
+      }
       const timer = setTimeout(() => {
         visible.value = true;
       }, 150);

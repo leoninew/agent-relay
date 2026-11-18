@@ -46,7 +46,9 @@
 
   function resize(): void {
     const control = root.value?.querySelector("textarea");
-    if (!props.autoresize || !control) return;
+    if (!props.autoresize || !control) {
+      return;
+    }
     const scrollTop = control.scrollTop;
     control.style.height = "auto";
     control.style.height = `${control.scrollHeight}px`;
@@ -57,13 +59,17 @@
   watch(
     [root, () => props.multiline, () => props.autoresize],
     ([element, multiline, autoresize], _, onCleanup) => {
-      if (!element || !multiline || !autoresize) return;
+      if (!element || !multiline || !autoresize) {
+        return;
+      }
       resize();
       let observer: ResizeObserver | undefined;
       if (typeof ResizeObserver !== "undefined") {
         let width = element.getBoundingClientRect().width;
         observer = new ResizeObserver(([entry]) => {
-          if (!entry || entry.contentRect.width === width) return;
+          if (!entry || entry.contentRect.width === width) {
+            return;
+          }
           width = entry.contentRect.width;
           resize();
         });
@@ -78,8 +84,9 @@
   );
 
   function updateValue(event: Event): void {
-    if (!composing.value)
+    if (!composing.value) {
       model.value = (event.target as HTMLInputElement | HTMLTextAreaElement).value;
+    }
   }
 
   function finishComposition(event: CompositionEvent): void {
@@ -95,13 +102,17 @@
     const control = root.value?.querySelector<HTMLInputElement | HTMLTextAreaElement>(
       "input, textarea",
     );
-    if (control?.selectionStart == null || control.selectionEnd == null) return;
+    if (control?.selectionStart == null || control.selectionEnd == null) {
+      return;
+    }
     return { start: control.selectionStart, end: control.selectionEnd };
   }
 
   async function setSelection(start: number, end = start): Promise<void> {
     await nextTick();
-    if (props.disabled || props.readonly || composing.value) return;
+    if (props.disabled || props.readonly || composing.value) {
+      return;
+    }
     const control = root.value?.querySelector<HTMLInputElement | HTMLTextAreaElement>(
       "input, textarea",
     );
@@ -110,7 +121,9 @@
   }
 
   async function clear(): Promise<void> {
-    if (props.disabled || props.readonly) return;
+    if (props.disabled || props.readonly) {
+      return;
+    }
     model.value = "";
     await nextTick();
     focus();

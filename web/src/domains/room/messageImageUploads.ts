@@ -42,7 +42,9 @@ export function createImageUploads(options: {
   }
   function cancel(ids: object[]): void {
     for (let index = tasks.length - 1; index >= 0; index--) {
-      if (!ids.includes(tasks[index].id)) continue;
+      if (!ids.includes(tasks[index].id)) {
+        continue;
+      }
       tasks[index].controller.abort();
       tasks.splice(index, 1);
     }
@@ -58,22 +60,32 @@ export function createImageUploads(options: {
     queueMicrotask(flush);
   }
   function flush(): void {
-    if (timer) clearTimeout(timer);
+    if (timer) {
+      clearTimeout(timer);
+    }
     timer = undefined;
     const active = options.editor();
-    if (disposed || !active || active.isDestroyed) return;
+    if (disposed || !active || active.isDestroyed) {
+      return;
+    }
     if (options.disabled()) {
       cancelAll();
       return;
     }
     if (options.composing() || active.view.composing) {
-      if (tasks.some((task) => task.result || task.failed)) timer = setTimeout(flush, 50);
+      if (tasks.some((task) => task.result || task.failed)) {
+        timer = setTimeout(flush, 50);
+      }
       return;
     }
     for (const batch of new Set(tasks.map((task) => task.batch))) {
       for (const task of tasks.filter((task) => task.batch === batch)) {
-        if (!tasks.includes(task)) continue;
-        if (!task.result && !task.failed) break;
+        if (!tasks.includes(task)) {
+          continue;
+        }
+        if (!task.result && !task.failed) {
+          break;
+        }
         const anchor = placeholders(active.view)
           .find()
           .find((item) => item.spec.id === task.id);
@@ -110,18 +122,23 @@ export function createImageUploads(options: {
   }
   function cancelAll(): void {
     cancel(tasks.map((task) => task.id));
-    if (timer) clearTimeout(timer);
+    if (timer) {
+      clearTimeout(timer);
+    }
     timer = undefined;
     const active = options.editor();
-    if (active && !active.isDestroyed)
+    if (active && !active.isDestroyed) {
       active.view.dispatch(
         active.state.tr
           .setMeta(uploadsKey, { clear: true } satisfies UploadMeta)
           .setMeta("addToHistory", false),
       );
+    }
   }
   function add(view: EditorView, files: File[], position?: number): void {
-    if (disposed || options.disabled() || options.composing() || view.composing) return;
+    if (disposed || options.disabled() || options.composing() || view.composing) {
+      return;
+    }
     const accepted = files.filter((file) => {
       const key =
         file.size > 10 * 1024 * 1024
@@ -129,12 +146,18 @@ export function createImageUploads(options: {
           : !["image/png", "image/jpeg", "image/webp"].includes(file.type)
             ? "errors.image_invalid"
             : undefined;
-      if (key) options.error({ key });
+      if (key) {
+        options.error({ key });
+      }
       return !key;
     });
-    if (!accepted.length) return;
+    if (!accepted.length) {
+      return;
+    }
     const tr = view.state.tr;
-    if (position === undefined) tr.deleteSelection();
+    if (position === undefined) {
+      tr.deleteSelection();
+    }
     const pos = Math.max(1, Math.min(position ?? tr.selection.from, tr.doc.content.size - 1));
     const batch = {};
     const added = accepted.map((file): Upload => ({
@@ -173,11 +196,15 @@ export function createImageUploads(options: {
     for (const task of added) {
       void uploadRoomImage(options.roomId, task.file, task.controller.signal, options.channelId)
         .then((result) => {
-          if (disposed || !tasks.includes(task)) return;
+          if (disposed || !tasks.includes(task)) {
+            return;
+          }
           task.result = result;
         })
         .catch((error: unknown) => {
-          if (disposed || !tasks.includes(task)) return;
+          if (disposed || !tasks.includes(task)) {
+            return;
+          }
           task.failed = true;
           options.error(describeApiError(error, "composer.imageUploadFailed"));
         })
@@ -191,24 +218,30 @@ export function createImageUploads(options: {
       apply(tr, previous) {
         const meta = tr.getMeta(uploadsKey) as UploadMeta | undefined;
         let next = meta?.clear ? DecorationSet.empty : previous.map(tr.mapping, tr.doc);
-        if (meta?.remove)
+        if (meta?.remove) {
           next = next.remove(
             next.find().filter((item) => meta.remove!.includes(item.spec.id as object)),
           );
-        if (meta?.add) next = next.add(tr.doc, meta.add);
+        }
+        if (meta?.add) {
+          next = next.add(tr.doc, meta.add);
+        }
         return next;
       },
     },
     props: {
       decorations: (state) => uploadsKey.getState(state),
       handleKeyDown(view, event) {
-        if (!["Backspace", "Delete"].includes(event.key) || !view.state.selection.empty)
+        if (!["Backspace", "Delete"].includes(event.key) || !view.state.selection.empty) {
           return false;
+        }
         const anchor = placeholders(view).find(
           view.state.selection.from,
           view.state.selection.from,
         )[0];
-        if (!anchor) return false;
+        if (!anchor) {
+          return false;
+        }
         remove(view, anchor.spec.id as object);
         return true;
       },
@@ -219,7 +252,9 @@ export function createImageUploads(options: {
           .find()
           .map((item) => item.spec.id as object);
         const missing = tasks.filter((task) => !live.includes(task.id)).map((task) => task.id);
-        if (missing.length) cancel(missing);
+        if (missing.length) {
+          cancel(missing);
+        }
       },
     }),
   });
@@ -230,7 +265,9 @@ export function createImageUploads(options: {
     cancelAll,
     destroy() {
       disposed = true;
-      if (timer) clearTimeout(timer);
+      if (timer) {
+        clearTimeout(timer);
+      }
       cancel(tasks.map((task) => task.id));
     },
   };

@@ -41,7 +41,9 @@ export function useStoredOrder<Item extends { id: string }>(
     const reordered = [...orderedItems.value];
     const index = reordered.findIndex((item) => item.id === itemId);
     const target = index + offset;
-    if (index < 0 || target < 0 || target >= reordered.length) return;
+    if (index < 0 || target < 0 || target >= reordered.length) {
+      return;
+    }
     const [item] = reordered.splice(index, 1);
     reordered.splice(target, 0, item);
     orderedItems.value = reordered;

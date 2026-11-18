@@ -23,12 +23,15 @@ function cached<Result>(
   force: boolean,
 ): Promise<Result> {
   const existing = cache.get(key);
-  if (!force && existing && existing.context === context && existing.expires > Date.now())
+  if (!force && existing && existing.context === context && existing.expires > Date.now()) {
     return existing.promise;
+  }
   const entry = { expires: Date.now() + 60_000, context, promise: load() };
   cache.set(key, entry);
   void entry.promise.catch(() => {
-    if (cache.get(key) === entry) cache.delete(key);
+    if (cache.get(key) === entry) {
+      cache.delete(key);
+    }
   });
   return entry.promise;
 }
@@ -52,14 +55,18 @@ export function useRoomCapabilities(
   }
 
   async function loadSkills(force = false): Promise<void> {
-    if (!active) return;
+    if (!active) {
+      return;
+    }
     const version = ++skillVersion;
     const current = room();
     const currentChannel = channelId();
     skills.value = { skills: [], errors: [] };
     skillError.value = undefined;
     skillsLoading.value = Boolean(current && currentChannel);
-    if (!current || !currentChannel) return;
+    if (!current || !currentChannel) {
+      return;
+    }
     try {
       const result = await cached(
         skillCache,
@@ -68,11 +75,17 @@ export function useRoomCapabilities(
         () => request((signal) => fetchRoomSkills(current.id, force, signal, currentChannel)),
         force,
       );
-      if (version === skillVersion) skills.value = result;
+      if (version === skillVersion) {
+        skills.value = result;
+      }
     } catch (caught) {
-      if (version === skillVersion) skillError.value = describeApiError(caught, "errors.skills");
+      if (version === skillVersion) {
+        skillError.value = describeApiError(caught, "errors.skills");
+      }
     } finally {
-      if (version === skillVersion) skillsLoading.value = false;
+      if (version === skillVersion) {
+        skillsLoading.value = false;
+      }
     }
   }
 

@@ -115,25 +115,37 @@
   watch(
     () => props.open,
     (open) => {
-      if (open) reset();
+      if (open) {
+        reset();
+      }
       submitted.value = false;
     },
   );
 
   function close(): void {
-    if (busy.value) return;
+    if (busy.value) {
+      return;
+    }
     emit("close");
   }
 
   async function submit(): Promise<void> {
-    if (busy.value) return;
+    if (busy.value) {
+      return;
+    }
     submitted.value = true;
-    if (!name.value.trim()) return;
-    if (await createChannel()) emit("created", channelId.value!);
+    if (!name.value.trim()) {
+      return;
+    }
+    if (await createChannel()) {
+      emit("created", channelId.value!);
+    }
   }
 
   async function lookup(): Promise<void> {
-    if (channelId.value && (await lookupChannel(channelId.value))) emit("created", channelId.value);
+    if (channelId.value && (await lookupChannel(channelId.value))) {
+      emit("created", channelId.value);
+    }
   }
 </script>
 

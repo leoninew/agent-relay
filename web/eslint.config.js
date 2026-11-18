@@ -8,6 +8,9 @@ export default defineConfigWithVueTs(
   ...pluginVue.configs["flat/recommended"],
   vueTsConfigs.recommended,
   {
+    rules: { curly: ["error", "all"] },
+  },
+  {
     files: ["**/*.{ts,vue}"],
     rules: {
       "@typescript-eslint/consistent-type-imports": "error",

@@ -23,7 +23,9 @@ export function deleteAdjacentMemberMention(
   if (selection instanceof NodeSelection && selection.node.type.name === memberMentionNodeName) {
     return closeHistory(state.tr.deleteSelection());
   }
-  if (!selection.empty) return;
+  if (!selection.empty) {
+    return;
+  }
   const { $from } = selection;
   if (key === "Delete") {
     if ($from.nodeAfter?.type.name === memberMentionNodeName) {
@@ -50,9 +52,13 @@ export const MemberMention = Mention.extend({
   addProseMirrorPlugins: () => [],
   addKeyboardShortcuts() {
     const remove = (key: "Backspace" | "Delete") => {
-      if (!this.editor.isEditable || this.editor.view.composing) return false;
+      if (!this.editor.isEditable || this.editor.view.composing) {
+        return false;
+      }
       const transaction = deleteAdjacentMemberMention(this.editor.state, key);
-      if (!transaction) return false;
+      if (!transaction) {
+        return false;
+      }
       this.editor.view.dispatch(transaction);
       return true;
     };

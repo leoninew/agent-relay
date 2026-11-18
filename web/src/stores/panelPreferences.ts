@@ -13,7 +13,9 @@ function loadPreferences(): PanelPreferences {
   try {
     const storage = browserStorage();
     const saved = storage ? readJSON<unknown>(storage, storageKey, null) : null;
-    if (!saved || typeof saved !== "object") return defaults;
+    if (!saved || typeof saved !== "object") {
+      return defaults;
+    }
     const value = saved as Partial<Record<Panel, unknown>>;
     return {
       navigation: typeof value.navigation === "boolean" ? value.navigation : false,
@@ -28,11 +30,15 @@ export const usePanelPreferencesStore = defineStore("panelPreferences", () => {
   const collapsed = ref<PanelPreferences>(loadPreferences());
 
   function setCollapsed(panel: Panel, value: boolean): void {
-    if (collapsed.value[panel] === value) return;
+    if (collapsed.value[panel] === value) {
+      return;
+    }
     collapsed.value[panel] = value;
     try {
       const storage = browserStorage();
-      if (storage) writeJSON(storage, storageKey, collapsed.value);
+      if (storage) {
+        writeJSON(storage, storageKey, collapsed.value);
+      }
     } catch {
       // Keep the current session usable when browser storage is unavailable.
     }

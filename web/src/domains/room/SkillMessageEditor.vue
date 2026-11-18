@@ -97,7 +97,9 @@
   let output = props.modelValue;
   let outputIdentity = JSON.stringify([props.skills, props.memberMentions ?? []]);
   function remember(skills: readonly SkillReference[]): void {
-    for (const skill of skills) identities.set(skill.id, { ...skill });
+    for (const skill of skills) {
+      identities.set(skill.id, { ...skill });
+    }
   }
   remember(props.skills);
   const knownSkills = () => [...identities.values()];
@@ -183,11 +185,15 @@
       allowedPrefixes: null,
       findSuggestionMatch: ({ $position }) => {
         const before = $position.nodeBefore;
-        if (!before?.isText) return null;
+        if (!before?.isText) {
+          return null;
+        }
         const source = nodeSource($position.doc);
         const offset = sourceOffset($position.doc, $position.pos);
         const match = composerQueryAt(source, offset);
-        if (!match || offset - match.start > (before.text?.length ?? 0)) return null;
+        if (!match || offset - match.start > (before.text?.length ?? 0)) {
+          return null;
+        }
         const suffixLength = Math.min(match.end - offset, $position.nodeAfter?.text?.length ?? 0);
         return {
           range: {
@@ -240,14 +246,20 @@
         uploads.plugin,
         new Plugin({
           filterTransaction(tr, state) {
-            if (!tr.docChanged || tr.getMeta("externalContent")) return true;
+            if (!tr.docChanged || tr.getMeta("externalContent")) {
+              return true;
+            }
             const next = nodeSource(tr.doc).length;
-            if (next <= messageMaxLength || next <= nodeSource(state.doc).length) return true;
+            if (next <= messageMaxLength || next <= nodeSource(state.doc).length) {
+              return true;
+            }
             emit("tooLong");
             return false;
           },
           appendTransaction(transactions, _old, state) {
-            if (composing || !transactions.some((tr) => tr.docChanged)) return null;
+            if (composing || !transactions.some((tr) => tr.docChanged)) {
+              return null;
+            }
             const tr = reconcileReferences(state.tr, knownSkills(), props.roomId, props.channelId);
             return tr.docChanged ? tr : null;
           },
@@ -258,13 +270,21 @@
 
   function copy(event: ClipboardEvent, cut = false): boolean {
     const active = editor.value;
-    if (!active || !event.clipboardData || active.state.selection.empty || (cut && props.disabled))
+    if (
+      !active ||
+      !event.clipboardData ||
+      active.state.selection.empty ||
+      (cut && props.disabled)
+    ) {
       return false;
+    }
     const payload = writeMessageClipboard(active.state.selection.content().content);
     event.preventDefault();
     event.clipboardData.setData("text/plain", payload.text);
     event.clipboardData.setData(messageClipboardType, payload.data);
-    if (cut) active.commands.deleteSelection();
+    if (cut) {
+      active.commands.deleteSelection();
+    }
     return true;
   }
   const editor = useEditor({
@@ -297,21 +317,30 @@
         ...(props.activeDescendant ? { "aria-activedescendant": props.activeDescendant } : {}),
       }),
       handleKeyDown(view, event) {
-        if (props.disabled) return true;
-        if (composing || view.composing || event.isComposing || event.keyCode === 229) return false;
+        if (props.disabled) {
+          return true;
+        }
+        if (composing || view.composing || event.isComposing || event.keyCode === 229) {
+          return false;
+        }
         emit("keydown", event);
-        if (event.defaultPrevented) return true;
+        if (event.defaultPrevented) {
+          return true;
+        }
         if (event.key === "Enter") {
-          if (event.shiftKey)
+          if (event.shiftKey) {
             view.dispatch(
               view.state.tr.replaceSelectionWith(view.state.schema.nodes.hardBreak.create()),
             );
+          }
           return true;
         }
         return false;
       },
       handlePaste(view, event) {
-        if (props.disabled || composing) return true;
+        if (props.disabled || composing) {
+          return true;
+        }
         const copied = readMessageClipboard(
           event.clipboardData?.getData(messageClipboardType) ?? "",
           [...knownSkills(), ...props.availableSkills],
@@ -319,8 +348,12 @@
         );
         const text = event.clipboardData?.getData("text/plain").replace(/\r\n?/g, "\n") ?? "";
         event.preventDefault();
-        if (!copied && !text) return true;
-        if (copied) remember(copied.skills);
+        if (!copied && !text) {
+          return true;
+        }
+        if (copied) {
+          remember(copied.skills);
+        }
         view.dispatch(
           view.state.tr
             .replaceSelection(
@@ -346,17 +379,22 @@
         return true;
       },
       handleDrop(view, event) {
-        if (props.disabled || composing) return true;
-        if (view.dragging) return false;
+        if (props.disabled || composing) {
+          return true;
+        }
+        if (view.dragging) {
+          return false;
+        }
         const text = event.dataTransfer?.getData("text/plain").replace(/\r\n?/g, "\n") ?? "";
         const position = view.posAtCoords({ left: event.clientX, top: event.clientY })?.pos;
-        if (text && position !== undefined)
+        if (text && position !== undefined) {
           view.dispatch(
             view.state.tr.insert(
               Math.max(1, Math.min(position, view.state.doc.content.size - 1)),
               messageSlice(view.state.schema, text, knownSkills(), props.roomId, props.channelId),
             ),
           );
+        }
         return true;
       },
       handleClickOn(view, _pos, node, nodePos, event, direct) {
@@ -365,9 +403,12 @@
           props.disabled ||
           !(event.target instanceof Element) ||
           !event.target.closest("[data-remove-reference]")
-        )
+        ) {
           return false;
-        if (!["mention", "imageReference"].includes(node.type.name)) return false;
+        }
+        if (!["mention", "imageReference"].includes(node.type.name)) {
+          return false;
+        }
         view.dispatch(view.state.tr.delete(nodePos, nodePos + node.nodeSize));
         return true;
       },
@@ -377,28 +418,38 @@
             event.preventDefault();
             return true;
           }
-          if (composing || view.composing || event.isComposing) return false;
-          if (!["insertParagraph", "insertLineBreak"].includes(event.inputType)) return false;
+          if (composing || view.composing || event.isComposing) {
+            return false;
+          }
+          if (!["insertParagraph", "insertLineBreak"].includes(event.inputType)) {
+            return false;
+          }
           event.preventDefault();
-          if (event.inputType === "insertLineBreak")
+          if (event.inputType === "insertLineBreak") {
             view.dispatch(
               view.state.tr.replaceSelectionWith(view.state.schema.nodes.hardBreak.create()),
             );
-          else emit("keydown", new KeyboardEvent("keydown", { key: "Enter", cancelable: true }));
+          } else {
+            emit("keydown", new KeyboardEvent("keydown", { key: "Enter", cancelable: true }));
+          }
           return true;
         },
         paste(view, event) {
           const files = [...(event.clipboardData?.files ?? [])].filter((file) =>
             file.type.startsWith("image/"),
           );
-          if (!files.length) return false;
+          if (!files.length) {
+            return false;
+          }
           event.preventDefault();
           uploadError.value = undefined;
           uploads.add(view, files);
           return true;
         },
         dragover: (_view, event) => {
-          if (!event.dataTransfer?.types.includes("Files")) return false;
+          if (!event.dataTransfer?.types.includes("Files")) {
+            return false;
+          }
           event.preventDefault();
           return true;
         },
@@ -406,7 +457,9 @@
           const files = [...(event.dataTransfer?.files ?? [])].filter((file) =>
             file.type.startsWith("image/"),
           );
-          if (!files.length) return false;
+          if (!files.length) {
+            return false;
+          }
           event.preventDefault();
           const position = view.posAtCoords({ left: event.clientX, top: event.clientY })?.pos;
           uploadError.value = undefined;
@@ -416,7 +469,9 @@
         copy: (_view, event) => copy(event),
         cut: (_view, event) => copy(event, true),
         compositionstart: () => {
-          if (compositionTimer) clearTimeout(compositionTimer);
+          if (compositionTimer) {
+            clearTimeout(compositionTimer);
+          }
           compositionTimer = undefined;
           composing = true;
           emit("compositionstart");
@@ -424,23 +479,31 @@
           return false;
         },
         compositionend: () => {
-          if (compositionTimer) clearTimeout(compositionTimer);
+          if (compositionTimer) {
+            clearTimeout(compositionTimer);
+          }
           // ProseMirror's built-in handler flushes the final DOM input in a microtask.
           // Keep the guard active until a subsequent task sees the committed state.
           compositionTimer = setTimeout(() => {
             compositionTimer = undefined;
             const active = editor.value;
-            if (!active || disposed || active.isDestroyed) return;
+            if (!active || disposed || active.isDestroyed) {
+              return;
+            }
             composing = false;
             emit("compositionend");
-            if (props.disabled || active.view.composing) return;
+            if (props.disabled || active.view.composing) {
+              return;
+            }
             const tr = reconcileReferences(
               active.state.tr,
               knownSkills(),
               props.roomId,
               props.channelId,
             );
-            if (tr.docChanged) active.view.dispatch(tr);
+            if (tr.docChanged) {
+              active.view.dispatch(tr);
+            }
             uploads.flush();
           }, 0);
           return false;
@@ -448,12 +511,16 @@
       },
     },
     onUpdate({ editor: active, transaction }) {
-      if (disposed || props.disabled) return;
+      if (disposed || props.disabled) {
+        return;
+      }
       const content = nodeSource(active.state.doc);
       const selected = documentSkills(active.state.doc);
       const memberMentions = documentMemberMentions(active.state.doc);
       const identity = JSON.stringify([selected, memberMentions]);
-      if (content === output && identity === outputIdentity) return;
+      if (content === output && identity === outputIdentity) {
+        return;
+      }
       output = content;
       outputIdentity = identity;
       remember(selected);
@@ -472,10 +539,13 @@
     if (
       value === nodeSource(active.state.doc) &&
       JSON.stringify(memberMentions) === JSON.stringify(documentMemberMentions(active.state.doc))
-    )
+    ) {
       return;
+    }
     uploads.cancelAll();
-    if (compositionTimer) clearTimeout(compositionTimer);
+    if (compositionTimer) {
+      clearTimeout(compositionTimer);
+    }
     compositionTimer = undefined;
     composing = false;
     emit("compositionend");
@@ -497,17 +567,23 @@
   }
   function refreshSkillTooltips(): void {
     const root = editor.value?.view.dom;
-    if (!root) return;
+    if (!root) {
+      return;
+    }
     for (const element of root.querySelectorAll<HTMLElement>("[data-skill-id]")) {
       const label = element.querySelector<HTMLElement>(".editor-skill-label")?.textContent ?? "";
       element.title = props.skillDescriptions?.get(element.dataset.skillId ?? "")?.trim() || label;
     }
   }
   function focus(): void {
-    if (!props.disabled) editor.value?.commands.focus();
+    if (!props.disabled) {
+      editor.value?.commands.focus();
+    }
   }
   function dismissQuery(): void {
-    if (editor.value) exitSuggestion(editor.value.view, SuggestionPluginKey);
+    if (editor.value) {
+      exitSuggestion(editor.value.view, SuggestionPluginKey);
+    }
   }
   function suggestionRange(active: Editor, trigger: "$" | "@") {
     const suggestion = SuggestionPluginKey.getState(active.state) as
@@ -518,9 +594,13 @@
   }
   function insertSkill(reference: SkillReference): void {
     const active = editor.value;
-    if (!active || props.disabled || composing || disposed) return;
+    if (!active || props.disabled || composing || disposed) {
+      return;
+    }
     const range = suggestionRange(active, "$");
-    if (!range) return;
+    if (!range) {
+      return;
+    }
     remember([reference]);
     active
       .chain()
@@ -540,15 +620,21 @@
   }
   function insertMember(member: Pick<Member, "id" | "name">): void {
     const active = editor.value;
-    if (!active || props.disabled || composing || disposed) return;
+    if (!active || props.disabled || composing || disposed) {
+      return;
+    }
     const range = suggestionRange(active, "@");
-    if (!range) return;
+    if (!range) {
+      return;
+    }
     insertMemberMention(active, range, member);
     focus();
   }
   function clear(): void {
     const active = editor.value;
-    if (!active || props.disabled || composing) return;
+    if (!active || props.disabled || composing) {
+      return;
+    }
     uploads.cancelAll();
     uploadError.value = undefined;
     active.view.dispatch(active.state.tr.delete(1, active.state.doc.content.size - 1));
@@ -558,7 +644,9 @@
     [() => props.modelValue, () => props.memberMentions],
     ([value, memberMentions]) => {
       const active = editor.value;
-      if (active) syncModelValue(active, value, memberMentions);
+      if (active) {
+        syncModelValue(active, value, memberMentions);
+      }
     },
     { flush: "post" },
   );
@@ -574,7 +662,9 @@
           props.roomId,
           props.channelId,
         );
-        if (tr.docChanged) active.view.dispatch(tr.setMeta("addToHistory", false));
+        if (tr.docChanged) {
+          active.view.dispatch(tr.setMeta("addToHistory", false));
+        }
       }
     },
     { deep: true },
@@ -603,7 +693,9 @@
           props.roomId,
           props.channelId,
         );
-        if (tr.docChanged) editor.value.view.dispatch(tr.setMeta("addToHistory", false));
+        if (tr.docChanged) {
+          editor.value.view.dispatch(tr.setMeta("addToHistory", false));
+        }
       }
     },
   );
@@ -618,13 +710,17 @@
     ],
     () => {
       const active = editor.value;
-      if (active) active.setOptions({ editorProps: active.options.editorProps });
+      if (active) {
+        active.setOptions({ editorProps: active.options.editorProps });
+      }
     },
     { flush: "post" },
   );
   onBeforeUnmount(() => {
     disposed = true;
-    if (compositionTimer) clearTimeout(compositionTimer);
+    if (compositionTimer) {
+      clearTimeout(compositionTimer);
+    }
     uploads.destroy();
   });
   defineExpose({ focus, insertSkill, insertMember, dismissQuery, clear });

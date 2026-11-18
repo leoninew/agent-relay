@@ -73,9 +73,13 @@
   );
 
   function submit(): void {
-    if (!props.channel || props.busy) return;
+    if (!props.channel || props.busy) {
+      return;
+    }
     attempted.value = true;
-    if (nameError.value) return;
+    if (nameError.value) {
+      return;
+    }
     emit("confirm", name.value.trim());
   }
 </script>

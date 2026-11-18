@@ -558,19 +558,28 @@
 
   async function applySearch(): Promise<void> {
     clearTimeout(searchTimer);
-    if (!active.value) return;
+    if (!active.value) {
+      return;
+    }
     const nextKeyword = searchText.value.trim();
-    if (nextKeyword === keyword.value) return;
+    if (nextKeyword === keyword.value) {
+      return;
+    }
     keyword.value = nextKeyword;
     await loadLatest();
   }
 
   async function submitSearch(): Promise<void> {
     clearTimeout(searchTimer);
-    if (loading.value || refreshingSessions.value || sending.value || clearing.value) return;
+    if (loading.value || refreshingSessions.value || sending.value || clearing.value) {
+      return;
+    }
     keyword.value = searchText.value.trim();
-    if (keyword.value) await loadLatest();
-    else await refreshRoom();
+    if (keyword.value) {
+      await loadLatest();
+    } else {
+      await refreshRoom();
+    }
   }
 
   function cancelQueries(): number {
@@ -585,12 +594,16 @@
   function startEvents(scope: string, roomId: string, version: number): void {
     const current = roomsStore.snapshots[scope];
     const channelId = currentChannelId.value;
-    if (!current || !channelId || version !== loadVersion) return;
+    if (!current || !channelId || version !== loadVersion) {
+      return;
+    }
     stopEvents = subscribeRoomEvents(
       roomId,
       current.eventId,
       async (page: RoomEventPage) => {
-        if (version !== loadVersion) return;
+        if (version !== loadVersion) {
+          return;
+        }
         if (page.resyncRequired) {
           roomPanel.closeDetails();
           replyTo.value = undefined;
@@ -599,15 +612,23 @@
           return;
         }
         const events = page.events.filter((event) => event.eventId > current.eventId);
-        if (!events.length) return;
+        if (!events.length) {
+          return;
+        }
         if (events.some((event) => event.kind === "room" && event.entityId === channelId)) {
           await channelsStore.load(roomId, true);
-          if (version !== loadVersion) return;
+          if (version !== loadVersion) {
+            return;
+          }
         }
         const signal = queryController?.signal;
         const retainedIds = new Set(current.messages.map((message) => message.id));
-        if (detailMessage.value) retainedIds.add(detailMessage.value.id);
-        if (replyTo.value) retainedIds.add(replyTo.value.id);
+        if (detailMessage.value) {
+          retainedIds.add(detailMessage.value.id);
+        }
+        if (replyTo.value) {
+          retainedIds.add(replyTo.value.id);
+        }
         const { state, messages } = await loadRoomEventUpdates(
           roomId,
           channelId,
@@ -616,9 +637,14 @@
           retainedIds,
           signal,
         );
-        if (version !== loadVersion) return;
-        if ("room" in state) roomsStore.syncMetadata(state, channelId);
-        else roomsStore.syncActivity(roomId, state, channelId);
+        if (version !== loadVersion) {
+          return;
+        }
+        if ("room" in state) {
+          roomsStore.syncMetadata(state, channelId);
+        } else {
+          roomsStore.syncActivity(roomId, state, channelId);
+        }
         if (clearDeletedFilters()) {
           await loadRoom();
           return;
@@ -628,12 +654,16 @@
         roomsStore.applyMessages(roomId, messages, filters(), channelId);
         roomPanel.syncMessages(messages);
         const updatedReply = messages.find((message) => message.id === replyTo.value?.id);
-        if (updatedReply) replyTo.value = updatedReply;
+        if (updatedReply) {
+          replyTo.value = updatedReply;
+        }
         current.eventId = page.nextEventId;
         const newest = current.messages.at(-1);
         if (wasAtEnd && newest && newest.seq > previousSeq) {
           await nextTick();
-          if (version === loadVersion) timeline.value?.scrollToEnd();
+          if (version === loadVersion) {
+            timeline.value?.scrollToEnd();
+          }
         }
       },
       undefined,
@@ -674,7 +704,9 @@
   ): Promise<boolean> {
     const roomId = currentRoomId.value;
     const channelId = currentChannelId.value;
-    if (!roomId || !channelId || !active.value) return false;
+    if (!roomId || !channelId || !active.value) {
+      return false;
+    }
     const scope = roomsStore.snapshotKey(roomId, channelId);
     const query = filters();
     const queryKey = messageQueryKey(roomId, channelId, query);
@@ -696,20 +728,28 @@
         queryController?.signal,
         channelId,
       );
-      if (version !== loadVersion) return false;
+      if (version !== loadVersion) {
+        return false;
+      }
       const position = previous ? timeline.value?.capturePosition() : undefined;
       roomsStore.sync(previous ? mergeRefreshedSnapshot(previous, result) : result, channelId);
       loadedQueryKey.value = queryKey;
       roomPanel.syncMessages(result.messages);
       if (position) {
         await nextTick();
-        if (version !== loadVersion) return false;
+        if (version !== loadVersion) {
+          return false;
+        }
         timeline.value?.restorePosition(position);
       }
-      if (clearDeletedFilters()) return await loadRoom();
+      if (clearDeletedFilters()) {
+        return await loadRoom();
+      }
       await refreshDetailMessage(roomId, version);
       await refreshReplyTo(roomId, version);
-      if (version !== loadVersion) return false;
+      if (version !== loadVersion) {
+        return false;
+      }
       startEvents(scope, roomId, version);
       return true;
     } catch (caught) {
@@ -719,14 +759,18 @@
       }
       return false;
     } finally {
-      if (version === loadVersion) loading.value = false;
+      if (version === loadVersion) {
+        loading.value = false;
+      }
     }
   }
 
   async function refreshDetailMessage(roomId: string, version: number): Promise<void> {
     const target = detailTarget.value;
     const channelId = currentChannelId.value;
-    if (target?.kind !== "message" || !channelId) return;
+    if (target?.kind !== "message" || !channelId) {
+      return;
+    }
     const selected = target.message;
     try {
       const message = await fetchRoomMessage(
@@ -735,9 +779,13 @@
         queryController?.signal,
         channelId,
       );
-      if (version === loadVersion) roomPanel.syncMessages([message]);
+      if (version === loadVersion) {
+        roomPanel.syncMessages([message]);
+      }
     } catch (caught) {
-      if (version === loadVersion) toasts.error(describeApiError(caught, "errors.detailLoad"));
+      if (version === loadVersion) {
+        toasts.error(describeApiError(caught, "errors.detailLoad"));
+      }
     }
   }
 
@@ -746,7 +794,9 @@
     const channelId = currentChannelId.value;
     const draft = scope ? drafts.value[scope] : undefined;
     const messageId = draft?.replyToMessageId;
-    if (!messageId || !channelId) return;
+    if (!messageId || !channelId) {
+      return;
+    }
     const current = () =>
       version === loadVersion &&
       currentRoomId.value === roomId &&
@@ -756,9 +806,13 @@
       const message =
         visibleMessages.value.find((message) => message.id === messageId) ??
         (await fetchRoomMessage(roomId, messageId, queryController?.signal, channelId));
-      if (current()) replyTo.value = message;
+      if (current()) {
+        replyTo.value = message;
+      }
     } catch (caught) {
-      if (!current()) return;
+      if (!current()) {
+        return;
+      }
       if (caught instanceof ApiClientError && caught.status === 404 && !pendingPublication.value) {
         cancelReply();
       }
@@ -767,7 +821,9 @@
   }
 
   async function loadLatest(): Promise<void> {
-    if (!(await loadRoom({ preservePosition: false }))) return;
+    if (!(await loadRoom({ preservePosition: false }))) {
+      return;
+    }
     await nextTick();
     timeline.value?.scrollToEnd();
   }
@@ -776,7 +832,9 @@
     const roomId = currentRoomId.value;
     const channelId = currentChannelId.value;
     const beforeSeq = snapshot.value?.nextBeforeSeq;
-    if (!roomId || !channelId || !beforeSeq || loadingOlder.value || loading.value) return;
+    if (!roomId || !channelId || !beforeSeq || loadingOlder.value || loading.value) {
+      return;
+    }
     const scope = roomsStore.snapshotKey(roomId, channelId);
     const version = cancelQueries();
     loadingOlder.value = true;
@@ -787,13 +845,17 @@
         queryController?.signal,
         channelId,
       );
-      if (version !== loadVersion) return;
+      if (version !== loadVersion) {
+        return;
+      }
       timeline.value?.rememberScroll();
       roomsStore.prependPage(roomId, page, channelId);
       await nextTick();
       timeline.value?.restoreScroll();
     } catch (caught) {
-      if (version === loadVersion) toasts.error(describeApiError(caught, "errors.historyLoad"));
+      if (version === loadVersion) {
+        toasts.error(describeApiError(caught, "errors.historyLoad"));
+      }
     } finally {
       if (version === loadVersion) {
         loadingOlder.value = false;
@@ -808,18 +870,25 @@
     loadError.value = null;
     try {
       await roomsStore.load();
-      if (!active.value || version !== initializationVersion) return;
-      if (props.roomId && props.channelId) await openRoom(props.roomId, props.channelId);
-      else if (roomsStore.rooms.length)
+      if (!active.value || version !== initializationVersion) {
+        return;
+      }
+      if (props.roomId && props.channelId) {
+        await openRoom(props.roomId, props.channelId);
+      } else if (roomsStore.rooms.length) {
         await router.replace(
           channelRoute(
             roomsStore.rooms[0].id,
             channelsStore.preferredChannel(roomsStore.rooms[0].id) ?? DEFAULT_CHANNEL_ID,
           ),
         );
-      else loading.value = false;
+      } else {
+        loading.value = false;
+      }
     } catch (caught) {
-      if (!active.value || version !== initializationVersion) return;
+      if (!active.value || version !== initializationVersion) {
+        return;
+      }
       loadError.value = describeApiError(caught, "errors.roomLoad");
       toasts.error(loadError.value);
       loading.value = false;
@@ -841,14 +910,18 @@
     try {
       await channelsStore.load(roomId, true);
     } catch {
-      if (version !== loadVersion || !active.value) return;
+      if (version !== loadVersion || !active.value) {
+        return;
+      }
       loadError.value = channelsStore.errors[roomCacheKey(roomId, "channels")] ?? {
         key: "errors.channelLoad",
       };
       loading.value = false;
       return;
     }
-    if (version !== loadVersion || !active.value) return;
+    if (version !== loadVersion || !active.value) {
+      return;
+    }
     const requested = channelsStore.resolveChannelId(roomId, requestedChannelId);
     const cachedFallback =
       requestedChannelId === previouslySelectedChannel
@@ -861,7 +934,9 @@
       return;
     }
     const route = channelRoute(roomId, channelId);
-    if (requestedChannelId !== route.params.channelId) void router.replace(route);
+    if (requestedChannelId !== route.params.channelId) {
+      void router.replace(route);
+    }
     await openChannel(roomId, channelId);
   }
 
@@ -897,47 +972,62 @@
     sessionsLoading.value = false;
     sessionsError.value = null;
     roomPanel.changeChannel();
-    if (showDetails) roomPanel.selectChannel(channelId);
+    if (showDetails) {
+      roomPanel.selectChannel(channelId);
+    }
     messageQueue.reset();
     replyTo.value = undefined;
     sendError.value = null;
     const saved = sessionStorage.getItem(channelResourceKey(scope, "publication"));
     pendingPublication.value = saved ? (JSON.parse(saved) as CreateMessage) : undefined;
     openDraft(scope, pendingPublication.value);
-    if (!(await loadRoom())) return;
+    if (!(await loadRoom())) {
+      return;
+    }
     await nextTick();
-    if (currentRoomId.value === roomId && currentChannelId.value === channelId)
+    if (currentRoomId.value === roomId && currentChannelId.value === channelId) {
       timeline.value?.scrollToEnd();
+    }
   }
 
   async function retry(): Promise<void> {
-    if (currentRoomId.value && props.channelId && !currentChannelId.value)
+    if (currentRoomId.value && props.channelId && !currentChannelId.value) {
       await openRoom(currentRoomId.value, props.channelId);
-    else if (currentRoomId.value) await loadRoom();
-    else await initialize();
+    } else if (currentRoomId.value) {
+      await loadRoom();
+    } else {
+      await initialize();
+    }
   }
 
   function openChannelCreate(): void {
-    if (!currentChannelId.value) return;
+    if (!currentChannelId.value) {
+      return;
+    }
     channelCreateOpen.value = true;
   }
 
   async function selectChannel(channelId: string): Promise<void> {
     const roomId = currentRoomId.value;
-    if (!roomId) return;
+    if (!roomId) {
+      return;
+    }
     if (channelId === currentChannelId.value) {
       roomPanel.selectChannel(channelId);
       return;
     }
     await openChannel(roomId, channelId, true);
-    if (currentRoomId.value === roomId && currentChannelId.value === channelId)
+    if (currentRoomId.value === roomId && currentChannelId.value === channelId) {
       await router.push(channelRoute(roomId, channelId));
+    }
   }
 
   async function openCreatedChannel(channelId: string): Promise<void> {
     channelCreateOpen.value = false;
     toasts.success({ key: "notice.channelCreated" });
-    if (!currentRoomId.value) return;
+    if (!currentRoomId.value) {
+      return;
+    }
     await selectChannel(channelId);
   }
 
@@ -945,9 +1035,14 @@
     kind: "topic" | "member",
     resourceId: string | undefined,
   ): Promise<void> {
-    if (!roomPanel.selectSidebar(kind, resourceId)) return;
-    if (kind === "topic") composer.value?.selectTopic(resourceId);
-    else composer.value?.selectMember(resourceId);
+    if (!roomPanel.selectSidebar(kind, resourceId)) {
+      return;
+    }
+    if (kind === "topic") {
+      composer.value?.selectTopic(resourceId);
+    } else {
+      composer.value?.selectMember(resourceId);
+    }
     await loadLatest();
   }
 
@@ -955,7 +1050,9 @@
     const message =
       visibleMessages.value.find((message) => message.id === messageId) ??
       queueMessages.value.find((message) => message.id === messageId);
-    if (message) roomPanel.selectMessage(message);
+    if (message) {
+      roomPanel.selectMessage(message);
+    }
   }
 
   function viewMessageDetails(messageId: string): void {
@@ -969,7 +1066,9 @@
   }
 
   function quoteMessage(message: RoomMessage): void {
-    if (sending.value || pendingPublication.value) return;
+    if (sending.value || pendingPublication.value) {
+      return;
+    }
     replyTo.value = message;
     void composer.value?.quote(message);
   }
@@ -977,14 +1076,20 @@
   function cancelReply(): void {
     const scope = requestScope.value;
     const draft = scope ? drafts.value[scope] : undefined;
-    if (draft) draft.replyToMessageId = undefined;
+    if (draft) {
+      draft.replyToMessageId = undefined;
+    }
     replyTo.value = undefined;
   }
 
   async function sendMessage(draft: MessageDraft): Promise<void> {
     const scope = requestScope.value;
-    if (sending.value || clearing.value || !scope) return;
-    if (pendingPublication.value) return;
+    if (sending.value || clearing.value || !scope) {
+      return;
+    }
+    if (pendingPublication.value) {
+      return;
+    }
     const request = { ...draft, publicationId: crypto.randomUUID() };
     sessionStorage.setItem(channelResourceKey(scope, "publication"), JSON.stringify(request));
     pendingPublication.value = request;
@@ -992,12 +1097,16 @@
   }
 
   async function resumePublication(): Promise<void> {
-    if (pendingPublication.value && !sending.value) await publish(pendingPublication.value, true);
+    if (pendingPublication.value && !sending.value) {
+      await publish(pendingPublication.value, true);
+    }
   }
 
   async function publish(request: CreateMessage, lookup = false): Promise<void> {
     const scope = requestScope.value;
-    if (!currentRoomId.value || !currentChannelId.value || !scope) return;
+    if (!currentRoomId.value || !currentChannelId.value || !scope) {
+      return;
+    }
     const roomId = currentRoomId.value;
     const channelId = currentChannelId.value;
     sending.value = true;
@@ -1008,10 +1117,14 @@
         try {
           sentMessage = await fetchPublication(roomId, request.publicationId, channelId);
         } catch (caught) {
-          if (!(caught instanceof ApiClientError) || caught.status !== 404) throw caught;
+          if (!(caught instanceof ApiClientError) || caught.status !== 404) {
+            throw caught;
+          }
           sentMessage = await postRoomMessage(roomId, request, channelId);
         }
-      } else sentMessage = await postRoomMessage(roomId, request, channelId);
+      } else {
+        sentMessage = await postRoomMessage(roomId, request, channelId);
+      }
     } catch (caught) {
       if (
         caught instanceof ApiClientError &&
@@ -1019,10 +1132,14 @@
         [404, 409, 422].includes(caught.status ?? 0)
       ) {
         sessionStorage.removeItem(channelResourceKey(scope, "publication"));
-        if (scope === requestScope.value) pendingPublication.value = undefined;
+        if (scope === requestScope.value) {
+          pendingPublication.value = undefined;
+        }
       }
       const message = describeApiError(caught, "errors.publish");
-      if (scope === requestScope.value) sendError.value = message;
+      if (scope === requestScope.value) {
+        sendError.value = message;
+      }
       toasts.error(message);
       sending.value = false;
       return;
@@ -1054,11 +1171,15 @@
     editingTopic.value = undefined;
     deleteTarget.value = undefined;
     setupMode.value = mode;
-    if (mode === "member") void loadSessions();
+    if (mode === "member") {
+      void loadSessions();
+    }
   }
 
   async function loadSessions(): Promise<void> {
-    if (!currentRoomId.value || !currentChannelId.value || !active.value) return;
+    if (!currentRoomId.value || !currentChannelId.value || !active.value) {
+      return;
+    }
     const roomId = currentRoomId.value;
     const channelId = currentChannelId.value;
     const version = ++sessionsVersion;
@@ -1068,14 +1189,18 @@
     sessionsError.value = null;
     try {
       const result = await fetchRoomSessions(roomId, sessionsController.signal, channelId);
-      if (version === sessionsVersion) sessions.value = result;
+      if (version === sessionsVersion) {
+        sessions.value = result;
+      }
     } catch (caught) {
       if (version === sessionsVersion) {
         sessions.value = [];
         sessionsError.value = describeApiError(caught, "errors.sessionLoad");
       }
     } finally {
-      if (version === sessionsVersion) sessionsLoading.value = false;
+      if (version === sessionsVersion) {
+        sessionsLoading.value = false;
+      }
     }
   }
 
@@ -1086,8 +1211,9 @@
       refreshingSessions.value ||
       sending.value ||
       clearing.value
-    )
+    ) {
       return;
+    }
     const roomId = currentRoomId.value;
     const channelId = currentChannelId.value;
     const version = initializationVersion;
@@ -1096,10 +1222,13 @@
     try {
       await fetchRoomSessions(roomId, refreshController.signal, channelId);
     } catch (caught) {
-      if (active.value && version === initializationVersion)
+      if (active.value && version === initializationVersion) {
         toasts.error(describeApiError(caught, "errors.sessionRefresh"));
+      }
     } finally {
-      if (version === initializationVersion) refreshingSessions.value = false;
+      if (version === initializationVersion) {
+        refreshingSessions.value = false;
+      }
     }
     if (
       !active.value ||
@@ -1107,22 +1236,29 @@
       roomId !== currentRoomId.value ||
       channelId !== currentChannelId.value ||
       !(await loadRoom())
-    )
+    ) {
       return;
+    }
   }
 
   function editChannel(channel: Channel): void {
-    if (channel.isDefault) return;
+    if (channel.isDefault) {
+      return;
+    }
     setupError.value = null;
     editingChannel.value = channel;
   }
 
   async function archiveChannel(name: string): Promise<void> {
-    if (await confirmArchive(name)) toasts.success({ key: "notice.channelArchived" });
+    if (await confirmArchive(name)) {
+      toasts.success({ key: "notice.channelArchived" });
+    }
   }
 
   async function saveChannel(channelId: string, request: UpdateChannel): Promise<void> {
-    if (!currentRoomId.value || channelId === DEFAULT_CHANNEL_ID) return;
+    if (!currentRoomId.value || channelId === DEFAULT_CHANNEL_ID) {
+      return;
+    }
     const roomId = currentRoomId.value;
     await saveSetup(async () => {
       await channelsStore.update(roomId, channelId, request);
@@ -1146,7 +1282,9 @@
   }
 
   function openDelete(target: ResourceDeleteTarget): void {
-    if (target.kind === "channel" && target.node.isDefault) return;
+    if (target.kind === "channel" && target.node.isDefault) {
+      return;
+    }
     setupMode.value = undefined;
     editingMember.value = undefined;
     setupError.value = null;
@@ -1168,8 +1306,9 @@
       saving.value ||
       sending.value ||
       pendingPublication.value
-    )
+    ) {
       return;
+    }
     clearing.value = true;
     saving.value = true;
     clearError.value = null;
@@ -1181,7 +1320,9 @@
         key: "notice.cleared",
         params: { messages: result.removedMessages, members: result.removedMembers },
       });
-      if (currentRoomId.value !== roomId || currentChannelId.value !== channelId) return;
+      if (currentRoomId.value !== roomId || currentChannelId.value !== channelId) {
+        return;
+      }
       clearOpen.value = false;
       roomPanel.reset();
       messageQueue.reset();
@@ -1203,7 +1344,9 @@
   }
 
   async function saveSetup(action: () => Promise<void>, successMessage: string): Promise<void> {
-    if (saving.value) return;
+    if (saving.value) {
+      return;
+    }
     saving.value = true;
     setupError.value = null;
     const roomId = currentRoomId.value;
@@ -1218,8 +1361,9 @@
       }
     } catch (caught) {
       const message = describeApiError(caught, "errors.save");
-      if (roomId === currentRoomId.value && channelId === currentChannelId.value)
+      if (roomId === currentRoomId.value && channelId === currentChannelId.value) {
         setupError.value = message;
+      }
       toasts.error(message);
     } finally {
       saving.value = false;
@@ -1232,12 +1376,15 @@
       metadata.room.id === currentRoomId.value &&
       channelId === currentChannelId.value &&
       clearDeletedFilters()
-    )
+    ) {
       void loadRoom();
+    }
   }
 
   async function saveNewMember(request: CreateMember): Promise<void> {
-    if (!currentRoomId.value || !currentChannelId.value) return;
+    if (!currentRoomId.value || !currentChannelId.value) {
+      return;
+    }
     const roomId = currentRoomId.value;
     const channelId = currentChannelId.value;
     await saveSetup(async () => {
@@ -1247,7 +1394,9 @@
   }
 
   async function saveMember(memberId: string, request: UpdateMember): Promise<void> {
-    if (!currentRoomId.value || !currentChannelId.value) return;
+    if (!currentRoomId.value || !currentChannelId.value) {
+      return;
+    }
     const roomId = currentRoomId.value;
     const channelId = currentChannelId.value;
     await saveSetup(async () => {
@@ -1257,7 +1406,9 @@
   }
 
   async function saveNewTopic(request: CreateTopic): Promise<void> {
-    if (!currentRoomId.value || !currentChannelId.value) return;
+    if (!currentRoomId.value || !currentChannelId.value) {
+      return;
+    }
     const roomId = currentRoomId.value;
     const channelId = currentChannelId.value;
     await saveSetup(async () => {
@@ -1267,7 +1418,9 @@
   }
 
   async function saveTopic(topicId: string, request: CreateTopic): Promise<void> {
-    if (!currentRoomId.value || !currentChannelId.value) return;
+    if (!currentRoomId.value || !currentChannelId.value) {
+      return;
+    }
     const roomId = currentRoomId.value;
     const channelId = currentChannelId.value;
     await saveSetup(async () => {
@@ -1284,12 +1437,15 @@
       !currentRoomId.value ||
       !currentChannelId.value ||
       !deleteTarget.value
-    )
+    ) {
       return;
+    }
     const roomId = currentRoomId.value;
     const channelId = currentChannelId.value;
     const target = deleteTarget.value;
-    if (target.kind === "channel" && (target.node.isDefault || pendingPublication.value)) return;
+    if (target.kind === "channel" && (target.node.isDefault || pendingPublication.value)) {
+      return;
+    }
     saving.value = true;
     setupError.value = null;
     try {
@@ -1319,10 +1475,14 @@
       toasts.success({
         key: target.kind === "topic" ? "notice.topicDeleted" : "notice.memberDeleted",
       });
-      if (currentRoomId.value === roomId) deleteTarget.value = undefined;
+      if (currentRoomId.value === roomId) {
+        deleteTarget.value = undefined;
+      }
     } catch (caught) {
       const message = describeApiError(caught, "errors.remove");
-      if (currentRoomId.value === roomId) setupError.value = message;
+      if (currentRoomId.value === roomId) {
+        setupError.value = message;
+      }
       toasts.error(message);
     } finally {
       saving.value = false;
@@ -1332,7 +1492,9 @@
   async function showReference(messageId: string): Promise<void> {
     const roomId = currentRoomId.value;
     const channelId = currentChannelId.value;
-    if (!roomId || !channelId) return;
+    if (!roomId || !channelId) {
+      return;
+    }
     if (!visibleMessages.value.some((message) => message.id === messageId)) {
       const version = loadVersion;
       try {
@@ -1342,13 +1504,19 @@
           queryController?.signal,
           channelId,
         );
-        if (version !== loadVersion) return;
+        if (version !== loadVersion) {
+          return;
+        }
         selectedTopicId.value = undefined;
         selectedMemberId.value = undefined;
         resetSearch();
-        if (!(await loadRoom({ beforeSeq: message.seq + 1 }))) return;
+        if (!(await loadRoom({ beforeSeq: message.seq + 1 }))) {
+          return;
+        }
       } catch (caught) {
-        if (version === loadVersion) toasts.error(describeApiError(caught, "errors.reference"));
+        if (version === loadVersion) {
+          toasts.error(describeApiError(caught, "errors.reference"));
+        }
         return;
       }
     }
@@ -1385,15 +1553,22 @@
       keyword.value = searchText.value.trim();
       void loadRoom();
       void messageQueue.refresh();
-      if (setupMode.value === "member") void loadSessions();
-    } else void initialize();
+      if (setupMode.value === "member") {
+        void loadSessions();
+      }
+    } else {
+      void initialize();
+    }
   });
   onBeforeUnmount(pauseReads);
 
   watch(searchText, (value) => {
     clearTimeout(searchTimer);
-    if (!value.trim()) void applySearch();
-    else searchTimer = setTimeout(() => void applySearch(), 300);
+    if (!value.trim()) {
+      void applySearch();
+    } else {
+      searchTimer = setTimeout(() => void applySearch(), 300);
+    }
   });
 
   watch(
@@ -1413,9 +1588,12 @@
         channelId !== previousChannelId ||
         topicId !== previousTopicId ||
         memberId !== previousMemberId
-      )
+      ) {
         messageQueue.reset();
-      if (active.value && roomId && channelId && snapshot.value) void messageQueue.refresh();
+      }
+      if (active.value && roomId && channelId && snapshot.value) {
+        void messageQueue.refresh();
+      }
     },
   );
 
@@ -1448,7 +1626,9 @@
       loading.value = false;
       return;
     }
-    if (channelId !== currentChannelId.value) void openChannel(roomId, channelId);
+    if (channelId !== currentChannelId.value) {
+      void openChannel(roomId, channelId);
+    }
   });
 
   onMounted(initialize);

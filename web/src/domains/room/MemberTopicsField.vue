@@ -92,7 +92,9 @@
   });
 
   async function createInlineTopic(): Promise<void> {
-    if (props.disabled || busy.value || !props.roomId || !props.channelId) return;
+    if (props.disabled || busy.value || !props.roomId || !props.channelId) {
+      return;
+    }
     const topicName = newTopicName.value.trim();
     topicNameError.value = null;
     topicRequestError.value = null;
@@ -102,7 +104,9 @@
     }
     const existing = props.topics.find((topic) => topic.name === topicName);
     if (existing) {
-      if (!topicIds.value.includes(existing.id)) topicIds.value = [...topicIds.value, existing.id];
+      if (!topicIds.value.includes(existing.id)) {
+        topicIds.value = [...topicIds.value, existing.id];
+      }
       newTopicName.value = "";
       return;
     }

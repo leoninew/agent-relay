@@ -254,7 +254,9 @@
   );
   let previousScroll = 0;
   function onImageError(event: Event): void {
-    if (!(event.target instanceof HTMLImageElement)) return;
+    if (!(event.target instanceof HTMLImageElement)) {
+      return;
+    }
     const frame = event.target.closest(".message-image-frame");
     const failure = frame?.querySelector<HTMLElement>(".message-image-failure");
     if (failure) {
@@ -270,13 +272,16 @@
   }
 
   function restoreScroll(): void {
-    if (timeline.value)
+    if (timeline.value) {
       timeline.value.scrollTop = previousScroll + timeline.value.scrollHeight - previousHeight;
+    }
   }
 
   function capturePosition() {
     const element = timeline.value;
-    if (!element) return undefined;
+    if (!element) {
+      return undefined;
+    }
     const top = element.getBoundingClientRect().top;
     const anchor = Array.from(element.querySelectorAll<HTMLElement>("article")).find(
       (article) => article.getBoundingClientRect().bottom > top,
@@ -291,7 +296,9 @@
 
   function restorePosition(position: NonNullable<ReturnType<typeof capturePosition>>): void {
     const element = timeline.value;
-    if (!element) return;
+    if (!element) {
+      return;
+    }
     if (position.atEnd) {
       scrollToEnd();
       return;
@@ -299,10 +306,12 @@
     const anchor = Array.from(element.querySelectorAll<HTMLElement>("article")).find(
       (article) => article.dataset.messageId === position.messageId,
     );
-    if (anchor)
+    if (anchor) {
       element.scrollTop +=
         anchor.getBoundingClientRect().top - element.getBoundingClientRect().top - position.offset;
-    else element.scrollTop = position.scrollTop;
+    } else {
+      element.scrollTop = position.scrollTop;
+    }
   }
 
   function findMember(memberId: string | null): Member | undefined {
@@ -364,7 +373,9 @@
   }
 
   function startsNewMinute(index: number): boolean {
-    if (index === 0) return true;
+    if (index === 0) {
+      return true;
+    }
     const previousMinute = Math.floor(
       new Date(props.messages[index - 1].createdAt).getTime() / 60000,
     );

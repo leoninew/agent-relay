@@ -167,17 +167,27 @@
   );
 
   function onMenuOpen(open: boolean): void {
-    if (open && !preferences.saving && !preferences.loading) void preferences.load();
+    if (open && !preferences.saving && !preferences.loading) {
+      void preferences.load();
+    }
   }
 
   async function selectLanguage(language: LanguagePreference): Promise<void> {
-    if (preferences.loading || preferences.saving || language === preferences.language) return;
-    if (await preferences.save(language)) toasts.success({ key: "appMenu.languageSaved" });
+    if (preferences.loading || preferences.saving || language === preferences.language) {
+      return;
+    }
+    if (await preferences.save(language)) {
+      toasts.success({ key: "appMenu.languageSaved" });
+    }
   }
 
   async function selectTheme(theme: ThemePreference): Promise<void> {
-    if (preferences.loading || preferences.saving || theme === preferences.theme) return;
-    if (await preferences.saveTheme(theme)) toasts.success({ key: "appMenu.themeSaved" });
+    if (preferences.loading || preferences.saving || theme === preferences.theme) {
+      return;
+    }
+    if (await preferences.saveTheme(theme)) {
+      toasts.success({ key: "appMenu.themeSaved" });
+    }
   }
 
   async function openAbout(): Promise<void> {

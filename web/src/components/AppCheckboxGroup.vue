@@ -36,7 +36,9 @@
   const root = useTemplateRef<ComponentPublicInstance>("root");
 
   async function clear(): Promise<void> {
-    if (props.disabled) return;
+    if (props.disabled) {
+      return;
+    }
     model.value = [];
     await nextTick();
     const element = root.value?.$el as HTMLElement | undefined;

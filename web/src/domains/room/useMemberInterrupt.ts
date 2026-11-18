@@ -29,15 +29,20 @@ export function useMemberInterrupt(
       member.presence !== "busy" ||
       member.deletedAt ||
       !member.sessionId
-    )
+    ) {
       return;
+    }
     const key = JSON.stringify([currentRoom, currentChannel, member.id]);
-    if (pending.value.has(key)) return;
+    if (pending.value.has(key)) {
+      return;
+    }
     const currentScope = scope();
     pending.value.set(key, { memberId: member.id, scope: currentScope });
     try {
       const result = await interruptRoomMember(currentRoom, member.id, currentChannel);
-      if (scope() !== currentScope) return;
+      if (scope() !== currentScope) {
+        return;
+      }
       const message = {
         key: {
           interrupted: "notice.memberInterrupted",
@@ -45,17 +50,25 @@ export function useMemberInterrupt(
         }[result.status],
         params: { name: member.name },
       };
-      if (result.status === "interrupted") toasts.success(message);
-      else toasts.info(message);
+      if (result.status === "interrupted") {
+        toasts.success(message);
+      } else {
+        toasts.info(message);
+      }
     } catch (caught) {
-      if (scope() !== currentScope) return;
+      if (scope() !== currentScope) {
+        return;
+      }
       toasts.error(describeApiError(caught, "errors.memberInterrupt"));
     } finally {
       try {
-        if (scope() === currentScope) await refresh(currentRoom, currentChannel);
+        if (scope() === currentScope) {
+          await refresh(currentRoom, currentChannel);
+        }
       } catch (caught) {
-        if (scope() === currentScope)
+        if (scope() === currentScope) {
           toasts.error(describeApiError(caught, "errors.sessionRefresh"));
+        }
       } finally {
         pending.value.delete(key);
       }

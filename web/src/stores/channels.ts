@@ -39,37 +39,49 @@ export const useChannelsStore = defineStore("channels", () => {
 
   function resolveChannelId(roomId: string, requested: string): string | undefined {
     const available = activeChannels(roomId);
-    if (!available.length) return undefined;
+    if (!available.length) {
+      return undefined;
+    }
     return available.some((candidate) => candidate.id === requested) ? requested : undefined;
   }
 
   async function load(roomId: string, force = false): Promise<Channel[]> {
     const key = roomCacheKey(roomId, "channels");
     const selectionKey = roomCacheKey(roomId, "selected-channel");
-    if (!force && loadedRooms.value[key]) return channels(roomId);
+    if (!force && loadedRooms.value[key]) {
+      return channels(roomId);
+    }
     const inFlight = pending.get(key);
-    if (inFlight) return inFlight;
+    if (inFlight) {
+      return inFlight;
+    }
     const controller = new AbortController();
     controllers.set(key, controller);
     loading.value[key] = true;
     errors.value[key] = null;
     const request = fetchChannels(roomId, controller.signal)
       .then((result) => {
-        if (controllers.get(key) !== controller) return result;
+        if (controllers.get(key) !== controller) {
+          return result;
+        }
         byRoom.value[key] = result;
         loadedRooms.value[key] = true;
         const stored = recent.value[selectionKey] ?? selectionStorage.load(roomId);
         const selected = stored ? resolveChannelId(roomId, stored) : undefined;
-        if (selected) recent.value[selectionKey] = selected;
-        else {
+        if (selected) {
+          recent.value[selectionKey] = selected;
+        } else {
           delete recent.value[selectionKey];
-          if (stored) selectionStorage.remove(roomId);
+          if (stored) {
+            selectionStorage.remove(roomId);
+          }
         }
         return result;
       })
       .catch((caught: unknown) => {
-        if (controllers.get(key) === controller)
+        if (controllers.get(key) === controller) {
           errors.value[key] = describeApiError(caught, "errors.channelLoad");
+        }
         throw caught;
       })
       .finally(() => {

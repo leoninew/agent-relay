@@ -9,9 +9,13 @@ export function isInlineTriggerPrefix(content: string, start: number): boolean {
 
 export function skillQueryAt(content: string, position: number): SkillQuery | undefined {
   const prefix = content.slice(0, position).match(/\$([\p{L}\p{N}_:./@-]*)$/u);
-  if (!prefix) return undefined;
+  if (!prefix) {
+    return undefined;
+  }
   const start = position - prefix[1].length - 1;
-  if (!isInlineTriggerPrefix(content, start) || !isSourcePosition(content, start)) return undefined;
+  if (!isInlineTriggerPrefix(content, start) || !isSourcePosition(content, start)) {
+    return undefined;
+  }
   const suffix = content.slice(position).match(/^[\p{L}\p{N}_:./@-]*/u)?.[0] ?? "";
   return {
     start,
@@ -52,8 +56,9 @@ export function scanInlineSource<T extends { end: number }>(
           marker[1][0] === fence.character &&
           marker[1].length >= fence.length &&
           !marker[2].trim()
-        )
+        ) {
           fence = undefined;
+        }
         index = lineEnd;
         continue;
       }
@@ -73,11 +78,14 @@ export function scanInlineSource<T extends { end: number }>(
     }
     if (content[index] === "`") {
       let runEnd = index + 1;
-      while (content[runEnd] === "`") runEnd++;
+      while (content[runEnd] === "`") {
+        runEnd++;
+      }
       const run = content.slice(index, runEnd);
       let close = content.indexOf(run, runEnd);
-      while (close >= 0 && (content[close - 1] === "`" || content[close + run.length] === "`"))
+      while (close >= 0 && (content[close - 1] === "`" || content[close + run.length] === "`")) {
         close = content.indexOf(run, close + run.length);
+      }
       index = close < 0 ? runEnd : close + run.length;
       continue;
     }
@@ -85,7 +93,9 @@ export function scanInlineSource<T extends { end: number }>(
     if (reference) {
       references.push(reference);
       index = reference.end;
-    } else index++;
+    } else {
+      index++;
+    }
   }
   return references;
 }
@@ -147,13 +157,17 @@ export function referencedCapabilities(
   const references: CapabilityReference[] = [];
   for (const reference of inlineSkills(content)) {
     const skill = skills.get(reference.id);
-    if (!skill || seen.has(skill.id)) continue;
+    if (!skill || seen.has(skill.id)) {
+      continue;
+    }
     seen.add(skill.id);
     references.push(skill);
   }
   for (const reference of candidates) {
     const key = `mcp:${reference.id}`;
-    if (reference.type === "skill" || seen.has(key)) continue;
+    if (reference.type === "skill" || seen.has(key)) {
+      continue;
+    }
     seen.add(key);
     references.push(reference);
   }

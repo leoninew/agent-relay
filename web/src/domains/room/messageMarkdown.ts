@@ -23,11 +23,15 @@ markdown.renderer.rules.image = (tokens, index, options, environment, renderer) 
   return `<span class="message-image-frame">${image}<span class="message-image-failure" hidden>${failure}</span></span>`;
 };
 markdown.inline.ruler.before("link", "skill_reference", (state, silent) => {
-  if (state.src[state.pos] !== "[" || state.linkLevel > 0) return false;
+  if (state.src[state.pos] !== "[" || state.linkLevel > 0) {
+    return false;
+  }
   const reference = skillAt(state.src, state.pos);
   const environment = state.env as MessageEnvironment;
   const skill = reference && environment.skills.get(reference.id);
-  if (!reference || !skill) return false;
+  if (!reference || !skill) {
+    return false;
+  }
   if (!silent) {
     const token = state.push("skill_reference", "span", 0);
     token.content = skill.name;

@@ -6,7 +6,9 @@ import type { Member, SessionModelCatalog } from "@/services/roomApi";
 import { useToastsStore } from "@/stores/toasts";
 
 export function modelTarget(members: Member[], selectedIds: string[]): Member | undefined {
-  if (selectedIds.length !== 1) return undefined;
+  if (selectedIds.length !== 1) {
+    return undefined;
+  }
   return members.find(
     (member) =>
       member.id === selectedIds[0] &&
@@ -46,17 +48,20 @@ export function useSessionModels(
   let disposed = false;
 
   function validate(result: SessionModelCatalog, sessionId: string): SessionModelCatalog {
-    if (result.sessionId !== sessionId)
+    if (result.sessionId !== sessionId) {
       throw new ApiClientError("Session binding changed.", "http_error", {
         status: 409,
         code: "session_binding_changed",
       });
+    }
     return result;
   }
 
   async function refresh(): Promise<void> {
     const target = member();
-    if (disposed || !scope.value || !target?.sessionId || updating.value) return;
+    if (disposed || !scope.value || !target?.sessionId || updating.value) {
+      return;
+    }
     const version = generation;
     const sequence = ++readSequence;
     const sessionId = target.sessionId;
@@ -64,13 +69,18 @@ export function useSessionModels(
     catalog.value = undefined;
     try {
       const result = await fetchMemberModels(roomId(), target.id, channelId());
-      if (version !== generation || sequence !== readSequence) return;
+      if (version !== generation || sequence !== readSequence) {
+        return;
+      }
       catalog.value = validate(result, sessionId);
     } catch (caught) {
-      if (version === generation && sequence === readSequence)
+      if (version === generation && sequence === readSequence) {
         toasts.error(describeApiError(caught, "errors.memberModels"));
+      }
     } finally {
-      if (version === generation && sequence === readSequence) loading.value = false;
+      if (version === generation && sequence === readSequence) {
+        loading.value = false;
+      }
     }
   }
 
@@ -85,8 +95,9 @@ export function useSessionModels(
       updating.value ||
       !catalog.value?.models.some((option) => option.model === model) ||
       catalog.value.currentModel === model
-    )
+    ) {
       return;
+    }
     const version = generation;
     const sessionId = target.sessionId;
     let failed = false;
@@ -96,13 +107,18 @@ export function useSessionModels(
         sessionId,
         model,
       });
-      if (version !== generation) return;
+      if (version !== generation) {
+        return;
+      }
       const confirmed = validate(result, sessionId);
-      if (confirmed.currentModel !== model)
+      if (confirmed.currentModel !== model) {
         throw new ApiClientError("Unconfirmed model update.", "contract_mismatch");
+      }
       catalog.value = confirmed;
     } catch (caught) {
-      if (version !== generation) return;
+      if (version !== generation) {
+        return;
+      }
       const rejected =
         caught instanceof ApiClientError &&
         caught.kind === "http_error" &&
@@ -118,7 +134,9 @@ export function useSessionModels(
       catalog.value = undefined;
     } finally {
       pending.value.delete(key);
-      if (scope.value === key && (version !== generation || failed)) await refresh();
+      if (scope.value === key && (version !== generation || failed)) {
+        await refresh();
+      }
     }
   }
 

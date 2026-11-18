@@ -19,13 +19,19 @@ export function subscribeRoomEvents(
   let generation = 0;
 
   async function consume(page: RoomEventPage): Promise<void> {
-    if (stopped || (!page.resyncRequired && page.nextEventId <= afterEventId)) return;
+    if (stopped || (!page.resyncRequired && page.nextEventId <= afterEventId)) {
+      return;
+    }
     await apply(page);
-    if (!stopped) afterEventId = page.nextEventId;
+    if (!stopped) {
+      afterEventId = page.nextEventId;
+    }
   }
 
   function reconnect(): void {
-    if (stopped || timer) return;
+    if (stopped || timer) {
+      return;
+    }
     status?.("reconnecting");
     timer = setTimeout(() => {
       timer = undefined;
@@ -40,10 +46,14 @@ export function subscribeRoomEvents(
       let page: RoomEventPage;
       do {
         page = await fetchRoomEvents(roomId, afterEventId, controller.signal, channelId);
-        if (stopped) return;
+        if (stopped) {
+          return;
+        }
         await consume(page);
       } while (!stopped && page.hasMore && !page.resyncRequired);
-      if (stopped) return;
+      if (stopped) {
+        return;
+      }
       const url = new URL(
         roomResourcePath(roomId, channelId, "/event/stream"),
         window.location.href,
@@ -53,16 +63,22 @@ export function subscribeRoomEvents(
       const active = new WebSocket(url);
       socket = active;
       active.onopen = () => {
-        if (!stopped) status?.("connected");
+        if (!stopped) {
+          status?.("connected");
+        }
       };
       active.onmessage = (event: MessageEvent<string>) => {
         chain = chain
           .then(async () => {
-            if (stopped || currentGeneration !== generation) return;
+            if (stopped || currentGeneration !== generation) {
+              return;
+            }
             await consume(JSON.parse(event.data) as RoomEventPage);
           })
           .catch(() => {
-            if (currentGeneration === generation) generation++;
+            if (currentGeneration === generation) {
+              generation++;
+            }
             active.close();
             reconnect();
           });
@@ -80,7 +96,9 @@ export function subscribeRoomEvents(
     stopped = true;
     generation++;
     controller.abort();
-    if (timer) clearTimeout(timer);
+    if (timer) {
+      clearTimeout(timer);
+    }
     socket?.close();
   };
 }

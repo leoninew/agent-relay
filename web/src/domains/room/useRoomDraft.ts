@@ -15,7 +15,9 @@ export function useRoomDraft(
     () => (currentScope.value ? drafts.value[currentScope.value] : undefined),
     (draft) => {
       const scope = currentScope.value;
-      if (!scope || !draft || locked()) return;
+      if (!scope || !draft || locked()) {
+        return;
+      }
       if (
         draft.content ||
         draft.topicIds.length ||
@@ -24,7 +26,9 @@ export function useRoomDraft(
         draft.replyToMessageId
       ) {
         storage.save(scope, draft);
-      } else storage.remove(scope);
+      } else {
+        storage.remove(scope);
+      }
     },
     { deep: true, flush: "sync" },
   );
@@ -56,8 +60,11 @@ export function useRoomDraft(
       mentionedMemberIds: [...sent.mentionedMemberIds],
     };
     drafts.value[scope] = draft;
-    if (draft.topicIds.length || draft.mentionedMemberIds.length) storage.save(scope, draft);
-    else storage.remove(scope);
+    if (draft.topicIds.length || draft.mentionedMemberIds.length) {
+      storage.save(scope, draft);
+    } else {
+      storage.remove(scope);
+    }
   }
 
   return { drafts, open, finish };

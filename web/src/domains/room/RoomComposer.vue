@@ -398,8 +398,9 @@
     }
     // Retain explicitly selected identities for editor undo after the last occurrence is deleted.
     for (const skill of [...(draft.value.capabilities ?? []), ...additional]) {
-      if (skill.type === "skill")
+      if (skill.type === "skill") {
         knownSkills.set(skill.id, { type: "skill", id: skill.id, name: skill.name });
+      }
     }
     return referencedCapabilities(content, [
       ...(draft.value.capabilities ?? []).filter((reference) => reference.type !== "skill"),
@@ -413,7 +414,9 @@
     memberMentions: MemberMentionRange[],
     addedMemberIds?: string[],
   ): void {
-    if (!props.ready || props.sending || props.locked) return;
+    if (!props.ready || props.sending || props.locked) {
+      return;
+    }
     insertionTooLong.value = false;
     draft.value = updateComposerContent(
       draft.value,
@@ -425,10 +428,14 @@
   }
 
   function selectOption(option: (typeof options.value)[number]): void {
-    if (!pickerOpen.value) return;
+    if (!pickerOpen.value) {
+      return;
+    }
     if (option.type === "member") {
       const member = agentMembers.value.find((candidate) => candidate.id === option.id);
-      if (member) editor.value?.insertMember(member);
+      if (member) {
+        editor.value?.insertMember(member);
+      }
       return;
     }
     insertionTooLong.value = false;
@@ -436,7 +443,9 @@
   }
 
   function removeCapability(reference: CapabilityReference): void {
-    if (props.sending || props.locked) return;
+    if (props.sending || props.locked) {
+      return;
+    }
     insertionTooLong.value = false;
     draft.value = {
       ...draft.value,
@@ -446,18 +455,21 @@
     };
   }
   const contentError = computed(() => {
-    if (insertionTooLong.value || content.value.length > 6000)
+    if (insertionTooLong.value || content.value.length > 6000) {
       return t("validation.contentTooLong");
+    }
     const skills = new Set(
       draft.value.capabilities
         ?.filter((reference) => reference.type === "skill")
         .map((item) => item.id),
     );
     const inline = inlineSkills(content.value);
-    if (inline.some((reference) => !skills.has(reference.id)))
+    if (inline.some((reference) => !skills.has(reference.id))) {
       return t("validation.skillReference");
-    if (!withoutInlineSkills(content.value).trim() && !inline.length)
+    }
+    if (!withoutInlineSkills(content.value).trim() && !inline.length) {
       return t("validation.content");
+    }
     return undefined;
   });
   const showContentError = computed(
@@ -484,9 +496,15 @@
       : t("validation.recipients"),
   );
   const sendDisabledReason = computed(() => {
-    if (uploading.value) return t("composer.imagesUploading");
-    if (contentError.value) return contentError.value;
-    if (!hasRecipients.value) return routingError.value;
+    if (uploading.value) {
+      return t("composer.imagesUploading");
+    }
+    if (contentError.value) {
+      return contentError.value;
+    }
+    if (!hasRecipients.value) {
+      return routingError.value;
+    }
     return undefined;
   });
 
@@ -499,7 +517,9 @@
       () => props.sending,
     ],
     () => {
-      if (!props.ready || props.locked || props.sending) return;
+      if (!props.ready || props.locked || props.sending) {
+        return;
+      }
       const validTopicIds = topicIds.value.filter((id) =>
         props.topics.some((topic) => topic.id === id),
       );
@@ -522,19 +542,29 @@
   );
 
   function addTopic(topicId: string): void {
-    if (props.sending || props.locked || topicIds.value.includes(topicId)) return;
-    if (!props.topics.some((topic) => topic.id === topicId && !topic.deletedAt)) return;
+    if (props.sending || props.locked || topicIds.value.includes(topicId)) {
+      return;
+    }
+    if (!props.topics.some((topic) => topic.id === topicId && !topic.deletedAt)) {
+      return;
+    }
     topicIds.value = [...topicIds.value, topicId];
   }
 
   function addMember(memberId: string): void {
-    if (props.sending || props.locked || mentionedMemberIds.value.includes(memberId)) return;
-    if (!agentMembers.value.some((member) => member.id === memberId)) return;
+    if (props.sending || props.locked || mentionedMemberIds.value.includes(memberId)) {
+      return;
+    }
+    if (!agentMembers.value.some((member) => member.id === memberId)) {
+      return;
+    }
     mentionedMemberIds.value = [...mentionedMemberIds.value, memberId];
   }
 
   function selectTopic(topicId?: string): void {
-    if (props.sending || props.locked) return;
+    if (props.sending || props.locked) {
+      return;
+    }
     topicIds.value =
       topicId && props.topics.some((topic) => topic.id === topicId && !topic.deletedAt)
         ? [topicId]
@@ -542,7 +572,9 @@
   }
 
   function selectMember(memberId?: string): void {
-    if (props.sending || props.locked) return;
+    if (props.sending || props.locked) {
+      return;
+    }
     mentionedMemberIds.value =
       memberId && agentMembers.value.some((member) => member.id === memberId) ? [memberId] : [];
   }
@@ -561,9 +593,13 @@
   }
 
   function submit(): void {
-    if (!props.ready || props.sending || props.locked || uploading.value) return;
+    if (!props.ready || props.sending || props.locked || uploading.value) {
+      return;
+    }
     attempted.value = true;
-    if (showContentError.value || showRecipientError.value) return;
+    if (showContentError.value || showRecipientError.value) {
+      return;
+    }
     const capabilities = capabilitiesForContent(content.value);
     emit("send", {
       content: content.value.trim(),
@@ -575,7 +611,9 @@
   }
 
   function onKeydown(event: KeyboardEvent): void {
-    if (composing.value || event.isComposing || event.keyCode === 229 || event.shiftKey) return;
+    if (composing.value || event.isComposing || event.keyCode === 229 || event.shiftKey) {
+      return;
+    }
     if (pickerOpen.value) {
       if (event.key === "Escape") {
         event.preventDefault();
@@ -598,7 +636,9 @@
       if (event.key === "Enter" || (event.key === "Tab" && options.value.length)) {
         event.preventDefault();
         const option = options.value[activeIndex.value];
-        if (option) selectOption(option);
+        if (option) {
+          selectOption(option);
+        }
         return;
       }
     }

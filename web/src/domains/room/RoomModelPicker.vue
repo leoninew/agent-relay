@@ -130,11 +130,15 @@
   );
 
   function retryRead(): void {
-    if (!props.disabled && !catalog.value && !loading.value && !updating.value) void refresh();
+    if (!props.disabled && !catalog.value && !loading.value && !updating.value) {
+      void refresh();
+    }
   }
 
   function cancelClose(): void {
-    if (closeTimer !== undefined) clearTimeout(closeTimer);
+    if (closeTimer !== undefined) {
+      clearTimeout(closeTimer);
+    }
     closeTimer = undefined;
   }
 

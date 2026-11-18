@@ -10,8 +10,11 @@ function createRoot(): ThemeRoot & { classes: Set<string> } {
       add: (name) => classes.add(name),
       remove: (name) => classes.delete(name),
       toggle: (name, force) => {
-        if (force ?? !classes.has(name)) classes.add(name);
-        else classes.delete(name);
+        if (force ?? !classes.has(name)) {
+          classes.add(name);
+        } else {
+          classes.delete(name);
+        }
         return classes.has(name);
       },
     },
@@ -32,7 +35,9 @@ function createMedia(initial: boolean): ThemeMediaQuery & {
       this.listener = listener;
     },
     removeEventListener(_type, listener) {
-      if (this.listener === listener) this.listener = null;
+      if (this.listener === listener) {
+        this.listener = null;
+      }
     },
     set(matches) {
       this.matches = matches;

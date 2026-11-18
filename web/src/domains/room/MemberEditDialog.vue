@@ -115,14 +115,22 @@
     { immediate: true },
   );
   watch(name, (value) => {
-    if (value.trim()) delete errors.value.name;
+    if (value.trim()) {
+      delete errors.value.name;
+    }
   });
 
   function submit(): void {
-    if (!props.member || props.saving || topicSaving.value) return;
+    if (!props.member || props.saving || topicSaving.value) {
+      return;
+    }
     errors.value = {};
-    if (!name.value.trim()) errors.value.name = { key: "validation.name" };
-    if (Object.keys(errors.value).length) return;
+    if (!name.value.trim()) {
+      errors.value.name = { key: "validation.name" };
+    }
+    if (Object.keys(errors.value).length) {
+      return;
+    }
     emit("save", props.member.id, { name: name.value.trim(), topicIds: [...topicIds.value] });
   }
 </script>

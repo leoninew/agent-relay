@@ -17,13 +17,19 @@ export function useRoomPanel(messages: () => RoomMessage[]) {
   const drawerOpen = ref(false);
   const queueScope = computed<MessageQueueScope>(() => {
     const selected = target.value;
-    if (selected?.kind === "topic") return { topicId: selected.id };
-    if (selected?.kind === "member") return { memberId: selected.id };
+    if (selected?.kind === "topic") {
+      return { topicId: selected.id };
+    }
+    if (selected?.kind === "member") {
+      return { memberId: selected.id };
+    }
     return {};
   });
   const message = computed(() => {
     const selected = target.value;
-    if (!selected) return messages().at(-1);
+    if (!selected) {
+      return messages().at(-1);
+    }
     return selected.kind === "message" ? selected.message : undefined;
   });
 
@@ -31,10 +37,13 @@ export function useRoomPanel(messages: () => RoomMessage[]) {
     const selection = kind === "topic" ? selectedTopicId : selectedMemberId;
     const changed = selection.value !== resourceId;
     selection.value = resourceId;
-    if (resourceId !== undefined) target.value = { kind, id: resourceId };
-    else if (selectedTopicId.value === undefined && selectedMemberId.value === undefined) {
+    if (resourceId !== undefined) {
+      target.value = { kind, id: resourceId };
+    } else if (selectedTopicId.value === undefined && selectedMemberId.value === undefined) {
       closeDetails();
-    } else if (target.value?.kind === kind) closeDetails();
+    } else if (target.value?.kind === kind) {
+      closeDetails();
+    }
     return changed;
   }
 
@@ -62,9 +71,13 @@ export function useRoomPanel(messages: () => RoomMessage[]) {
 
   function syncMessages(messages: RoomMessage[]): void {
     const current = target.value;
-    if (current?.kind !== "message") return;
+    if (current?.kind !== "message") {
+      return;
+    }
     const updated = messages.find((candidate) => candidate.id === current.message.id);
-    if (updated) target.value = { kind: "message", message: updated };
+    if (updated) {
+      target.value = { kind: "message", message: updated };
+    }
   }
 
   function reset(): void {

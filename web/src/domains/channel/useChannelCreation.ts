@@ -29,10 +29,15 @@ export function useChannelCreation(
   const busy = computed(() => checking.value || step.value === "creating");
 
   function savePending(room: string, sourceChannel: string, value?: PendingCreation): void {
-    if (!storage || !room) return;
+    if (!storage || !room) {
+      return;
+    }
     const key = channelCacheKey(room, sourceChannel, "channel-creation");
-    if (value) storage.setItem(key, JSON.stringify(value));
-    else storage.removeItem(key);
+    if (value) {
+      storage.setItem(key, JSON.stringify(value));
+    } else {
+      storage.removeItem(key);
+    }
   }
 
   function reset(): void {
@@ -67,10 +72,14 @@ export function useChannelCreation(
   }
 
   async function submit(): Promise<boolean> {
-    if (busy.value || step.value === "unknown") return false;
+    if (busy.value || step.value === "unknown") {
+      return false;
+    }
     const room = roomId();
     const sourceChannel = sourceChannelId();
-    if (!room || !sourceChannel || !name.value.trim()) return false;
+    if (!room || !sourceChannel || !name.value.trim()) {
+      return false;
+    }
     channelId.value = `channel-${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}`;
     const request: CreateChannel = {
       name: name.value.trim(),
@@ -92,7 +101,9 @@ export function useChannelCreation(
         caught instanceof ApiClientError && caught.status && caught.status < 500
           ? "form"
           : "unknown";
-      if (step.value === "form") savePending(room, sourceChannel);
+      if (step.value === "form") {
+        savePending(room, sourceChannel);
+      }
       return false;
     }
   }
@@ -100,7 +111,9 @@ export function useChannelCreation(
   async function lookup(selectedChannelId: string): Promise<boolean> {
     const room = roomId();
     const sourceChannel = sourceChannelId();
-    if (!room || !sourceChannel || busy.value) return false;
+    if (!room || !sourceChannel || busy.value) {
+      return false;
+    }
     checking.value = true;
     error.value = undefined;
     try {

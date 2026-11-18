@@ -20,10 +20,13 @@ export function mergeRefreshedSnapshot(
 ): RoomSnapshot {
   const firstSeq = incoming.messages[0]?.seq;
   const incomingIds = new Set(incoming.messages.map((message) => message.id));
-  if (firstSeq === undefined || !previous.messages.some((message) => incomingIds.has(message.id)))
+  if (firstSeq === undefined || !previous.messages.some((message) => incomingIds.has(message.id))) {
     return incoming;
+  }
   const older = previous.messages.filter((message) => message.seq < firstSeq);
-  if (!older.length) return incoming;
+  if (!older.length) {
+    return incoming;
+  }
   return {
     ...incoming,
     messages: [...older, ...incoming.messages],

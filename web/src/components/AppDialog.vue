@@ -60,27 +60,38 @@
   watch(
     () => props.open,
     (open) => {
-      if (open)
+      if (open) {
         previousFocus =
           document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      }
     },
   );
 
   function updateOpen(open: boolean): void {
-    if (props.busy) return;
+    if (props.busy) {
+      return;
+    }
     emit("update:open", open);
-    if (!open) emit("close");
+    if (!open) {
+      emit("close");
+    }
   }
 
   function preventBusyClose(event: Event): void {
-    if (props.busy) event.preventDefault();
+    if (props.busy) {
+      event.preventDefault();
+    }
   }
 
   function focusInitial(event: Event): void {
-    if (!props.initialFocus || !(event.target instanceof HTMLElement)) return;
+    if (!props.initialFocus || !(event.target instanceof HTMLElement)) {
+      return;
+    }
     const target = event.target.querySelector<HTMLElement>(props.initialFocus);
     target?.focus();
-    if (!target || target.ownerDocument.activeElement !== target) return;
+    if (!target || target.ownerDocument.activeElement !== target) {
+      return;
+    }
     event.preventDefault();
     if (
       (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) &&

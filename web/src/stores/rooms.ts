@@ -67,22 +67,30 @@ export const useRoomsStore = defineStore("rooms", () => {
       }
     }
     for (const key of Object.keys(metadataVersions)) {
-      if (key.startsWith(`${roomCacheKey(roomId)}:channel:`)) delete metadataVersions[key];
+      if (key.startsWith(`${roomCacheKey(roomId)}:channel:`)) {
+        delete metadataVersions[key];
+      }
     }
     for (const key of Object.keys(activityVersions)) {
-      if (key.startsWith(`${roomCacheKey(roomId)}:channel:`)) delete activityVersions[key];
+      if (key.startsWith(`${roomCacheKey(roomId)}:channel:`)) {
+        delete activityVersions[key];
+      }
     }
     useChannelsStore().reset(roomId);
     removeRoomCacheStorage(roomId);
     rooms.value = rooms.value.filter((room) => room.id !== roomId);
-    if (recentRoomId.value === roomId) recentRoomId.value = undefined;
+    if (recentRoomId.value === roomId) {
+      recentRoomId.value = undefined;
+    }
   }
 
   async function update(roomId: string, request: UpdateRoom): Promise<Room> {
     const room = await updateRoom(roomId, request);
     updateRoomName(room);
     for (const [scope, snapshot] of Object.entries(snapshots.value)) {
-      if (scope.startsWith(`${roomCacheKey(room.id)}:channel:`)) snapshot.room = room;
+      if (scope.startsWith(`${roomCacheKey(room.id)}:channel:`)) {
+        snapshot.room = room;
+      }
     }
     return room;
   }
@@ -116,13 +124,17 @@ export const useRoomsStore = defineStore("rooms", () => {
 
   function updateRoomName(room: Room): void {
     const index = rooms.value.findIndex((candidate) => candidate.id === room.id);
-    if (index !== -1) rooms.value.splice(index, 1, room);
+    if (index !== -1) {
+      rooms.value.splice(index, 1, room);
+    }
   }
 
   function syncMetadata(metadata: RoomMetadata, channelId: string): void {
     const scope = snapshotScope(metadata.room.id, channelId);
     const snapshot = snapshots.value[scope];
-    if (!snapshot || metadata.eventId < (metadataVersions[scope] ?? 0)) return;
+    if (!snapshot || metadata.eventId < (metadataVersions[scope] ?? 0)) {
+      return;
+    }
     metadataVersions[scope] = metadata.eventId;
     snapshot.room = metadata.room;
     snapshot.topics = metadata.topics;
@@ -135,7 +147,9 @@ export const useRoomsStore = defineStore("rooms", () => {
   function syncActivity(roomId: string, activity: RoomActivity, channelId: string): void {
     const scope = snapshotScope(roomId, channelId);
     const snapshot = snapshots.value[scope];
-    if (!snapshot || activity.eventId < (activityVersions[scope] ?? 0)) return;
+    if (!snapshot || activity.eventId < (activityVersions[scope] ?? 0)) {
+      return;
+    }
     activityVersions[scope] = activity.eventId;
     snapshot.positions = activity.positions;
     snapshot.summary = activity.summary;

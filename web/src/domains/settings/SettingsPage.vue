@@ -70,10 +70,14 @@
   ]);
 
   async function reload(): Promise<void> {
-    if (await preferences.load()) selected.value = preferences.language;
+    if (await preferences.load()) {
+      selected.value = preferences.language;
+    }
   }
   async function save(): Promise<void> {
-    if (await preferences.save(selected.value)) toasts.success({ key: "settings.saved" });
+    if (await preferences.save(selected.value)) {
+      toasts.success({ key: "settings.saved" });
+    }
   }
   function goBack(): void {
     const roomId = rooms.recentRoomId;

@@ -193,7 +193,9 @@
   let changingViewport = false;
 
   function syncViewport(): void {
-    if (mobile.value === mobileQuery.matches && compact.value === compactQuery.matches) return;
+    if (mobile.value === mobileQuery.matches && compact.value === compactQuery.matches) {
+      return;
+    }
     changingViewport = true;
     mobile.value = mobileQuery.matches;
     compact.value = compactQuery.matches;
@@ -204,12 +206,17 @@
   }
 
   function savePanelState(panel: "navigation" | "details", collapsed: boolean): void {
-    if (!changingViewport) panelPreferences.setCollapsed(panel, collapsed);
+    if (!changingViewport) {
+      panelPreferences.setCollapsed(panel, collapsed);
+    }
   }
 
   function collapseDetails(): void {
-    if (!compact.value) detailsPanel.value?.collapse();
-    else emit("collapseDetails");
+    if (!compact.value) {
+      detailsPanel.value?.collapse();
+    } else {
+      emit("collapseDetails");
+    }
   }
 
   function closeNavigation(): void {
@@ -217,7 +224,9 @@
   }
 
   function updateDetailsOpen(open: boolean): void {
-    if (!open) emit("collapseDetails");
+    if (!open) {
+      emit("collapseDetails");
+    }
   }
 
   function restoreDetailsFocus(event: Event): void {
@@ -252,7 +261,9 @@
         previousDetailsFocus =
           document.activeElement instanceof HTMLElement ? document.activeElement : null;
       }
-      if (open && !compact.value && detailsPanel.value?.isCollapsed) restoreDetails();
+      if (open && !compact.value && detailsPanel.value?.isCollapsed) {
+        restoreDetails();
+      }
     },
   );
 
@@ -279,7 +290,9 @@
   watch(
     () => detailsPanel.value?.isCollapsed,
     (collapsed) => {
-      if (collapsed) emit("collapseDetails");
+      if (collapsed) {
+        emit("collapseDetails");
+      }
     },
   );
 

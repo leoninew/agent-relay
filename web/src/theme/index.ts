@@ -41,7 +41,9 @@ export function createSystemThemeMediaQuery(
     matchMedia = undefined;
   }
 
-  if (typeof matchMedia !== "function") return inertThemeMediaQuery();
+  if (typeof matchMedia !== "function") {
+    return inertThemeMediaQuery();
+  }
 
   try {
     const query = matchMedia(systemThemeQuery);
@@ -61,7 +63,9 @@ export function createSystemThemeMediaQuery(
 }
 
 export function resolveTheme(preference: ThemePreference, prefersDark: boolean): ResolvedTheme {
-  if (preference !== "system") return preference;
+  if (preference !== "system") {
+    return preference;
+  }
   return prefersDark ? "dark" : "light";
 }
 
@@ -76,7 +80,9 @@ export function createThemeRuntime(root: ThemeRoot, mediaQuery: ThemeMediaQuery)
   }
 
   function onSystemChange(): void {
-    if (preference === "system") apply();
+    if (preference === "system") {
+      apply();
+    }
   }
 
   mediaQuery.addEventListener("change", onSystemChange);

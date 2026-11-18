@@ -45,9 +45,13 @@ export function useMessageQueue(
 
   async function refresh(): Promise<void> {
     const currentRoom = roomId();
-    if (!currentRoom) return;
+    if (!currentRoom) {
+      return;
+    }
     const currentChannel = channelId();
-    if (!currentChannel) return;
+    if (!currentChannel) {
+      return;
+    }
     cancel();
     const requestVersion = version;
     controller = new AbortController();
@@ -71,16 +75,21 @@ export function useMessageQueue(
           requestVersion !== version ||
           currentRoom !== roomId() ||
           currentChannel !== channelId()
-        )
+        ) {
           return;
+        }
         loaded.push(...page.messages);
         cursor = page.nextBeforeSeq ?? undefined;
       } while (page.hasMore && loaded.length < desiredCount);
       apply(page, loaded);
     } catch (caught) {
-      if (requestVersion === version) error.value = describeApiError(caught, "errors.queueLoad");
+      if (requestVersion === version) {
+        error.value = describeApiError(caught, "errors.queueLoad");
+      }
     } finally {
-      if (requestVersion === version) loading.value = false;
+      if (requestVersion === version) {
+        loading.value = false;
+      }
     }
   }
 
@@ -92,10 +101,13 @@ export function useMessageQueue(
       nextBeforeSeq === null ||
       loading.value ||
       loadingMore.value
-    )
+    ) {
       return;
+    }
     const currentChannel = channelId();
-    if (!currentChannel) return;
+    if (!currentChannel) {
+      return;
+    }
     const requestVersion = version;
     controller = new AbortController();
     loadingMore.value = true;
@@ -103,29 +115,46 @@ export function useMessageQueue(
     try {
       const query = { ...scope(), beforeSeq: nextBeforeSeq, limit: 50 };
       const page = await fetchMessageQueue(currentRoom, query, controller.signal, currentChannel);
-      if (requestVersion !== version || currentRoom !== roomId() || currentChannel !== channelId())
+      if (
+        requestVersion !== version ||
+        currentRoom !== roomId() ||
+        currentChannel !== channelId()
+      ) {
         return;
+      }
       const combined = new Map(messages.value.map((message) => [message.id, message]));
-      for (const message of page.messages) combined.set(message.id, message);
+      for (const message of page.messages) {
+        combined.set(message.id, message);
+      }
       apply(page, [...combined.values()]);
     } catch (caught) {
-      if (requestVersion === version) error.value = describeApiError(caught, "errors.queueMore");
+      if (requestVersion === version) {
+        error.value = describeApiError(caught, "errors.queueMore");
+      }
     } finally {
-      if (requestVersion === version) loadingMore.value = false;
+      if (requestVersion === version) {
+        loadingMore.value = false;
+      }
     }
   }
 
   async function remove(messageId: string): Promise<void> {
     const currentRoom = roomId();
-    if (!currentRoom || removingId.value !== null) return;
+    if (!currentRoom || removingId.value !== null) {
+      return;
+    }
     const currentChannel = channelId();
-    if (!currentChannel) return;
+    if (!currentChannel) {
+      return;
+    }
     const currentScope = { ...scope() };
     removingId.value = messageId;
     removeError.value = null;
     try {
       await deleteQueueMessage(currentRoom, messageId, currentChannel);
-      if (currentRoom === roomId() && currentChannel === channelId()) await refresh();
+      if (currentRoom === roomId() && currentChannel === channelId()) {
+        await refresh();
+      }
     } catch (caught) {
       const selectedScope = scope();
       if (
@@ -133,8 +162,9 @@ export function useMessageQueue(
         currentChannel === channelId() &&
         currentScope.topicId === selectedScope.topicId &&
         currentScope.memberId === selectedScope.memberId
-      )
+      ) {
         removeError.value = describeApiError(caught, "errors.queueRemove");
+      }
     } finally {
       removingId.value = null;
     }

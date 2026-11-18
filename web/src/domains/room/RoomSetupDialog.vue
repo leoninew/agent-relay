@@ -306,11 +306,16 @@
   );
 
   function sessionStatus(session: SessionCandidate): string {
-    if (session.archived) return t("session.archived");
+    if (session.archived) {
+      return t("session.archived");
+    }
     if (!session.usable) {
-      if (session.unavailableReasonCode === "session_not_connected")
+      if (session.unavailableReasonCode === "session_not_connected") {
         return t("session.notConnected");
-      if (session.unavailableReasonCode === "session_error") return t("session.error");
+      }
+      if (session.unavailableReasonCode === "session_error") {
+        return t("session.error");
+      }
       return t("session.unavailable");
     }
     return t(session.presence === "busy" ? "session.busy" : "session.idle");
@@ -318,7 +323,9 @@
 
   function unavailableReason(session: SessionCandidate): string {
     const key = `session.${session.unavailableReasonCode}`;
-    if (session.unavailableReasonCode && te(key)) return t(key);
+    if (session.unavailableReasonCode && te(key)) {
+      return t(key);
+    }
     return t("session.unavailableReason");
   }
 
@@ -333,12 +340,17 @@
   });
 
   watch(sessionId, (selected, previous) => {
-    if (props.mode !== "member") return;
+    if (props.mode !== "member") {
+      return;
+    }
     const previousName = props.sessions?.find((session) => session.id === previous)?.name;
-    if (!name.value || name.value === previousName)
+    if (!name.value || name.value === previousName) {
       name.value =
         props.sessions?.find((session) => session.id === selected)?.name.slice(0, 80) ?? "";
-    if (selected) delete errors.value.session;
+    }
+    if (selected) {
+      delete errors.value.session;
+    }
   });
   watch(
     () => props.sessions,
@@ -348,40 +360,57 @@
         !sessions?.some(
           (session) => session.id === sessionId.value && !session.memberId && session.usable,
         )
-      )
+      ) {
         sessionId.value = "";
+      }
     },
   );
   watch(name, (value) => {
-    if (value.trim()) delete errors.value.name;
+    if (value.trim()) {
+      delete errors.value.name;
+    }
   });
   watch(workspacePath, (value) => {
-    if (value.trim()) delete errors.value.workspacePath;
+    if (value.trim()) {
+      delete errors.value.workspacePath;
+    }
   });
 
   function submit(): void {
-    if (props.saving || topicSaving.value) return;
-    if (props.mode === "member" && (props.sessionsLoading || props.sessionsError)) return;
+    if (props.saving || topicSaving.value) {
+      return;
+    }
+    if (props.mode === "member" && (props.sessionsLoading || props.sessionsError)) {
+      return;
+    }
     errors.value = {};
-    if (!name.value.trim()) errors.value.name = { key: "validation.name" };
+    if (!name.value.trim()) {
+      errors.value.name = { key: "validation.name" };
+    }
     if (props.mode === "room") {
-      if (!workspacePath.value.trim()) errors.value.workspacePath = { key: "validation.path" };
-      else if (!/^([a-zA-Z]:[\\/]|\/|\\\\)/.test(workspacePath.value.trim()))
+      if (!workspacePath.value.trim()) {
+        errors.value.workspacePath = { key: "validation.path" };
+      } else if (!/^([a-zA-Z]:[\\/]|\/|\\\\)/.test(workspacePath.value.trim())) {
         errors.value.workspacePath = { key: "validation.absolutePath" };
+      }
     }
     if (props.mode === "member") {
       if (
         !props.sessions?.some(
           (session) => session.id === sessionId.value && !session.memberId && session.usable,
         )
-      )
+      ) {
         errors.value.session = { key: "validation.session" };
+      }
     }
-    if (Object.keys(errors.value).length) return;
-    if (props.mode === "room" && props.room)
+    if (Object.keys(errors.value).length) {
+      return;
+    }
+    if (props.mode === "room" && props.room) {
       emit("updateRoom", { name: name.value.trim(), workspacePath: workspacePath.value });
-    else if (props.mode === "room")
+    } else if (props.mode === "room") {
       emit("createRoom", { name: name.value.trim(), workspacePath: workspacePath.value });
+    }
     if (props.mode === "member") {
       const request = {
         name: name.value.trim(),
@@ -391,8 +420,11 @@
     }
     if (props.mode === "topic") {
       const request = { name: name.value.trim(), description: description.value.trim() };
-      if (props.topic) emit("updateTopic", props.topic.id, request);
-      else emit("createTopic", request);
+      if (props.topic) {
+        emit("updateTopic", props.topic.id, request);
+      } else {
+        emit("createTopic", request);
+      }
     }
   }
 </script>

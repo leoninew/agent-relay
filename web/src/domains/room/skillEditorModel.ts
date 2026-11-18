@@ -19,9 +19,12 @@ export function skillEditorParts(
   let start = 0;
   for (const reference of inlineSkills(content)) {
     const skill = identities.get(reference.id);
-    if (!skill) continue;
-    if (reference.start > start)
+    if (!skill) {
+      continue;
+    }
+    if (reference.start > start) {
       parts.push({ start, end: reference.start, text: content.slice(start, reference.start) });
+    }
     parts.push({
       start: reference.start,
       end: reference.end,
@@ -30,7 +33,8 @@ export function skillEditorParts(
     });
     start = reference.end;
   }
-  if (start < content.length)
+  if (start < content.length) {
     parts.push({ start, end: content.length, text: content.slice(start) });
+  }
   return parts;
 }

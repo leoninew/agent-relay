@@ -78,8 +78,9 @@ describe("session model selection", () => {
   it("only targets exactly one directly selected active agent binding", () => {
     const members = roomFixture().members;
     expect(modelTarget(members, ["frontend-worker"])?.sessionId).toBe("session-frontend");
-    for (const selected of [[], ["frontend-worker", "backend-worker"], ["absent"], ["user"]])
+    for (const selected of [[], ["frontend-worker", "backend-worker"], ["absent"], ["user"]]) {
       expect(modelTarget(members, selected)).toBeUndefined();
+    }
     expect(
       modelTarget([{ ...members[0], deletedAt: "2026-11-15" }], [members[0].id]),
     ).toBeUndefined();
@@ -140,9 +141,13 @@ describe("session model selection", () => {
       vi.mocked(fetchMemberModels).mockResolvedValue(
         catalog(change === "binding" ? "rebound" : "session-frontend", "new"),
       );
-      if (change === "room") room.value = "other-room";
-      else if (change === "channel") channel.value = "other-channel";
-      else members.value[0].sessionId = "rebound";
+      if (change === "room") {
+        room.value = "other-room";
+      } else if (change === "channel") {
+        channel.value = "other-channel";
+      } else {
+        members.value[0].sessionId = "rebound";
+      }
       await setImmediate();
       old.resolve(catalog());
       await setImmediate();
@@ -204,7 +209,9 @@ describe("session model selection", () => {
         : "errors.session_model_update_unknown",
     );
     expect(useToastsStore().items[0].tone).toBe("error");
-    if (failure === "rejected") expect(useToastsStore().items[0].message.requestId).toBe("req");
+    if (failure === "rejected") {
+      expect(useToastsStore().items[0].message.requestId).toBe("req");
+    }
     expect(updateMemberModel).toHaveBeenCalledTimes(1);
     expect(fetchMemberModels).toHaveBeenCalledTimes(2);
   });

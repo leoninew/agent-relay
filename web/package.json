@@ -11,7 +11,7 @@
     "dev": "vite --mode dev",
     "build": "vue-tsc --build && vite build --mode prod",
     "lint": "eslint .",
-    "lint:fix": "eslint . --fix --fix-type=problem",
+    "lint:fix": "eslint . --fix --fix-type=problem,suggestion",
     "format": "prettier --check .",
     "format:write": "prettier --write .",
     "typecheck": "vue-tsc --build",

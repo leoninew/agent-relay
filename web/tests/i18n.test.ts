@@ -9,8 +9,9 @@ function entries(value: Record<string, unknown>, prefix = ""): Record<string, st
   return Object.fromEntries(
     Object.entries(value).flatMap(([key, item]) => {
       const path = prefix ? `${prefix}.${key}` : key;
-      if (typeof item === "string")
+      if (typeof item === "string") {
         return [[path, [...item.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort()]];
+      }
       return Object.entries(entries(item as Record<string, unknown>, path));
     }),
   );

@@ -31,7 +31,9 @@ export const usePreferencesStore = defineStore("preferences", () => {
     loading.value = true;
     try {
       const preferences = await fetchPreferences();
-      if (version !== generation) return false;
+      if (version !== generation) {
+        return false;
+      }
       apply(preferences);
       error.value = null;
       return true;
@@ -44,27 +46,37 @@ export const usePreferencesStore = defineStore("preferences", () => {
       }
       return false;
     } finally {
-      if (version === generation) loading.value = false;
+      if (version === generation) {
+        loading.value = false;
+      }
     }
   }
 
   async function saveUpdate(update: PreferencesUpdate): Promise<boolean> {
-    if (saving.value) return false;
+    if (saving.value) {
+      return false;
+    }
     const version = ++generation;
     loading.value = false;
     saving.value = true;
     error.value = null;
     try {
       const preferences = await updatePreferences(update);
-      if (version !== generation) return false;
+      if (version !== generation) {
+        return false;
+      }
       apply(preferences);
       return true;
     } catch (caught) {
-      if (version !== generation) return false;
+      if (version !== generation) {
+        return false;
+      }
       if (caught instanceof ApiClientError && ["timeout", "network_error"].includes(caught.kind)) {
         try {
           const confirmed = await fetchPreferences();
-          if (version !== generation) return false;
+          if (version !== generation) {
+            return false;
+          }
           apply(confirmed);
           if (
             (update.language === undefined || confirmed.language === update.language) &&
@@ -73,7 +85,9 @@ export const usePreferencesStore = defineStore("preferences", () => {
             return true;
           }
         } catch {
-          if (version !== generation) return false;
+          if (version !== generation) {
+            return false;
+          }
           error.value = { key: "settings.saveUnknown", requestId: caught.requestId };
           return false;
         }

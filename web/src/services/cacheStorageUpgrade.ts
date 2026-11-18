@@ -10,8 +10,12 @@ function storageKeys(storage: Storage): string[] {
 
 function moveKey(storage: Storage, previous: string, current: string): void {
   const value = storage.getItem(previous);
-  if (value === null) return;
-  if (storage.getItem(current) === null) storage.setItem(current, value);
+  if (value === null) {
+    return;
+  }
+  if (storage.getItem(current) === null) {
+    storage.setItem(current, value);
+  }
   storage.removeItem(previous);
 }
 

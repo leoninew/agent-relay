@@ -232,7 +232,9 @@
   }
 
   async function saveRoom(request: CreateRoom): Promise<void> {
-    if (saving.value) return;
+    if (saving.value) {
+      return;
+    }
     saving.value = true;
     createError.value = null;
     try {
@@ -252,7 +254,9 @@
   }
 
   async function editAfterMenuClose(event: Event, room: Room): Promise<void> {
-    if (pendingRoomEditId !== room.id) return;
+    if (pendingRoomEditId !== room.id) {
+      return;
+    }
     pendingRoomEditId = undefined;
     event.preventDefault();
     roomsStore.createOpen = false;
@@ -268,12 +272,16 @@
 
   async function renameRoom(request: UpdateRoom): Promise<void> {
     const room = editingRoom.value;
-    if (!room || saving.value) return;
+    if (!room || saving.value) {
+      return;
+    }
     saving.value = true;
     renameError.value = null;
     try {
       const updated = await roomsStore.update(room.id, request);
-      if (updated.workspacePath !== room.workspacePath) await channelsStore.load(room.id, true);
+      if (updated.workspacePath !== room.workspacePath) {
+        await channelsStore.load(room.id, true);
+      }
       editingRoom.value = undefined;
       toasts.success({ key: "notice.roomRenamed" });
     } catch (caught) {
@@ -298,7 +306,9 @@
 
   async function deleteRoom(): Promise<void> {
     const room = roomToDelete.value;
-    if (!room || deleting.value) return;
+    if (!room || deleting.value) {
+      return;
+    }
     deleting.value = true;
     deleteError.value = null;
     try {
@@ -340,7 +350,9 @@
   watch(
     () => roomsStore.createOpen,
     (open) => {
-      if (open) createError.value = null;
+      if (open) {
+        createError.value = null;
+      }
     },
   );
 </script>
