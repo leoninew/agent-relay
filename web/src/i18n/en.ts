@@ -136,6 +136,7 @@ export default {
     backToDefault: "Back to default channel",
   },
   navigation: {
+    newMessages: "New messages",
     rooms: "Rooms",
     switchRoom: "Switch room: {name}",
     reorderRoom: "{name} (drag to reorder, or use Alt and the arrow keys)",
@@ -445,6 +446,7 @@ export default {
   },
   appMenu: {
     title: "Application menu",
+    githubRepository: "Conflua on GitHub (opens in a new tab)",
     about: "About",
     version: "Version",
     versionUnavailable: "Version unavailable",

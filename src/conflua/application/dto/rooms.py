@@ -5,6 +5,12 @@ from conflua.application.dto.positions import TopicPosition
 from conflua.domain.rooms.models import Member, Room, RoomChangeKind, RoomModel, Session, Topic
 
 
+class ChannelMessageHead(RoomModel):
+    room_id: str
+    channel_id: str
+    latest_seq: int
+
+
 class RoomSummary(RoomModel):
     total_messages: int
     queued_count: int

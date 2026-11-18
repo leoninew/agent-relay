@@ -4,6 +4,15 @@ import type { RoomSnapshot } from "@/services/roomApi";
 export type ChannelWorkspaceKind = "existing" | "worktree";
 export type ChannelStatus = "active" | "archived";
 
+export type ChannelMessageHead = { roomId: string; channelId: string; latestSeq: number };
+
+export async function fetchChannelMessageHeads(signal: AbortSignal): Promise<ChannelMessageHead[]> {
+  const { data } = await apiClient.get<ChannelMessageHead[]>("/api/room/channel-message-heads", {
+    signal,
+  });
+  return data;
+}
+
 export type Channel = {
   id: string;
   roomId: string;

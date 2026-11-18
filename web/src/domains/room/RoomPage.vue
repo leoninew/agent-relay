@@ -298,6 +298,7 @@
     onMounted,
     ref,
     watch,
+    watchPostEffect,
   } from "vue";
   import { useRouter } from "vue-router";
   import { useI18n } from "vue-i18n";
@@ -370,6 +371,7 @@
   import { subscribeRoomEvents } from "@/services/roomEvents";
   import type { Channel, UpdateChannel } from "@/services/channelApi";
   import { useRoomsStore } from "@/stores/rooms";
+  import { useNavigationActivity } from "@/stores/navigationActivity";
   import { useChannelsStore } from "@/stores/channels";
   import { useToastsStore } from "@/stores/toasts";
 
@@ -494,6 +496,32 @@
   const replyTo = ref<RoomMessage>();
   const composer = ref<InstanceType<typeof RoomComposer>>();
   const timeline = ref<InstanceType<typeof MessageTimeline>>();
+  const activity = useNavigationActivity();
+  watchPostEffect(() => {
+    const roomId = currentRoomId.value;
+    const channelId = currentChannelId.value;
+    if (
+      !active.value ||
+      !activity.visible ||
+      !roomId ||
+      !channelId ||
+      roomId !== props.roomId ||
+      channelId !== props.channelId ||
+      !timeline.value ||
+      loading.value ||
+      loadError.value ||
+      !messagesCurrent.value ||
+      selectedTopicId.value ||
+      selectedMemberId.value ||
+      keyword.value
+    ) {
+      return;
+    }
+    const last = visibleMessages.value.at(-1);
+    if (last) {
+      activity.presented(roomId, channelId, last.seq);
+    }
+  });
   const pendingPublication = ref<CreateMessage>();
   const {
     drafts,

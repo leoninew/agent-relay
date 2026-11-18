@@ -9,6 +9,7 @@ from conflua.application.dto.desktop import ShutdownNotificationTarget
 from conflua.application.dto.members import SessionChannel
 from conflua.application.dto.positions import TopicPosition
 from conflua.application.dto.rooms import (
+    ChannelMessageHead,
     RoomActivity,
     RoomEvent,
     RoomEventPage,
@@ -82,6 +83,31 @@ class SQLAlchemyRoomReads:
                 .where(RoomRecord.archived_at.is_(None))
                 .order_by(insertion_order("rooms"))
             )
+        ]
+
+    def channel_message_heads(self) -> list[ChannelMessageHead]:
+        latest = (
+            select(func.max(MessageRecord.seq))
+            .where(
+                MessageRecord.room_id == ChannelRecord.room_id,
+                MessageRecord.channel_id == ChannelRecord.id,
+                MessageRecord.publisher_id != USER_MEMBER_ID,
+                MessageRecord.deleted_at.is_(None),
+            )
+            .scalar_subquery()
+        )
+        rows = self.session.execute(
+            select(ChannelRecord.room_id, ChannelRecord.id, func.coalesce(latest, 0))
+            .join(RoomRecord, RoomRecord.id == ChannelRecord.room_id)
+            .where(
+                RoomRecord.archived_at.is_(None),
+                ChannelRecord.status == "active",
+                ChannelRecord.archived_at.is_(None),
+            )
+        )
+        return [
+            ChannelMessageHead(room_id=room_id, channel_id=channel_id, latest_seq=seq)
+            for room_id, channel_id, seq in rows
         ]
 
     def workspace_exists(self, workspace_path: str, *, exclude_room_id: str | None = None) -> bool:

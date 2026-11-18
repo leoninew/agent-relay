@@ -21,11 +21,19 @@
             :class="{ 'is-active': defaultChannel.id === channelId }"
             :aria-current="defaultChannel.id === channelId ? 'page' : undefined"
             :aria-label="t('channel.switch', { name: t('channel.default') })"
+            :aria-description="
+              hasActivity(defaultChannel) ? t('navigation.newMessages') : undefined
+            "
             :title="defaultChannel.description"
             @click.left.exact.prevent="$emit('select', defaultChannel.id)"
           >
             <AppIcon name="chat" class="sidebar-item-icon" />
             <span class="sidebar-node-name">{{ t("channel.default") }}</span>
+            <span
+              v-if="hasActivity(defaultChannel)"
+              class="navigation-message-dot"
+              aria-hidden="true"
+            />
           </a>
         </RouterLink>
       </div>
@@ -62,11 +70,13 @@
               :class="{ 'is-active': item.id === channelId }"
               :aria-current="item.id === channelId ? 'page' : undefined"
               :aria-label="t('channel.switch', { name: item.name })"
+              :aria-description="hasActivity(item) ? t('navigation.newMessages') : undefined"
               :title="item.description"
               @click.left.exact.prevent="$emit('select', item.id)"
             >
               <AppIcon name="chat" class="sidebar-item-icon" />
               <span class="sidebar-node-name">{{ item.name }}</span>
+              <span v-if="hasActivity(item)" class="navigation-message-dot" aria-hidden="true" />
             </a>
           </RouterLink>
           <button
@@ -94,13 +104,17 @@
   import RoomSidebarSection from "@/domains/room/RoomSidebarSection.vue";
   import { canArchiveChannel } from "@/domains/channel/useChannelArchive";
   import type { Channel } from "@/services/channelApi";
+  import { useNavigationActivity } from "@/stores/navigationActivity";
 
   const { t } = useI18n();
-  defineProps<{
+  const props = defineProps<{
     defaultChannel?: Channel;
     channelId?: string;
     disabled: boolean;
   }>();
+  const activity = useNavigationActivity();
+  const hasActivity = (channel: Channel) =>
+    channel.id !== props.channelId && activity.unread.get(channel.roomId)?.has(channel.id);
   defineEmits<{
     create: [];
     select: [channelId: string];

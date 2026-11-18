@@ -22,6 +22,7 @@ from conflua.application.dto.messages import (
 )
 from conflua.application.dto.rooms import (
     ChangedTopic,
+    ChannelMessageHead,
     ClearedRoom,
     CreateRoom,
     CreateTopic,
@@ -79,6 +80,11 @@ def read_image(room_id: str, image_id: str, service: ImageServiceDependency) -> 
 @router.get("")
 def list_rooms(queries: RoomQueriesDependency) -> list[Room]:
     return queries.rooms()
+
+
+@router.get("/channel-message-heads")
+def channel_message_heads(queries: RoomQueriesDependency) -> list[ChannelMessageHead]:
+    return queries.channel_message_heads()
 
 
 @router.post("", status_code=201)

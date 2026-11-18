@@ -1,5 +1,11 @@
 from conflua.application.dto.messages import MessagePage, MessageQueuePage, MessageUpdatesQuery
-from conflua.application.dto.rooms import RoomActivity, RoomEventPage, RoomMetadata, RoomSnapshot
+from conflua.application.dto.rooms import (
+    ChannelMessageHead,
+    RoomActivity,
+    RoomEventPage,
+    RoomMetadata,
+    RoomSnapshot,
+)
 from conflua.application.rooms.ports import RoomData
 from conflua.application.transactions import RepositoryScope
 from conflua.domain.rooms.models import Member, Message, Room
@@ -12,6 +18,10 @@ class RoomReader:
     def rooms(self) -> list[Room]:
         with self.repositories.read() as repository:
             return repository.rooms()
+
+    def channel_message_heads(self) -> list[ChannelMessageHead]:
+        with self.repositories.read() as repository:
+            return repository.channel_message_heads()
 
     def member_for_session(self, room_id: str, session_id: str) -> Member:
         with self.repositories.read() as repository:

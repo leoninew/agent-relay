@@ -21,6 +21,7 @@
     --destructive: 0 72.2% 50.6%;
     --destructive-foreground: 210 40% 98%;
     --warning: 32 90% 36%;
+    --new-message: 45 94% 38%;
     --success: 158 35% 30%;
     --topic: 215 20% 95%;
     --topic-foreground: 215 20% 38%;
@@ -62,6 +63,7 @@
     --destructive: 0 62.8% 50%;
     --destructive-foreground: 210 40% 98%;
     --warning: 43 96% 56%;
+    --new-message: var(--warning);
     --success: 158 45% 62%;
     --topic: 220 14% 17%;
     --topic-foreground: 215 18% 72%;
@@ -263,6 +265,16 @@
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.navigation-message-dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: hsl(var(--new-message));
+}
+.room-tab > .navigation-message-dot {
+  margin-inline-start: 5px;
 }
 .room-tab-list .room-tab {
   cursor: pointer;

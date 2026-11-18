@@ -1,8 +1,16 @@
 type RoomResource = "channels" | "channels-order" | "selected-channel";
 type ChannelResource =
-  "draft" | "publication" | "skills" | "topics-order" | "members-order" | "channel-creation";
+  | "draft"
+  | "publication"
+  | "skills"
+  | "topics-order"
+  | "members-order"
+  | "channel-creation"
+  | "seen-seq";
 
-export function appCacheKey(resource: "rooms-order" | "panels"): string {
+export function appCacheKey(
+  resource: "rooms-order" | "panels" | "message-dots-initialized",
+): string {
   return `conflua:app:${resource}`;
 }
 

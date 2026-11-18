@@ -102,6 +102,66 @@ def test_channel_sessions_include_history_but_exclude_other_channel(
             repository.member("room", member_id)
 
 
+def test_navigation_heads_only_include_live_incoming_messages_in_active_channels(
+    scoped_session: Session,
+) -> None:
+    now = datetime.now(UTC)
+    scoped_session.add(
+        RoomRecord(
+            id="second",
+            workspace_path="/second",
+            raw_workspace_path="/second",
+            name="Second",
+            description="",
+        )
+    )
+    scoped_session.add(
+        ChannelRecord(
+            room_id="second",
+            id="channel-default",
+            name="Default",
+            description="",
+            is_default=True,
+            workspace_kind="existing",
+        )
+    )
+    for room, channel, seq, sender, deleted in (
+        ("room", "other", 1, "elsewhere", False),
+        ("room", "other", 2, "user", False),
+        ("room", "other", 3, "elsewhere", True),
+        ("second", "channel-default", 8, "another", False),
+    ):
+        scoped_session.add(
+            MessageRecord(
+                room_id=room,
+                channel_id=channel,
+                id=f"message-{seq}",
+                seq=seq,
+                publisher_id=sender,
+                content="text",
+                created_at=now,
+                deleted_at=now if deleted else None,
+            )
+        )
+    repo = SQLAlchemyRoomRepository(scoped_session, "channel-default")
+
+    def heads() -> dict[tuple[str, str], int]:
+        return {
+            (row.room_id, row.channel_id): row.latest_seq for row in repo.channel_message_heads()
+        }
+
+    assert heads() == {
+        ("room", "other"): 1,
+        ("room", "channel-default"): 0,
+        ("second", "channel-default"): 8,
+    }
+    channel_record = scoped_session.get(ChannelRecord, ("room", "other"))
+    room_record = scoped_session.get(RoomRecord, "second")
+    assert channel_record and room_record
+    channel_record.archived_at = room_record.archived_at = now
+    assert heads() == {("room", "channel-default"): 0}
+
+
 def test_receipt_updates_only_live_unconfirmed_delivery(scoped_session: Session) -> None:
     now = datetime.now(UTC)
     for client in ("live", "deleted"):

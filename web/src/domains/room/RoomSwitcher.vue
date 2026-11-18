@@ -48,11 +48,19 @@
                   }"
                   class="room-tab"
                   :aria-label="t('navigation.switchRoom', { name: room.name })"
+                  :aria-description="
+                    roomHasActivity(room.id) ? t('navigation.newMessages') : undefined
+                  "
                   aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight"
                   @keydown.alt.left.prevent.stop="moveRoom(room.id, -1)"
                   @keydown.alt.right.prevent.stop="moveRoom(room.id, 1)"
                 >
                   <span class="room-tab-name">{{ room.name }}</span>
+                  <span
+                    v-if="roomHasActivity(room.id)"
+                    class="navigation-message-dot"
+                    aria-hidden="true"
+                  />
                 </RouterLink>
               </NavigationMenuLink>
               <DropdownMenuRoot :modal="false">
@@ -177,6 +185,7 @@
   import type { CreateRoom, Room, UpdateRoom } from "@/services/roomApi";
   import { useChannelsStore } from "@/stores/channels";
   import { useRoomsStore } from "@/stores/rooms";
+  import { useNavigationActivity } from "@/stores/navigationActivity";
   import { useToastsStore } from "@/stores/toasts";
   import { appCacheKey } from "@/services/cacheKeys";
 
@@ -185,6 +194,9 @@
   const router = useRouter();
   const roomNavigation = ref<HTMLElement>();
   const roomsStore = useRoomsStore();
+  const activity = useNavigationActivity();
+  const roomHasActivity = (roomId: string) =>
+    roomId !== route.params.roomId && activity.unread.has(roomId);
   const channelsStore = useChannelsStore();
   const { orderedItems: rooms, moveItem: moveRoom } = useStoredOrder(
     () => appCacheKey("rooms-order"),

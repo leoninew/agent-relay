@@ -30,6 +30,8 @@
 
 <script setup lang="ts">
   import { RouterLink, RouterView } from "vue-router";
+  import { onMounted, onBeforeUnmount } from "vue";
+  import { useNavigationActivity } from "@/stores/navigationActivity";
   import { useI18n } from "vue-i18n";
 
   import AppMenu from "@/components/AppMenu.vue";
@@ -41,6 +43,12 @@
 
   const { t } = useI18n();
   const preferences = usePreferencesStore();
+  const activity = useNavigationActivity();
+  let unsubscribe: (() => void) | undefined;
+  onMounted(() => {
+    unsubscribe = activity.subscribe();
+  });
+  onBeforeUnmount(() => unsubscribe?.());
   const brandIconUrl = `${import.meta.env.BASE_URL}conflua.png`;
 </script>
 

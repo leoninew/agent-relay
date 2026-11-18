@@ -136,6 +136,7 @@ export default {
     backToDefault: "返回默认频道",
   },
   navigation: {
+    newMessages: "有新消息",
     rooms: "聊天室",
     switchRoom: "切换聊天室：{name}",
     reorderRoom: "{name}（拖动排序，或按 Alt+左右方向键）",
@@ -437,6 +438,7 @@ export default {
   },
   appMenu: {
     title: "应用菜单",
+    githubRepository: "Conflua 的 GitHub 仓库（在新标签页打开）",
     about: "关于",
     version: "版本",
     versionUnavailable: "版本不可用",
