@@ -72,9 +72,9 @@ class SQLAlchemyDeliveryStore:
         with self.database.read() as session:
             return SQLAlchemyDeliveryRepository(session).unconfirmed_inputs()
 
-    def confirm_input(self, session_id: str, received: ReceivedInput) -> None:
+    def confirm_input(self, session_id: str, received: ReceivedInput) -> bool:
         with self.database.write() as session:
-            SQLAlchemyDeliveryRepository(session).confirm_input(session_id, received)
+            return SQLAlchemyDeliveryRepository(session).confirm_input(session_id, received)
 
     def confirm_queue(self, session_id: str, client_message_id: str, receipt: QueueReceipt) -> None:
         with self.database.write() as session:

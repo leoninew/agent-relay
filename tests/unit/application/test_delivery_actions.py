@@ -297,6 +297,24 @@ def test_steer_receipt_is_saved_without_queue_activation_or_false_history_confir
     delivery_store.confirm_input.assert_not_called()
 
 
+@pytest.mark.parametrize(
+    ("confirmations", "expected"),
+    [([True, True], 1), ([False, False], 0), ([True, RuntimeError("commit failed")], 1)],
+)
+def test_only_committed_receipts_request_presence_once_per_session(
+    delivery_store: Mock, queue_driver: Mock, confirmations: list[object], expected: int
+) -> None:
+    receipts = tuple(ReceivedInput(client, "item", "turn") for client in ("one", "two"))
+    queue_driver.read_input_page.return_value = InputPage(receipts, None)
+    delivery_store.confirm_input.side_effect = confirmations
+    notify = Mock()
+    service = DeliveryService(
+        delivery_store, queue_driver, logging.getLogger("tests.delivery"), request_presence=notify
+    )
+    service.observe("target", {"one", "two"})
+    assert notify.call_args_list == [call("target")] * expected
+
+
 def test_queue_fallback_reason_survives_activation_note(
     work: ClaimedDelivery, delivery_store: Mock, queue_driver: Mock
 ) -> None:

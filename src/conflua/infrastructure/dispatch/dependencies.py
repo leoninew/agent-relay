@@ -1,4 +1,5 @@
 import logging
+from collections.abc import Callable
 
 from conflua.application.delivery.ports import DeliveryDriver
 from conflua.application.delivery.service import DeliveryService
@@ -16,13 +17,21 @@ from conflua.infrastructure.persistence.dependencies import (
 
 
 def create_delivery_runner(
-    database: Database, driver: DeliveryDriver, logger: logging.Logger, concurrency: int
+    database: Database,
+    driver: DeliveryDriver,
+    logger: logging.Logger,
+    concurrency: int,
+    request_presence: Callable[[str], None],
 ) -> DeliveryRunner:
     store = create_delivery_store(database)
     return DeliveryRunner(
         store,
         DeliveryService(
-            store, driver, logger, FileImageStore(database.path.parent / "rooms", "channel-default")
+            store,
+            driver,
+            logger,
+            FileImageStore(database.path.parent / "rooms", "channel-default"),
+            request_presence=request_presence,
         ),
         SubmitterLock(database.path),
         logger,

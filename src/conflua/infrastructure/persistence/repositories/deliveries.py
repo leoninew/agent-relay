@@ -330,9 +330,9 @@ class SQLAlchemyDeliveryRepository:
             result.setdefault(session_id, set()).add(client_message_id)
         return result
 
-    def confirm_input(self, session_id: str, received: ReceivedInput) -> None:
+    def confirm_input(self, session_id: str, received: ReceivedInput) -> bool:
         now = datetime.now(UTC)
-        self._update(
+        changed = self._update(
             update(DeliveryRecord)
             .where(
                 DeliveryRecord.target_session_id == session_id,
@@ -350,6 +350,8 @@ class SQLAlchemyDeliveryRepository:
                 error=None,
             )
         )
+
+        return changed > 0
 
     def confirm_queue(self, session_id: str, client_message_id: str, receipt: QueueReceipt) -> None:
         if (

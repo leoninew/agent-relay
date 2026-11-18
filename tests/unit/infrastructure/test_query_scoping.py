@@ -1,10 +1,11 @@
 from collections.abc import Iterator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
+from conflua.application.dto.delivery import ReceivedInput
 from conflua.application.dto.members import SessionChannel
 from conflua.application.dto.messages import MessageUpdatesQuery
 from conflua.domain.rooms.errors import RoomConflictError, RoomNotFoundError
@@ -12,6 +13,7 @@ from conflua.domain.rooms.models import Member
 from conflua.infrastructure.persistence.models import (
     Base,
     ChannelRecord,
+    DeliveryRecord,
     MemberRecord,
     MessageRecipientRecord,
     MessageRecord,
@@ -22,6 +24,7 @@ from conflua.infrastructure.persistence.models import (
     TopicRecord,
 )
 from conflua.infrastructure.persistence.repositories.channels import SQLAlchemyChannelRepository
+from conflua.infrastructure.persistence.repositories.deliveries import SQLAlchemyDeliveryRepository
 from conflua.infrastructure.persistence.repositories.messages import SQLAlchemyMessageRepository
 from conflua.infrastructure.persistence.repositories.rooms import SQLAlchemyRoomRepository
 
@@ -97,6 +100,62 @@ def test_channel_sessions_include_history_but_exclude_other_channel(
     for member_id in ("historical", "elsewhere", "missing"):
         with pytest.raises(RoomNotFoundError):
             repository.member("room", member_id)
+
+
+def test_receipt_updates_only_live_unconfirmed_delivery(scoped_session: Session) -> None:
+    now = datetime.now(UTC)
+    for client in ("live", "deleted"):
+        scoped_session.add(
+            DeliveryRecord(
+                room_id="room",
+                channel_id="other",
+                id=client,
+                message_id=client,
+                target_member_id="elsewhere",
+                target_session_id="elsewhere",
+                client_message_id=client,
+                status="unknown",
+                updated_at=now,
+                deleted_at=now if client == "deleted" else None,
+            )
+        )
+    scoped_session.flush()
+    repository = SQLAlchemyDeliveryRepository(scoped_session)
+    receipt = ReceivedInput("live", "item", "turn")
+    assert not repository.confirm_input("current", receipt)
+    assert repository.confirm_input("elsewhere", receipt)
+    assert not repository.confirm_input("elsewhere", receipt)
+    assert not repository.confirm_input("elsewhere", ReceivedInput("deleted", "item", "turn"))
+    assert list(scoped_session.scalars(select(RoomEventRecord.message_id))) == ["live"]
+
+
+def test_targeted_observation_updates_current_bindings_and_ignores_stale_results(
+    scoped_session: Session,
+) -> None:
+    shared = scoped_session.get(MemberRecord, ("room", "elsewhere", "other"))
+    assert shared is not None
+    shared.session_id = "current"
+    scoped_session.flush()
+    repository = SQLAlchemyRoomRepository(scoped_session, "channel-default")
+    now = datetime.now(UTC)
+    repository.save_bound_session_observation("current", "busy", "active", now, "Worker")
+    repository.save_bound_session_observation(
+        "current", "available", "idle", now - timedelta(seconds=1), "Old name"
+    )
+    assert repository.member("room", "current").presence == "busy"
+    session_record = scoped_session.get(SessionRecord, ("room", "current"))
+    assert session_record is not None
+    assert (session_record.presence, session_record.name) == ("busy", "Worker")
+    assert {event.channel_id for event in scoped_session.scalars(select(RoomEventRecord))} == {
+        "channel-default",
+        "other",
+    }
+    shared.deleted_at = now
+    scoped_session.flush()
+    repository.save_bound_session_observation("current", "available", "idle", now, "Worker")
+    scoped_session.expire_all()
+    assert shared.presence == "busy"
+    assert repository.member("room", "current").presence == "available"
 
 
 @pytest.mark.parametrize("name", [None, "other", "Finished API"])

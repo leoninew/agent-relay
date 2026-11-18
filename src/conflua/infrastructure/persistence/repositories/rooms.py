@@ -3,6 +3,7 @@ from datetime import datetime
 from sqlalchemy import delete, false, func, or_, select, update
 
 from conflua.domain.rooms.errors import RoomConflictError
+from conflua.domain.rooms.members import observation_cutoff
 from conflua.domain.rooms.models import (
     DEFAULT_CHANNEL_ID,
     Member,
@@ -213,6 +214,38 @@ class SQLAlchemyRoomRepository(SQLAlchemyRoomReads):
         self.session.flush()
         return len(removed)
 
+    def save_bound_session_observation(
+        self, session_id: str, presence: str, activity: str, observed_at: datetime, name: str
+    ) -> None:
+        bindings = self.session.execute(
+            select(MemberRecord.room_id, MemberRecord.channel_id, MemberRecord.id)
+            .join(RoomRecord, RoomRecord.id == MemberRecord.room_id)
+            .join(
+                ChannelRecord,
+                (ChannelRecord.room_id == MemberRecord.room_id)
+                & (ChannelRecord.id == MemberRecord.channel_id),
+            )
+            .where(
+                MemberRecord.session_id == session_id,
+                MemberRecord.kind == "agent",
+                MemberRecord.deleted_at.is_(None),
+                RoomRecord.archived_at.is_(None),
+                ChannelRecord.archived_at.is_(None),
+                ChannelRecord.status == "active",
+            )
+        ).all()
+        for room_id, channel_id, member_id in bindings:
+            SQLAlchemyRoomRepository(self.session, channel_id).save_observation(
+                room_id,
+                member_id,
+                session_id,
+                presence,
+                activity,
+                observed_at,
+                name,
+                refresh_cutoff=observation_cutoff(observed_at),
+            )
+
     def save_observation(
         self,
         room_id: str,
@@ -233,6 +266,7 @@ class SQLAlchemyRoomRepository(SQLAlchemyRoomReads):
                 MemberRecord.id == member_id,
                 MemberRecord.session_id == session_id,
                 MemberRecord.deleted_at.is_(None),
+                or_(MemberRecord.observed_at.is_(None), MemberRecord.observed_at <= observed_at),
                 or_(
                     MemberRecord.presence.is_distinct_from(presence),
                     MemberRecord.activity.is_distinct_from(activity),
@@ -262,6 +296,7 @@ class SQLAlchemyRoomRepository(SQLAlchemyRoomReads):
             .where(
                 SessionRecord.room_id == room_id,
                 SessionRecord.id == session_id,
+                or_(SessionRecord.observed_at.is_(None), SessionRecord.observed_at <= observed_at),
                 or_(
                     SessionRecord.presence.is_distinct_from(presence),
                     name_changed,

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
 from conflua.application.delivery.ports import (
@@ -44,11 +45,14 @@ class DeliveryService:
         driver: DeliveryDriver,
         logger: logging.Logger,
         images: ImageStore | None = None,
+        *,
+        request_presence: Callable[[str], None] | None = None,
     ) -> None:
         self.store = store
         self.driver = driver
         self.logger = logger
         self.images = images
+        self.request_presence = request_presence
         self.history_cursors: dict[str, str | None] = {}
         self.unavailable_history_sessions: set[str] = set()
         self.queue_cursors: dict[str, str | None] = {}
@@ -227,6 +231,7 @@ class DeliveryService:
 
     def observe(self, session_id: str, client_message_ids: set[str]) -> None:
         self._observe_queue(session_id, client_message_ids)
+        confirmed = False
         try:
             latest = self.driver.read_input_page(session_id)
             inputs = list(latest.inputs)
@@ -239,8 +244,10 @@ class DeliveryService:
                 self.history_cursors[session_id] = latest.next_cursor
             self.unavailable_history_sessions.discard(session_id)
             for received in inputs:
-                if received.client_message_id in client_message_ids:
-                    self.store.confirm_input(session_id, received)
+                if received.client_message_id in client_message_ids and self.store.confirm_input(
+                    session_id, received
+                ):
+                    confirmed = True
         except InputHistoryUnavailable as exc:
             if session_id not in self.unavailable_history_sessions:
                 self.logger.info(
@@ -256,6 +263,12 @@ class DeliveryService:
                     exc,
                 )
                 self.unavailable_history_sessions.add(session_id)
+
+        if confirmed and self.request_presence is not None:
+            try:
+                self.request_presence(session_id)
+            except Exception:
+                self.logger.exception("Unable to request member presence session=%s", session_id)
 
     def _observe_queue(self, session_id: str, client_message_ids: set[str]) -> None:
         try:

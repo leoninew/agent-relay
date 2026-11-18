@@ -52,8 +52,8 @@ class MemberService:
     def candidates(self, room_id: str) -> list[SessionCandidate]:
         with self.store.read() as rooms:
             working_path = rooms.working_path(room_id)
-        sessions = self._metadata(lambda: self.driver.list_sessions(working_path))
         observed_at = datetime.now(UTC)
+        sessions = self._metadata(lambda: self.driver.list_sessions(working_path))
         self.record_observations(room_id, sessions, observed_at)
         sessions = [info for info in sessions if not info.archived]
         with self.store.read() as rooms:
@@ -218,28 +218,41 @@ class MemberService:
                 metadata=rooms.metadata(room_id),
             )
 
+    def _inspect_presence(self, session_id: str, logger: logging.Logger) -> SessionInfo | None:
+        try:
+            info = self.driver.inspect(session_id)
+            if info.id != session_id:
+                raise SessionUnavailableError(
+                    "Codex 返回的会话身份不匹配", code="session_identity_mismatch"
+                )
+            self.unavailable_presence_sessions.discard(session_id)
+            return info
+        except Exception as exc:
+            if session_id not in self.unavailable_presence_sessions:
+                logger.warning("Member presence unavailable session=%s reason=%s", session_id, exc)
+                self.unavailable_presence_sessions.add(session_id)
+            return None
+
+    def refresh_session_presence(self, session_id: str, logger: logging.Logger) -> None:
+        observed_at = datetime.now(UTC)
+        info = self._inspect_presence(session_id, logger)
+        if info is not None:
+            with self.store.write() as rooms:
+                rooms.save_bound_session_observation(
+                    session_id, info.presence, self.activity(info), observed_at, info.name
+                )
+
     def refresh_presence(self, logger: logging.Logger, cancelled: Callable[[], bool]) -> None:
+        observed_at = datetime.now(UTC)
         with self.store.read() as rooms:
             bindings = rooms.bindings()
         sessions: list[SessionInfo] = []
         for session_id in dict.fromkeys(session_id for _, _, session_id in bindings):
             if cancelled():
                 return
-            try:
-                info = self.driver.inspect(session_id)
-                if info.id != session_id:
-                    raise SessionUnavailableError(
-                        "Codex 返回的会话身份不匹配", code="session_identity_mismatch"
-                    )
+            info = self._inspect_presence(session_id, logger)
+            if info is not None:
                 sessions.append(info)
-                self.unavailable_presence_sessions.discard(session_id)
-            except Exception as exc:
-                if session_id not in self.unavailable_presence_sessions:
-                    logger.warning(
-                        "Member presence unavailable session=%s reason=%s", session_id, exc
-                    )
-                    self.unavailable_presence_sessions.add(session_id)
-        observed_at = datetime.now(UTC)
         for room_id, channel_id in dict.fromkeys(
             (room_id, channel_id) for room_id, channel_id, _ in bindings
         ):

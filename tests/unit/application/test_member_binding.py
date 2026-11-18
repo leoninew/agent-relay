@@ -257,6 +257,21 @@ def test_presence_failure_logs_once_until_the_session_recovers(
     assert "frontend-worker-session" not in service.unavailable_presence_sessions
 
 
+def test_targeted_presence_only_saves_verified_session(
+    room_store: MagicMock, room_repository: Mock, session_driver: Mock
+) -> None:
+    idle = SessionInfo("target", "codex", "Worker", "idle")
+    session_driver.inspect.side_effect = [TimeoutError(), replace(idle, id="other"), idle]
+    service = MemberService(room_store, session_driver)
+    for _ in range(3):
+        service.refresh_session_presence("target", logging.getLogger("tests.member-presence"))
+
+    room_repository.save_bound_session_observation.assert_called_once()
+    saved = room_repository.save_bound_session_observation.call_args.args
+    assert saved[:3] == ("target", "available", MemberService.activity(idle))
+    room_repository.active_bindings.assert_not_called()
+
+
 @pytest.mark.parametrize("status", ["unavailable", "idle"])
 def test_candidates_explain_unavailable_sessions_and_record_presence(
     status: str,

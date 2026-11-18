@@ -94,8 +94,10 @@ def _configure_app(
         if queue_driver is not None
         else create_queue_driver(codex.command, codex.rpc_timeout)
     )
-    delivery_runner = create_delivery_runner(database, queue, logger, codex.queue_concurrency)
     presence_runner = create_presence_runner(database, sessions, logger)
+    delivery_runner = create_delivery_runner(
+        database, queue, logger, codex.queue_concurrency, presence_runner.request_refresh
+    )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
