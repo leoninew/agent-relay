@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { effectScope, nextTick } from "vue";
 
 import { useMessageQueue } from "@/domains/room/useMessageQueue";
 import { deleteQueueMessage, fetchMessageQueue } from "@/services/roomApi";
@@ -25,6 +26,85 @@ function page(overrides: Partial<MessageQueuePage> = {}): MessageQueuePage {
 
 describe("message queue", () => {
   beforeEach(() => vi.resetAllMocks());
+
+  it("keeps a pending queue page when a timeline search replaces the snapshot", async () => {
+    const effects = effectScope();
+    const queue = useMessageQueue(
+      () => "room",
+      () => ({}),
+      () => "channel",
+    );
+    const cursor = effects.run(queue.followEvents)!;
+    const snapshot = roomFixture();
+    const older = snapshot.messages[0];
+    const firstPage = Array.from({ length: 50 }, (_, index) => ({
+      ...older,
+      id: `item-${index}`,
+      seq: 51 - index,
+    }));
+    try {
+      fetchQueue.mockResolvedValueOnce(
+        page({ messages: firstPage, hasMore: true, nextBeforeSeq: 2 }),
+      );
+      cursor.resume(snapshot.eventId);
+      await nextTick();
+      expect(fetchQueue).toHaveBeenCalledOnce();
+      let finishPage!: (result: MessageQueuePage) => void;
+      fetchQueue.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishPage = resolve;
+          }),
+      );
+      const more = queue.loadMore();
+      const filteredSnapshot = { ...snapshot, messages: [older] };
+      cursor.resume(filteredSnapshot.eventId);
+      await nextTick();
+      expect(fetchQueue).toHaveBeenCalledTimes(2);
+      expect(fetchQueue.mock.calls[1][2]?.aborted).toBe(false);
+      finishPage(page({ messages: [older] }));
+      await more;
+      expect(queue.messages.value).toEqual([...firstPage, older]);
+    } finally {
+      effects.stop();
+    }
+  });
+
+  it("catches up queue events across a search and reloads once on full resync", async () => {
+    const effects = effectScope();
+    const queue = useMessageQueue(
+      () => "room",
+      () => ({}),
+      () => "channel",
+    );
+    const cursor = effects.run(queue.followEvents)!;
+    fetchQueue.mockResolvedValue(page());
+    try {
+      cursor.resume(10);
+      await nextTick();
+      expect(cursor.resume(13)).toBe(10);
+      const batch = {
+        nextEventId: 13,
+        hasMore: false,
+        resyncRequired: false,
+        events: [
+          { eventId: 12, kind: "delivery" as const, entityId: "first", messageId: "message" },
+          { eventId: 13, kind: "delivery" as const, entityId: "second", messageId: "message" },
+        ],
+      };
+      cursor.advance(batch);
+      await nextTick();
+      cursor.advance(batch);
+      await nextTick();
+      expect(fetchQueue).toHaveBeenCalledTimes(2);
+      cursor.reset();
+      cursor.resume(13);
+      await nextTick();
+      expect(fetchQueue).toHaveBeenCalledTimes(3);
+    } finally {
+      effects.stop();
+    }
+  });
 
   it("loads the newest room queue messages and appends an older page", async () => {
     const sample = roomFixture().messages[0];

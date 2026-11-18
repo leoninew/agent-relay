@@ -53,19 +53,12 @@
             <div class="message-main">
               <div class="message-heading">
                 <div class="message-heading-main">
-                  <button
-                    type="button"
-                    class="message-heading-action"
-                    :aria-label="t('timeline.selectMember', { name: memberName(message.senderId) })"
-                    :disabled="!isRoutableMember(message.senderId)"
-                    @click.stop="$emit('addMember', message.senderId)"
-                  >
-                    <MemberIdentity
-                      :member="identityMember(message.senderId)"
-                      :session-name="sessionName(message.senderId)"
-                      appearance="author"
-                    />
-                  </button>
+                  <MemberRecipientButton
+                    :member="identityMember(message.senderId)"
+                    :session-name="sessionName(message.senderId)"
+                    appearance="author"
+                    @select="$emit('selectMember', $event)"
+                  />
                   <div
                     v-if="message.topicIds.length"
                     class="message-topics"
@@ -91,21 +84,15 @@
                     class="message-mentions"
                     :aria-label="t('timeline.mentions')"
                   >
-                    <button
+                    <MemberRecipientButton
                       v-for="memberId in message.mentionedMemberIds"
                       :key="memberId"
-                      type="button"
-                      class="message-heading-action mention-chip"
-                      :aria-label="t('timeline.selectMember', { name: memberName(memberId) })"
-                      :disabled="!isRoutableMember(memberId)"
-                      @click.stop="$emit('addMember', memberId)"
-                    >
-                      <MemberIdentity
-                        :member="identityMember(memberId)"
-                        :session-name="sessionName(memberId)"
-                        appearance="text"
-                      />
-                    </button>
+                      class="mention-chip"
+                      :member="identityMember(memberId)"
+                      :session-name="sessionName(memberId)"
+                      appearance="text"
+                      @select="$emit('selectMember', $event)"
+                    />
                   </div>
                 </div>
                 <div
@@ -189,7 +176,7 @@
   import AppIcon from "@/components/AppIcon.vue";
   import AppButton from "@/components/AppButton.vue";
   import MessageTimelineSkeleton from "@/domains/room/MessageTimelineSkeleton.vue";
-  import MemberIdentity from "@/domains/room/MemberIdentity.vue";
+  import MemberRecipientButton from "@/domains/room/MemberRecipientButton.vue";
   import { deliveryStage } from "@/domains/room/deliveryStage";
   import { memberSessionName } from "@/domains/room/memberSessionName";
   import { messageText } from "@/domains/room/inlineSkills";
@@ -230,7 +217,7 @@
     select: [messageId: string];
     viewDetails: [messageId: string];
     addTopic: [topicId: string];
-    addMember: [memberId: string];
+    selectMember: [memberId: string];
     loadOlder: [];
     latest: [];
   }>();
@@ -322,16 +309,11 @@
     return props.topics.find((topic) => topic.id === topicId);
   }
 
-  function isRoutableMember(memberId: string): boolean {
-    const member = findMember(memberId);
-    return member?.kind === "agent" && !member.deletedAt;
-  }
-
   function memberName(memberId: string): string {
     return memberId === "user" ? t("member.you") : (findMember(memberId)?.name ?? memberId);
   }
 
-  function identityMember(memberId: string): Pick<Member, "id" | "name"> {
+  function identityMember(memberId: string) {
     return findMember(memberId) ?? { id: memberId, name: memberId };
   }
 

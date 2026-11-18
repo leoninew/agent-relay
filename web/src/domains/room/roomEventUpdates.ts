@@ -7,6 +7,12 @@ import type {
   RoomMetadata,
 } from "@/services/roomApi";
 
+export function queueChangedSince(events: RoomEvent[], after: number): boolean {
+  return events.some(
+    (event) => event.eventId > after && (event.kind === "delivery" || event.kind === "clear"),
+  );
+}
+
 export async function loadRoomEventUpdates(
   roomId: string,
   channelId: string,

@@ -235,7 +235,7 @@
     height: 20px;
   }
   .app-menu-content {
-    min-width: 160px;
+    min-width: 172px;
   }
   .app-menu-chevron {
     margin-left: auto;
@@ -250,7 +250,7 @@
   .app-menu-option-label {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
   }
   .about-content {
     display: flex;

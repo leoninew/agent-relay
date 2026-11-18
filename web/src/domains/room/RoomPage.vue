@@ -157,7 +157,7 @@
           @select="selectMessage"
           @view-details="viewMessageDetails"
           @add-topic="composer?.addTopic($event)"
-          @add-member="composer?.addMember($event)"
+          @select-member="composer?.selectOnlyMember($event)"
         />
       </div>
       <RoomComposer
@@ -203,6 +203,7 @@
         @edit-topic="editTopic"
         @delete-topic="openDelete({ kind: 'topic', node: $event })"
         @edit-member="editMember"
+        @select-member="composer?.selectOnlyMember($event)"
         @delete-member="openDelete({ kind: 'member', node: $event })"
       >
         <template #queue>
@@ -456,6 +457,7 @@
     () => queueScope.value,
     () => currentChannelId.value,
   );
+  const queueCursor = messageQueue.followEvents();
   const {
     messages: queueMessages,
     hasMore: queueHasMore,
@@ -627,12 +629,13 @@
     }
     stopEvents = subscribeRoomEvents(
       roomId,
-      current.eventId,
+      queueCursor.resume(current.eventId),
       async (page: RoomEventPage) => {
         if (version !== loadVersion) {
           return;
         }
         if (page.resyncRequired) {
+          queueCursor.reset();
           roomPanel.closeDetails();
           replyTo.value = undefined;
           messageQueue.reset();
@@ -641,6 +644,7 @@
         }
         const events = page.events.filter((event) => event.eventId > current.eventId);
         if (!events.length) {
+          queueCursor.advance(page);
           return;
         }
         if (events.some((event) => event.kind === "room" && event.entityId === channelId)) {
@@ -673,6 +677,7 @@
         } else {
           roomsStore.syncActivity(roomId, state, channelId);
         }
+        queueCursor.advance(page);
         if (clearDeletedFilters()) {
           await loadRoom();
           return;
@@ -982,6 +987,7 @@
   ): Promise<void> {
     resetSearch();
     currentChannelId.value = channelId;
+    queueCursor.reset();
     channelsStore.remember(roomId, channelId);
     cancelQueries();
     const scope = roomsStore.snapshotKey(roomId, channelId);
@@ -1353,6 +1359,7 @@
       }
       clearOpen.value = false;
       roomPanel.reset();
+      queueCursor.reset();
       messageQueue.reset();
       cancelReply();
       resetSearch();
@@ -1576,11 +1583,11 @@
       return;
     }
     active.value = true;
+    queueCursor.reset();
     capabilities.resume();
     if (currentRoomId.value && currentChannelId.value) {
       keyword.value = searchText.value.trim();
       void loadRoom();
-      void messageQueue.refresh();
       if (setupMode.value === "member") {
         void loadSessions();
       }
@@ -1598,32 +1605,6 @@
       searchTimer = setTimeout(() => void applySearch(), 300);
     }
   });
-
-  watch(
-    [
-      currentRoomId,
-      currentChannelId,
-      () => queueScope.value.topicId,
-      () => queueScope.value.memberId,
-      () => snapshot.value?.eventId,
-    ],
-    (
-      [roomId, channelId, topicId, memberId],
-      [previousRoomId, previousChannelId, previousTopicId, previousMemberId],
-    ) => {
-      if (
-        roomId !== previousRoomId ||
-        channelId !== previousChannelId ||
-        topicId !== previousTopicId ||
-        memberId !== previousMemberId
-      ) {
-        messageQueue.reset();
-      }
-      if (active.value && roomId && channelId && snapshot.value) {
-        void messageQueue.refresh();
-      }
-    },
-  );
 
   watch([() => props.roomId, () => props.channelId], ([roomId, channelId]) => {
     if (!roomId || !channelId) {

@@ -551,14 +551,14 @@
     topicIds.value = [...topicIds.value, topicId];
   }
 
-  function addMember(memberId: string): void {
-    if (props.sending || props.locked || mentionedMemberIds.value.includes(memberId)) {
+  function selectOnlyMember(memberId: string): void {
+    if (!props.ready || props.sending || props.locked) {
       return;
     }
     if (!agentMembers.value.some((member) => member.id === memberId)) {
       return;
     }
-    mentionedMemberIds.value = [...mentionedMemberIds.value, memberId];
+    draft.value = { ...draft.value, topicIds: [], mentionedMemberIds: [memberId] };
   }
 
   function selectTopic(topicId?: string): void {
@@ -663,7 +663,7 @@
     editor.value?.focus();
   }
 
-  defineExpose({ reset, quote, addTopic, addMember, selectTopic, selectMember });
+  defineExpose({ reset, quote, addTopic, selectOnlyMember, selectTopic, selectMember });
 </script>
 
 <style scoped>

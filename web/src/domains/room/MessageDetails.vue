@@ -139,7 +139,12 @@
           <dl class="detail-message-meta">
             <dt>{{ t("details.name") }}</dt>
             <dd>
-              <MemberIdentity :member="member" :session-name="sessionName(member)" />
+              <MemberRecipientButton
+                :member="member"
+                :session-name="sessionName(member)"
+                :disabled="busy"
+                @select="$emit('selectMember', $event)"
+              />
             </dd>
             <template v-if="member.kind === 'agent'">
               <dt>{{ t("queue.status") }}</dt>
@@ -198,7 +203,12 @@
             <dd>#{{ message.seq }}</dd>
             <dt>{{ t("details.sender") }}</dt>
             <dd>
-              <MemberIdentity :member="sender" :session-name="sessionName(sender)" />
+              <MemberRecipientButton
+                :member="sender"
+                :session-name="sessionName(sender)"
+                :disabled="busy"
+                @select="$emit('selectMember', $event)"
+              />
             </dd>
             <dt>{{ t("details.sentAt") }}</dt>
             <dd>
@@ -227,7 +237,12 @@
             <tbody>
               <tr v-for="{ member: recipient, stage, error } in dispatchRows" :key="recipient.id">
                 <td>
-                  <MemberIdentity :member="recipient" :session-name="sessionName(recipient)" />
+                  <MemberRecipientButton
+                    :member="recipient"
+                    :session-name="sessionName(recipient)"
+                    :disabled="busy"
+                    @select="$emit('selectMember', $event)"
+                  />
                 </td>
                 <td>
                   <AppTooltip v-if="error" :text="t('delivery.diagnostic', { error })">
@@ -256,6 +271,7 @@
   import AppIcon from "@/components/AppIcon.vue";
   import AppTooltip from "@/components/AppTooltip.vue";
   import MemberIdentity from "@/domains/room/MemberIdentity.vue";
+  import MemberRecipientButton from "@/domains/room/MemberRecipientButton.vue";
   import TopicIdentity from "@/domains/room/TopicIdentity.vue";
   import { deliveryStage } from "@/domains/room/deliveryStage";
   import { useI18n } from "vue-i18n";
@@ -289,6 +305,7 @@
     editTopic: [topic: Topic];
     deleteTopic: [topic: Topic];
     editMember: [member: Member];
+    selectMember: [memberId: string];
     deleteMember: [member: Member];
   }>();
 
@@ -346,7 +363,7 @@
     orderResourceIds(props.message?.topicIds ?? [], props.topics),
   );
 
-  function resolveMember(memberId: string): Pick<Member, "id" | "name"> {
+  function resolveMember(memberId: string) {
     return (
       props.members.find((member) => member.id === memberId) ?? { id: memberId, name: memberId }
     );

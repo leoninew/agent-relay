@@ -1,9 +1,17 @@
 import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { fetchChannelMessageHeads } from "@/services/channelApi";
+import { fetchChannelMessageHeads, fetchChannels, type Channel } from "@/services/channelApi";
+import { fetchRooms } from "@/services/roomApi";
+import { useChannelsStore } from "@/stores/channels";
+import { useRoomsStore } from "@/stores/rooms";
 import { useNavigationActivity } from "@/stores/navigationActivity";
+import { roomFixture } from "../fixtures/room";
 
-vi.mock("@/services/channelApi", () => ({ fetchChannelMessageHeads: vi.fn() }));
+vi.mock("@/services/channelApi", () => ({
+  fetchChannelMessageHeads: vi.fn(),
+  fetchChannels: vi.fn(),
+}));
+vi.mock("@/services/roomApi", () => ({ fetchRooms: vi.fn() }));
 const head = (roomId: string, latestSeq: number, channelId = "default") => ({
   roomId,
   channelId,
@@ -50,6 +58,7 @@ it("only polls in the foreground and keeps reminders through a refresh failure",
   const doc = Object.assign(new EventTarget(), { visibilityState: "visible" });
   vi.stubGlobal("document", doc);
   const fetch = vi.mocked(fetchChannelMessageHeads);
+  useRoomsStore().rooms = [{ ...roomFixture().room, id: "room" }];
   fetch
     .mockResolvedValueOnce([head("room", 0)])
     .mockResolvedValueOnce([head("room", 3)])
@@ -66,5 +75,51 @@ it("only polls in the foreground and keeps reminders through a refresh failure",
   doc.visibilityState = "visible";
   doc.dispatchEvent(new Event("visibilitychange"));
   expect(fetch).toHaveBeenCalledTimes(4);
+  stop();
+});
+
+it("reconciles changed IDs, retries failed loads and leaves unopened rooms lazy", async () => {
+  vi.useFakeTimers();
+  vi.stubGlobal("document", Object.assign(new EventTarget(), { visibilityState: "visible" }));
+  const room = (id: string) => ({ ...roomFixture().room, id });
+  const channel = (roomId: string, id: string): Channel => ({
+    roomId,
+    id,
+    name: id,
+    description: "",
+    workingPath: "",
+    isDefault: false,
+    status: "active",
+    workspaceKind: "existing",
+    createdAt: null,
+  });
+  const rooms = useRoomsStore();
+  const channels = useChannelsStore();
+  rooms.rooms = [room("kept"), room("gone")];
+  vi.mocked(fetchChannels)
+    .mockResolvedValueOnce([channel("gone", "default")])
+    .mockResolvedValueOnce([channel("kept", "old")]);
+  await channels.load("gone");
+  await channels.load("kept");
+  vi.mocked(fetchChannels)
+    .mockClear()
+    .mockRejectedValueOnce(new Error("offline"))
+    .mockResolvedValue([channel("kept", "new"), { ...channel("kept", "old"), status: "archived" }]);
+  vi.mocked(fetchRooms).mockResolvedValue([room("kept"), room("added")]);
+  const rows = [head("added", 0), head("kept", 0, "new")];
+  vi.mocked(fetchChannelMessageHeads).mockResolvedValue(rows);
+  const activity = useNavigationActivity();
+  const stop = activity.subscribe();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(rooms.rooms.map(({ id }) => id)).toEqual(["kept", "added"]);
+  expect(activity.unread.size).toBe(0);
+  expect(fetchChannels).toHaveBeenCalledOnce();
+  await vi.advanceTimersByTimeAsync(5000);
+  expect(channels.activeChannels("kept").map(({ id }) => id)).toEqual(["new"]);
+  vi.mocked(fetchChannelMessageHeads).mockResolvedValue([head("kept", 3, "new"), head("added", 2)]);
+  await vi.advanceTimersByTimeAsync(5000);
+  expect(activity.unread.size).toBe(2);
+  expect(fetchRooms).toHaveBeenCalledOnce();
+  expect(vi.mocked(fetchChannels).mock.calls.map(([roomId]) => roomId)).toEqual(["kept", "kept"]);
   stop();
 });

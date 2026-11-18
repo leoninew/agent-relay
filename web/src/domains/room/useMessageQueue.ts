@@ -1,9 +1,15 @@
-import { ref } from "vue";
+import { ref, watch } from "vue";
+import { queueChangedSince } from "@/domains/room/roomEventUpdates";
 import type { MessageDescriptor } from "@/i18n";
 
 import { describeApiError } from "@/services/api";
 import { deleteQueueMessage, fetchMessageQueue } from "@/services/roomApi";
-import type { MessageQueuePage, MessageQueueScope, RoomMessage } from "@/services/roomApi";
+import type {
+  MessageQueuePage,
+  MessageQueueScope,
+  RoomEventPage,
+  RoomMessage,
+} from "@/services/roomApi";
 
 export function useMessageQueue(
   roomId: () => string | undefined,
@@ -35,6 +41,43 @@ export function useMessageQueue(
     nextBeforeSeq = null;
     error.value = null;
     removeError.value = null;
+  }
+
+  function followEvents() {
+    const revision = ref(0);
+    let eventCursor: number | undefined;
+    watch(
+      [() => scope().topicId, () => scope().memberId, revision],
+      ([topic, member], [previousTopic, previousMember]) => {
+        if (topic !== previousTopic || member !== previousMember) {
+          reset();
+        }
+        if (eventCursor !== undefined && roomId() && channelId()) {
+          void refresh();
+        }
+      },
+    );
+    return {
+      reset() {
+        eventCursor = undefined;
+      },
+      resume(snapshotEventId: number) {
+        if (eventCursor === undefined) {
+          eventCursor = snapshotEventId;
+          revision.value++;
+        }
+        return Math.min(eventCursor, snapshotEventId);
+      },
+      advance(page: RoomEventPage) {
+        if (eventCursor === undefined) {
+          return;
+        }
+        if (queueChangedSince(page.events, eventCursor)) {
+          revision.value++;
+        }
+        eventCursor = Math.max(eventCursor, page.nextEventId);
+      },
+    };
   }
 
   function apply(page: MessageQueuePage, loaded: RoomMessage[]): void {
@@ -179,6 +222,7 @@ export function useMessageQueue(
     error,
     removeError,
     refresh,
+    followEvents,
     loadMore,
     remove,
     reset,

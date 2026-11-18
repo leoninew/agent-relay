@@ -868,17 +868,17 @@
 }
 .room-switcher-menu {
   z-index: 30;
-  min-width: 136px;
+  min-width: 152px;
   max-width: min(220px, calc(100vw - 24px));
   max-height: var(--reka-dropdown-menu-content-available-height);
-  padding: 4px;
+  padding: 6px;
   overflow-y: auto;
   border: 1px solid hsl(var(--border));
   border-radius: 8px;
   background: hsl(var(--card));
   color: hsl(var(--foreground));
-  font-size: var(--font-size-caption);
-  line-height: var(--line-height-caption);
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
   font-weight: 400;
   box-shadow:
     0 2px 6px hsl(222 30% 10% / 0.06),
@@ -888,9 +888,9 @@
 .room-menu-action {
   display: flex;
   align-items: center;
-  gap: 6px;
-  min-height: 28px;
-  padding: 4px 8px;
+  gap: 8px;
+  min-height: 34px;
+  padding: 5px 10px;
   border-radius: 5px;
   color: hsl(var(--foreground));
   white-space: nowrap;
@@ -901,8 +901,8 @@
   background: hsl(var(--foreground) / 0.06);
 }
 .room-menu-action svg {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   color: hsl(var(--muted-foreground));
 }
 .room-menu-danger {

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { loadRoomEventUpdates } from "@/domains/room/roomEventUpdates";
+import { loadRoomEventUpdates, queueChangedSince } from "@/domains/room/roomEventUpdates";
 import { fetchRoomActivity, fetchRoomMessageUpdates, fetchRoomMetadata } from "@/services/roomApi";
 import type { RoomEvent } from "@/services/roomApi";
 import { roomFixture } from "../../fixtures/room";
@@ -36,6 +36,7 @@ describe("event update queries", () => {
       signal,
     );
     expect(fetchRoomMessageUpdates).toHaveBeenCalledOnce();
+    expect(queueChangedSince(events, 10)).toBe(true);
     expect(fetchRoomMessageUpdates).toHaveBeenCalledWith(
       "room",
       {
@@ -51,6 +52,18 @@ describe("event update queries", () => {
     expect(fetchRoomActivity).toHaveBeenCalledOnce();
     expect(fetchRoomActivity).toHaveBeenCalledWith("room", signal, "channel");
     expect(fetchRoomMetadata).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["position", false],
+    ["member", false],
+    ["session", false],
+    ["message", false],
+    ["clear", true],
+  ] as const)("marks queue changes for %s: %s", (kind, expected) => {
+    const events = [{ eventId: 11, kind, entityId: "entity", messageId: null }];
+    expect(queueChangedSince(events, 10)).toBe(expected);
+    expect(queueChangedSince(events, 11)).toBe(false);
   });
 
   it("loads resources for member changes without issuing an empty message query", async () => {

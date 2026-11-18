@@ -1,8 +1,14 @@
 import { computed, ref } from "vue";
 import { defineStore } from "pinia";
-import { appCacheKey, channelCacheKey } from "@/services/cacheKeys";
+import { appCacheKey, channelCacheKey, roomCacheKey } from "@/services/cacheKeys";
 import { fetchChannelMessageHeads, type ChannelMessageHead } from "@/services/channelApi";
 import { browserStorage } from "@/services/storage";
+import { useChannelsStore } from "@/stores/channels";
+import { useRoomsStore } from "@/stores/rooms";
+
+function sameIds(entries: { id: string }[], expected: ReadonlySet<string>): boolean {
+  return entries.length === expected.size && entries.every(({ id }) => expected.has(id));
+}
 
 export const useNavigationActivity = defineStore("navigationActivity", () => {
   const storage = browserStorage();
@@ -58,8 +64,31 @@ export const useNavigationActivity = defineStore("navigationActivity", () => {
   }
 
   function subscribe() {
+    const rooms = useRoomsStore();
+    const channels = useChannelsStore();
     let timer: ReturnType<typeof setTimeout> | undefined;
     let request: AbortController | undefined;
+    function reconcileDirectory(rows: ChannelMessageHead[]) {
+      const byRoom = new Map<string, Set<string>>();
+      for (const { roomId, channelId } of rows) {
+        const ids = byRoom.get(roomId) ?? new Set<string>();
+        ids.add(channelId);
+        byRoom.set(roomId, ids);
+      }
+      const loads: Promise<unknown>[] = [];
+      if (!sameIds(rooms.rooms, new Set(byRoom.keys()))) {
+        loads.push(rooms.load());
+      }
+      for (const [roomId, ids] of byRoom) {
+        if (
+          channels.loadedRooms[roomCacheKey(roomId, "channels")] &&
+          !sameIds(channels.activeChannels(roomId), ids)
+        ) {
+          loads.push(channels.load(roomId, true));
+        }
+      }
+      return Promise.allSettled(loads);
+    }
     async function refresh() {
       const controller = new AbortController();
       request = controller;
@@ -67,6 +96,7 @@ export const useNavigationActivity = defineStore("navigationActivity", () => {
         const rows = await fetchChannelMessageHeads(controller.signal);
         if (!controller.signal.aborted) {
           apply(rows);
+          void reconcileDirectory(rows);
         }
       } catch {
         // Keep the last successful summary until the next poll.
