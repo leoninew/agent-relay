@@ -58,13 +58,15 @@ describe("room draft editing", () => {
   it("restores inline skill positions and identities together with the quoted message", () => {
     const skill = { type: "skill", id: "skill-check", name: "dev-check" } as const;
     const marker = formatSkillReference(skill);
-    const content = `  前文🙂 ${marker}\n再用 ${marker} 检查  `;
+    const content = `@Architect   前文🙂 ${marker}\n再用 ${marker} 检查  `;
+    const memberMentions = [{ id: "member", name: "Architect", start: 0, end: 10 }];
     const editing = editor();
     editing.open("room");
     editing.drafts.value.room = {
       content,
       topicIds: ["topic"],
       mentionedMemberIds: ["member"],
+      memberMentions,
       capabilities: referencedCapabilities(content, [skill]),
       replyToMessageId: "quote",
     };
@@ -76,6 +78,7 @@ describe("room draft editing", () => {
     expect(draft.content).toBe(content);
     expect(draft.replyToMessageId).toBe("quote");
     expect(draft.capabilities).toEqual([skill]);
+    expect(draft.memberMentions).toEqual(memberMentions);
     expect(referencedCapabilities(draft.content, draft.capabilities ?? [])).toEqual([skill]);
   });
 
@@ -93,8 +96,13 @@ describe("room draft editing", () => {
     expect(editing.drafts.value.room.content).toBe("");
   });
 
-  it("restores a pending request without rewriting it or the saved editable draft", () => {
-    const original = { content: "editable", topicIds: ["topic"], mentionedMemberIds: [] };
+  it("keeps the editable draft and its mention offsets independent of a pending request", () => {
+    const original = {
+      content: "  @Worker  ",
+      topicIds: ["topic"],
+      mentionedMemberIds: ["agent"],
+      memberMentions: [{ id: "agent", name: "Worker", start: 2, end: 9 }],
+    };
     storage.save("room", original);
     const pending: CreateMessage = {
       publicationId: "original-id",
@@ -104,12 +112,17 @@ describe("room draft editing", () => {
     };
     const editing = editor(() => true);
     editing.open("room", pending);
+    expect(editing.drafts.value.room).toEqual(original);
     editing.drafts.value.room.topicIds = [];
 
     expect(pending.topicIds).toEqual(["original-topic"]);
     expect(pending.publicationId).toBe("original-id");
     expect(storage.load("room")).toEqual(original);
     expect(editing.drafts.value.room).not.toHaveProperty("publicationId");
+    const fallback = editor(() => true);
+    fallback.open("missing", pending);
+    expect(fallback.drafts.value.missing.content).toBe(pending.content);
+    expect(fallback.drafts.value.missing).not.toHaveProperty("publicationId");
   });
 
   it("keeps unsent content when a send is rejected and editing resumes", () => {

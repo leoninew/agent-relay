@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { formatSkillReference, referencedCapabilities } from "@/domains/room/inlineSkills";
+import { skillEditorParts } from "@/domains/room/skillEditorModel";
+import { readMessageClipboard, writeMessageClipboard } from "@/domains/room/messageClipboard";
 import {
-  readSkillClipboard,
-  skillEditorParts,
-  writeSkillClipboard,
-} from "@/domains/room/skillEditorModel";
+  decodeMessage,
+  documentMemberMentions,
+  messageSlice,
+} from "@/domains/room/messageEditorCodec";
+import { Schema } from "@tiptap/pm/model";
+import { NodeSelection } from "@tiptap/pm/state";
 import type { SkillReference } from "@/services/roomApi";
 
 const check: SkillReference = { type: "skill", id: "skill-check", name: "best:dev-check" };
@@ -28,49 +32,112 @@ describe("Skill editor serialization and atomic ranges", () => {
   });
 });
 
-describe("Skill editor clipboard identity", () => {
+const schema = new Schema({
+  nodes: {
+    doc: { content: "messageBody" },
+    messageBody: { content: "inline*" },
+    text: { group: "inline" },
+    mention: { group: "inline", inline: true, attrs: { id: {}, label: {}, marker: {} } },
+    memberMention: { group: "inline", inline: true, attrs: { id: {}, label: {} } },
+    hardBreak: { group: "inline", inline: true, attrs: { raw: {} } },
+  },
+});
+const copy = (content: string, skills: SkillReference[]) =>
+  writeMessageClipboard(
+    schema.nodeFromJSON(decodeMessage(content, skills, "room", "channel")).content,
+  );
+describe("Message editor clipboard identity", () => {
   it("copies readable external text and internally restores exact markers and repeated identities", () => {
     const content = `前 ${marker}\n${marker} 后`;
-    const copied = writeSkillClipboard(content, [check]);
+    const copied = copy(content, [check]);
     expect(copied.text).toBe(`前 $${check.name}\n$${check.name} 后`);
-    expect(readSkillClipboard(copied.data, [check])).toEqual({ content, skills: [check] });
+    expect(readMessageClipboard(copied.data, [check], [])).toEqual({
+      content,
+      skills: [check],
+      memberMentions: [],
+    });
   });
 
   it("resolves by ID using the current room identity, never a copied name", () => {
-    const copied = writeSkillClipboard(marker, [check]);
+    const copied = copy(marker, [check]);
     const renamed = { ...check, name: "current:name" };
-    expect(readSkillClipboard(copied.data, [renamed])).toEqual({
+    expect(readMessageClipboard(copied.data, [renamed], [])).toEqual({
       content: marker,
       skills: [renamed],
+      memberMentions: [],
     });
-    expect(readSkillClipboard(copied.data, [{ ...check, id: "another-id" }])).toEqual({
+    expect(readMessageClipboard(copied.data, [{ ...check, id: "another-id" }], [])).toEqual({
       content: `$${check.name}`,
       skills: [],
+      memberMentions: [],
     });
   });
 
   it("downgrades an unavailable copied tag to readable text and preserves available tags", () => {
-    const copied = writeSkillClipboard(`${marker} ${formatSkillReference(fix)}`, [check, fix]);
-    expect(readSkillClipboard(copied.data, [fix])).toEqual({
+    const copied = copy(`${marker} ${formatSkillReference(fix)}`, [check, fix]);
+    expect(readMessageClipboard(copied.data, [fix], [])).toEqual({
       content: `$${check.name} ${formatSkillReference(fix)}`,
       skills: [fix],
+      memberMentions: [],
     });
   });
 
   it("keeps code examples readable as their original source", () => {
     const content = `\`${marker}\``;
-    const copied = writeSkillClipboard(content, [check]);
+    const copied = copy(content, [check]);
     expect(copied.text).toBe(content);
-    expect(readSkillClipboard(copied.data, [check])).toEqual({ content, skills: [] });
+    expect(readMessageClipboard(copied.data, [check], [])).toEqual({
+      content,
+      skills: [],
+      memberMentions: [],
+    });
+  });
+
+  it("keeps only selected member nodes atomic and resolves against the destination roster", () => {
+    const member = { id: "architect", name: "Worker" };
+    const prefix = `${marker}\n@Worker `;
+    const doc = schema.nodeFromJSON(
+      decodeMessage(`${prefix}@Worker`, [check], "room", "channel", [
+        { ...member, start: prefix.length, end: prefix.length + 7 },
+      ]),
+    );
+    const copied = writeMessageClipboard(doc.content);
+    const current = { ...member, name: "New name" };
+    const paste = readMessageClipboard(copied.data, [], [current])!;
+    const text = `$${check.name}\n@Worker `;
+    expect(paste.content).toBe(`${text}@New name`);
+    const fragment = messageSlice(
+      schema,
+      paste.content,
+      paste.skills,
+      "room",
+      "channel",
+      paste.memberMentions,
+    );
+    const restored = schema.topNodeType.create(
+      null,
+      schema.nodes.messageBody.create(null, fragment),
+    );
+    expect(documentMemberMentions(restored)).toEqual([
+      { ...current, start: text.length, end: paste.content.length },
+    ]);
+    const selected = NodeSelection.create(doc, doc.content.size - 2);
+    const justMember = writeMessageClipboard(selected.content().content);
+    expect(justMember.text).toBe("@Worker");
+    expect(readMessageClipboard(justMember.data, [], [{ ...member, id: "other" }])).toEqual({
+      content: "@Worker",
+      skills: [],
+      memberMentions: [],
+    });
   });
 
   it.each([
     "not JSON",
     "null",
     "{}",
-    '{"version":2,"content":"x","skills":[]}',
-    '{"version":1,"content":"x","skills":[{"type":"skill","id":4}]}',
+    '{"version":2,"parts":["x"]}',
+    '{"version":1,"parts":[{"type":"skill","id":4}]}',
   ])("ignores invalid private clipboard payload %s", (value) => {
-    expect(readSkillClipboard(value, [check])).toBeUndefined();
+    expect(readMessageClipboard(value, [check], [])).toBeUndefined();
   });
 });

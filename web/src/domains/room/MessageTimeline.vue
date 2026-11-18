@@ -134,7 +134,11 @@
                 :capabilities="remainingCapabilities"
                 :skill-descriptions="skillDescriptions"
               />
-              <div class="message-content" v-html="renderedContent"></div>
+              <div
+                class="message-content"
+                @click="constrainMessageClickSelection"
+                v-html="renderedContent"
+              ></div>
             </div>
             <div class="message-actions">
               <button
@@ -179,6 +183,7 @@
 <script setup lang="ts">
   import CapabilityTags from "@/domains/room/CapabilityTags.vue";
   import { computed, ref } from "vue";
+  import { constrainMessageClickSelection } from "@/domains/room/messageTextSelection";
   import { useI18n } from "vue-i18n";
 
   import AppIcon from "@/components/AppIcon.vue";

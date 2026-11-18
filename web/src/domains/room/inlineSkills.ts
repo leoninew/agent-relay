@@ -3,7 +3,7 @@ import type { CapabilityReference, SkillReference } from "@/services/roomApi";
 export type InlineSkill = { start: number; end: number; id: string };
 export type SkillQuery = { start: number; end: number; text: string };
 
-export function isSkillTriggerPrefix(content: string, start: number): boolean {
+export function isInlineTriggerPrefix(content: string, start: number): boolean {
   return start === 0 || /[\s\p{P}\p{S}]$/u.test(content.slice(0, start));
 }
 
@@ -11,7 +11,7 @@ export function skillQueryAt(content: string, position: number): SkillQuery | un
   const prefix = content.slice(0, position).match(/\$([\p{L}\p{N}_:./@-]*)$/u);
   if (!prefix) return undefined;
   const start = position - prefix[1].length - 1;
-  if (!isSkillTriggerPrefix(content, start) || !isSourcePosition(content, start)) return undefined;
+  if (!isInlineTriggerPrefix(content, start) || !isSourcePosition(content, start)) return undefined;
   const suffix = content.slice(position).match(/^[\p{L}\p{N}_:./@-]*/u)?.[0] ?? "";
   return {
     start,

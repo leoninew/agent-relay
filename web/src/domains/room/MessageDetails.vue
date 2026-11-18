@@ -149,6 +149,11 @@
                 </span>
               </dd>
             </template>
+          </dl>
+        </section>
+        <section v-if="member.kind === 'agent'" class="message-detail-section">
+          <h3>{{ t("details.codex") }}</h3>
+          <dl class="detail-message-meta">
             <template v-if="member.sessionId">
               <dt>{{ t("details.codexSessionId") }}</dt>
               <dd class="detail-copyable-id">
@@ -166,15 +171,13 @@
                 </button>
               </dd>
             </template>
-            <template v-if="member.kind === 'agent'">
-              <dt>{{ t("details.codexSessionName") }}</dt>
-              <dd
-                class="detail-session-name"
-                :title="sessionName(member) ?? t('member.sessionUnavailable')"
-              >
-                {{ sessionName(member) ?? t("member.sessionUnavailable") }}
-              </dd>
-            </template>
+            <dt>{{ t("details.codexSessionName") }}</dt>
+            <dd
+              class="detail-session-name"
+              :title="sessionName(member) ?? t('member.sessionUnavailable')"
+            >
+              {{ sessionName(member) ?? t("member.sessionUnavailable") }}
+            </dd>
           </dl>
         </section>
         <section class="message-detail-section">

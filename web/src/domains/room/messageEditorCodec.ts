@@ -2,6 +2,11 @@ import type { JSONContent } from "@tiptap/core";
 import type { Node as EditorNode, Schema } from "@tiptap/pm/model";
 import type { Transaction } from "@tiptap/pm/state";
 import MarkdownIt from "markdown-it";
+import {
+  memberMentionNode,
+  memberMentionNodeName,
+  type MemberMentionRange,
+} from "@/domains/room/composerMemberMention";
 import { scanInlineSource } from "@/domains/room/inlineSkills";
 import { skillEditorParts } from "@/domains/room/skillEditorModel";
 import type { SkillReference } from "@/services/roomApi";
@@ -66,10 +71,23 @@ export function decodeMessage(
   skills: readonly SkillReference[],
   roomId: string,
   channelId: string,
+  memberMentions: readonly MemberMentionRange[] = [],
 ): JSONContent {
+  const mentions = memberMentions
+    .filter(({ start, end, name }) => start >= 0 && content.slice(start, end) === `@${name}`)
+    .map((mention) => ({
+      start: mention.start,
+      end: mention.end,
+      node: memberMentionNode(mention),
+    }));
+  const inline = references(content, skills, roomId, channelId).filter(
+    ({ start, end }) => !mentions.some((mention) => start < mention.end && end > mention.start),
+  );
   const nodes: JSONContent[] = [];
   let from = 0;
-  for (const reference of references(content, skills, roomId, channelId)) {
+  for (const reference of [...inline, ...mentions].sort(
+    (left, right) => left.start - right.start,
+  )) {
     if (reference.start < from) continue;
     nodes.push(...textNodes(content.slice(from, reference.start)), reference.node);
     from = reference.end;
@@ -81,6 +99,7 @@ export function decodeMessage(
 export function nodeSource(node: EditorNode): string {
   if (node.isText) return node.text ?? "";
   if (node.type.name === "hardBreak") return node.attrs.raw as string;
+  if (node.type.name === memberMentionNodeName) return `@${node.attrs.label as string}`;
   if (node.type.name === "mention" || node.type.name === "imageReference")
     return node.attrs.marker as string;
   let result = "";
@@ -114,6 +133,17 @@ function units(doc: EditorNode) {
   return result;
 }
 
+export function documentMemberMentions(doc: EditorNode): MemberMentionRange[] {
+  return units(doc)
+    .filter(({ node }) => node.type.name === memberMentionNodeName)
+    .map(({ node, start, end }) => ({
+      id: node.attrs.id as string,
+      name: node.attrs.label as string,
+      start,
+      end,
+    }));
+}
+
 export function sourceOffset(doc: EditorNode, position: number): number {
   for (const unit of units(doc)) {
     if (position <= unit.pos) return unit.start;
@@ -138,7 +168,10 @@ export function reconcileReferences(
   roomId: string,
   channelId: string,
 ): Transaction {
-  const desired = references(nodeSource(tr.doc), skills, roomId, channelId);
+  const members = documentMemberMentions(tr.doc);
+  const desired = references(nodeSource(tr.doc), skills, roomId, channelId).filter(
+    ({ start, end }) => !members.some((member) => start < member.end && end > member.start),
+  );
   for (const unit of units(tr.doc).reverse()) {
     if (!["mention", "imageReference"].includes(unit.node.type.name)) continue;
     const match = desired.find(
@@ -168,6 +201,8 @@ export function messageSlice(
   skills: readonly SkillReference[],
   roomId: string,
   channelId: string,
+  memberMentions?: readonly MemberMentionRange[],
 ) {
-  return schema.nodeFromJSON(decodeMessage(content, skills, roomId, channelId)).firstChild!.content;
+  return schema.nodeFromJSON(decodeMessage(content, skills, roomId, channelId, memberMentions))
+    .firstChild!.content;
 }

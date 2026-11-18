@@ -25,27 +25,31 @@
   import AppClearButton from "@/components/AppClearButton.vue";
   import { translateMessage } from "@/i18n";
   import type { MessageDescriptor } from "@/i18n";
-  import { createImageUploads } from "@/domains/room/messageImageUploads";
   import {
-    formatSkillReference,
-    isSkillTriggerPrefix,
-    isSourcePosition,
-  } from "@/domains/room/inlineSkills";
+    insertMemberMention,
+    MemberMention,
+    memberMentionMeta,
+    type MemberMentionRange,
+  } from "@/domains/room/composerMemberMention";
+  import { composerQueryAt, type ComposerQuery } from "@/domains/room/composerQuery";
+  import { createImageUploads } from "@/domains/room/messageImageUploads";
+  import { formatSkillReference } from "@/domains/room/inlineSkills";
   import {
     decodeMessage,
+    documentMemberMentions,
     documentSkills,
     messageSlice,
     nodeSource,
     reconcileReferences,
     sourceOffset,
   } from "@/domains/room/messageEditorCodec";
+  import { messageMaxLength } from "@/domains/room/skillEditorModel";
   import {
-    messageMaxLength,
-    readSkillClipboard,
-    skillClipboardType,
-    writeSkillClipboard,
-  } from "@/domains/room/skillEditorModel";
-  import type { SkillReference } from "@/services/roomApi";
+    messageClipboardType,
+    readMessageClipboard,
+    writeMessageClipboard,
+  } from "@/domains/room/messageClipboard";
+  import type { Member, SkillReference } from "@/services/roomApi";
   import { skillIcon } from "@/domains/room/skillIcon";
 
   defineOptions({ inheritAttrs: false });
@@ -53,6 +57,8 @@
     roomId: string;
     channelId: string;
     modelValue: string;
+    memberMentions?: MemberMentionRange[];
+    availableMembers: Member[];
     skills: SkillReference[];
     availableSkills: (SkillReference & { description?: string })[];
     skillDescriptions?: ReadonlyMap<string, string>;
@@ -68,8 +74,13 @@
     activeDescendant?: string;
   }>();
   const emit = defineEmits<{
-    change: [content: string, skills: SkillReference[]];
-    query: [query: { text: string } | undefined];
+    change: [
+      content: string,
+      skills: SkillReference[],
+      memberMentions: MemberMentionRange[],
+      addedMemberIds?: string[],
+    ];
+    query: [query: ComposerQuery | undefined];
     keydown: [event: KeyboardEvent];
     compositionstart: [];
     compositionend: [];
@@ -84,7 +95,7 @@
   let composing = false;
   let compositionTimer: ReturnType<typeof setTimeout> | undefined;
   let output = props.modelValue;
-  let outputIdentity = JSON.stringify(props.skills);
+  let outputIdentity = JSON.stringify([props.skills, props.memberMentions ?? []]);
   function remember(skills: readonly SkillReference[]): void {
     for (const skill of skills) identities.set(skill.id, { ...skill });
   }
@@ -106,8 +117,8 @@
       uploadError.value = error;
     },
   });
-  const showQuery = (value: { query: string }) => {
-    emit("query", { text: value.query });
+  const showQuery = (value: { query: string; text: string }) => {
+    emit("query", { kind: value.text.startsWith("@") ? "member" : "skill", text: value.query });
   };
   const Doc = Node.create({ name: "doc", topNode: true, content: "messageBody" });
   const Body = Node.create({
@@ -171,19 +182,20 @@
       char: "$",
       allowedPrefixes: null,
       findSuggestionMatch: ({ $position }) => {
-        const before = $position.nodeBefore?.isText ? ($position.nodeBefore.text ?? "") : "";
-        const match = /\$([\p{L}\p{N}_:./@-]*)$/u.exec(before);
-        if (!match) return null;
-        const after = $position.nodeAfter?.isText ? ($position.nodeAfter.text ?? "") : "";
-        const suffix = /^[\p{L}\p{N}_:./@-]*/u.exec(after)?.[0] ?? "";
-        const from = $position.pos - match[0].length;
+        const before = $position.nodeBefore;
+        if (!before?.isText) return null;
         const source = nodeSource($position.doc);
-        const start = sourceOffset($position.doc, from);
-        if (!isSkillTriggerPrefix(source, start) || !isSourcePosition(source, start)) return null;
+        const offset = sourceOffset($position.doc, $position.pos);
+        const match = composerQueryAt(source, offset);
+        if (!match || offset - match.start > (before.text?.length ?? 0)) return null;
+        const suffixLength = Math.min(match.end - offset, $position.nodeAfter?.text?.length ?? 0);
         return {
-          range: { from, to: $position.pos + suffix.length },
-          query: match[1],
-          text: match[0] + suffix,
+          range: {
+            from: $position.pos - (offset - match.start),
+            to: $position.pos + suffixLength,
+          },
+          query: match.text,
+          text: source.slice(match.start, offset + suffixLength),
         };
       },
       allow: () => !props.disabled && !composing,
@@ -248,21 +260,22 @@
     const active = editor.value;
     if (!active || !event.clipboardData || active.state.selection.empty || (cut && props.disabled))
       return false;
-    const fragment = active.state.selection.content().content;
-    let text = "";
-    fragment.forEach((node) => {
-      text += nodeSource(node);
-    });
-    const payload = writeSkillClipboard(text, knownSkills());
+    const payload = writeMessageClipboard(active.state.selection.content().content);
     event.preventDefault();
     event.clipboardData.setData("text/plain", payload.text);
-    event.clipboardData.setData(skillClipboardType, payload.data);
+    event.clipboardData.setData(messageClipboardType, payload.data);
     if (cut) active.commands.deleteSelection();
     return true;
   }
   const editor = useEditor({
-    extensions: [Doc, Body, Text, Break, Skill, Image, UndoRedo, Contract],
-    content: decodeMessage(props.modelValue, knownSkills(), props.roomId, props.channelId),
+    extensions: [Doc, Body, Text, Break, Skill, MemberMention, Image, UndoRedo, Contract],
+    content: decodeMessage(
+      props.modelValue,
+      knownSkills(),
+      props.roomId,
+      props.channelId,
+      props.memberMentions,
+    ),
     editable: !props.disabled,
     enableInputRules: false,
     enablePasteRules: false,
@@ -299,10 +312,11 @@
       },
       handlePaste(view, event) {
         if (props.disabled || composing) return true;
-        const copied = readSkillClipboard(event.clipboardData?.getData(skillClipboardType) ?? "", [
-          ...knownSkills(),
-          ...props.availableSkills,
-        ]);
+        const copied = readMessageClipboard(
+          event.clipboardData?.getData(messageClipboardType) ?? "",
+          [...knownSkills(), ...props.availableSkills],
+          props.availableMembers,
+        );
         const text = event.clipboardData?.getData("text/plain").replace(/\r\n?/g, "\n") ?? "";
         event.preventDefault();
         if (!copied && !text) return true;
@@ -317,10 +331,15 @@
                   knownSkills(),
                   props.roomId,
                   props.channelId,
+                  copied?.memberMentions,
                 ),
                 0,
                 0,
               ),
+            )
+            .setMeta(
+              memberMentionMeta,
+              copied?.memberMentions.map((member) => member.id),
             )
             .scrollIntoView(),
         );
@@ -428,23 +447,33 @@
         },
       },
     },
-    onUpdate({ editor: active }) {
+    onUpdate({ editor: active, transaction }) {
       if (disposed || props.disabled) return;
       const content = nodeSource(active.state.doc);
       const selected = documentSkills(active.state.doc);
-      const identity = JSON.stringify(selected);
+      const memberMentions = documentMemberMentions(active.state.doc);
+      const identity = JSON.stringify([selected, memberMentions]);
       if (content === output && identity === outputIdentity) return;
       output = content;
       outputIdentity = identity;
       remember(selected);
-      emit("change", content, knownSkills());
+      const addedMemberIds: string[] | undefined = transaction.getMeta(memberMentionMeta);
+      emit("change", content, knownSkills(), memberMentions, addedMemberIds);
     },
     onCreate({ editor: active }) {
-      syncModelValue(active, props.modelValue);
+      syncModelValue(active, props.modelValue, props.memberMentions);
     },
   });
-  function syncModelValue(active: Editor, value: string): void {
-    if (value === nodeSource(active.state.doc)) return;
+  function syncModelValue(
+    active: Editor,
+    value: string,
+    memberMentions: MemberMentionRange[] = [],
+  ): void {
+    if (
+      value === nodeSource(active.state.doc) &&
+      JSON.stringify(memberMentions) === JSON.stringify(documentMemberMentions(active.state.doc))
+    )
+      return;
     uploads.cancelAll();
     if (compositionTimer) clearTimeout(compositionTimer);
     compositionTimer = undefined;
@@ -453,9 +482,9 @@
     remember(props.skills);
     output = value;
     const doc = active.schema.nodeFromJSON(
-      decodeMessage(value, knownSkills(), props.roomId, props.channelId),
+      decodeMessage(value, knownSkills(), props.roomId, props.channelId, memberMentions),
     );
-    outputIdentity = JSON.stringify(documentSkills(doc));
+    outputIdentity = JSON.stringify([documentSkills(doc), documentMemberMentions(doc)]);
     active.view.updateState(
       EditorState.create({
         doc,
@@ -480,13 +509,18 @@
   function dismissQuery(): void {
     if (editor.value) exitSuggestion(editor.value.view, SuggestionPluginKey);
   }
+  function suggestionRange(active: Editor, trigger: "$" | "@") {
+    const suggestion = SuggestionPluginKey.getState(active.state) as
+      { active: boolean; range: { from: number; to: number }; text: string | null } | undefined;
+    return suggestion?.active && suggestion.text?.startsWith(trigger)
+      ? suggestion.range
+      : undefined;
+  }
   function insertSkill(reference: SkillReference): void {
     const active = editor.value;
     if (!active || props.disabled || composing || disposed) return;
-    const suggestion = SuggestionPluginKey.getState(active.state) as
-      { active: boolean; range: { from: number; to: number } } | undefined;
-    if (!suggestion?.active) return;
-    const range = suggestion.range;
+    const range = suggestionRange(active, "$");
+    if (!range) return;
     remember([reference]);
     active
       .chain()
@@ -504,6 +538,14 @@
       ])
       .run();
   }
+  function insertMember(member: Pick<Member, "id" | "name">): void {
+    const active = editor.value;
+    if (!active || props.disabled || composing || disposed) return;
+    const range = suggestionRange(active, "@");
+    if (!range) return;
+    insertMemberMention(active, range, member);
+    focus();
+  }
   function clear(): void {
     const active = editor.value;
     if (!active || props.disabled || composing) return;
@@ -513,10 +555,10 @@
     focus();
   }
   watch(
-    () => props.modelValue,
-    (value) => {
+    [() => props.modelValue, () => props.memberMentions],
+    ([value, memberMentions]) => {
       const active = editor.value;
-      if (active) syncModelValue(active, value);
+      if (active) syncModelValue(active, value, memberMentions);
     },
     { flush: "post" },
   );
@@ -585,7 +627,7 @@
     if (compositionTimer) clearTimeout(compositionTimer);
     uploads.destroy();
   });
-  defineExpose({ focus, insertSkill, dismissQuery, clear });
+  defineExpose({ focus, insertSkill, insertMember, dismissQuery, clear });
 </script>
 
 <style scoped>
@@ -636,7 +678,11 @@
     white-space: inherit;
     cursor: help;
   }
+  .skill-message-editor :deep(.editor-member) {
+    gap: 0;
+  }
   .skill-message-editor :deep(.editor-reference:not(.editor-skill) > span:nth-child(2)) {
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
   }

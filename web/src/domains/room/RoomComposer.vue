@@ -110,6 +110,8 @@
             :room-id="roomId"
             :channel-id="channelId"
             :model-value="content"
+            :member-mentions="draft.memberMentions"
+            :available-members="agentMembers"
             :skills="draftSkills"
             :available-skills="availableSkills"
             :skill-descriptions="skillDescriptions"
@@ -137,8 +139,9 @@
           />
           <div v-if="pickerOpen" class="capability-picker">
             <div class="capability-picker-heading">
-              <span>{{ t("composer.selectSkill") }}</span>
+              <span>{{ t(memberPicker ? "composer.selectMember" : "composer.selectSkill") }}</span>
               <button
+                v-if="!memberPicker"
                 type="button"
                 class="icon-button"
                 :aria-label="t('composer.refreshSkills')"
@@ -149,7 +152,13 @@
                 <AppIcon name="refresh" />
               </button>
             </div>
-            <div id="capability-options" role="listbox" :aria-label="t('composer.availableSkills')">
+            <div
+              id="capability-options"
+              role="listbox"
+              :aria-label="
+                t(memberPicker ? 'composer.availableMembers' : 'composer.availableSkills')
+              "
+            >
               <button
                 v-for="option in options"
                 :id="`capability-${option.index}`"
@@ -161,16 +170,31 @@
                 :aria-selected="activeIndex === option.index"
                 @mousedown.prevent
                 @mouseenter="activeIndex = option.index"
-                @click="selectCapability(option)"
+                @click="selectOption(option)"
               >
-                <AppIcon name="skill" />
-                <span>
-                  <span class="capability-option-label">{{ option.label }}</span>
-                  <span class="capability-option-description">{{ option.description }}</span>
+                <span
+                  class="capability-option-label"
+                  :class="{ 'member-option-label': option.type === 'member' }"
+                >
+                  <span aria-hidden="true">{{ option.type === "member" ? "@" : "$" }}</span>
+                  <span class="capability-option-name">{{ option.label }}</span>
+                </span>
+                <span
+                  v-if="option.type === 'skill' && option.description"
+                  class="capability-option-description"
+                >
+                  {{ option.description }}
                 </span>
               </button>
             </div>
-            <div class="capability-picker-status" role="status">
+            <div
+              v-if="memberPicker && !options.length"
+              class="capability-picker-status"
+              role="status"
+            >
+              <p>{{ t("composer.noMembers") }}</p>
+            </div>
+            <div v-if="!memberPicker" class="capability-picker-status" role="status">
               <p v-if="catalog?.skillsLoading">{{ t("composer.loadingSkills") }}</p>
               <p v-if="!options.length && !catalog?.skillsLoading">{{ t("composer.noSkills") }}</p>
               <p v-for="(issue, index) in catalog?.issues" :key="index">
@@ -222,6 +246,12 @@
   import MemberIdentity from "@/domains/room/MemberIdentity.vue";
   import CapabilityTags from "@/domains/room/CapabilityTags.vue";
   import SkillMessageEditor from "@/domains/room/SkillMessageEditor.vue";
+  import {
+    updateComposerContent,
+    type ComposerDraft,
+    type MemberMentionRange,
+  } from "@/domains/room/composerMemberMention";
+  import type { ComposerQuery } from "@/domains/room/composerQuery";
   import RoomModelPicker from "@/domains/room/RoomModelPicker.vue";
   import { modelTarget } from "@/domains/room/useSessionModels";
   import type { ComposerCatalog } from "@/domains/room/useRoomCapabilities";
@@ -230,7 +260,6 @@
     inlineSkills,
     messageText,
     referencedCapabilities,
-    removeInlineSkill,
     withoutInlineSkills,
   } from "@/domains/room/inlineSkills";
   import type {
@@ -272,7 +301,7 @@
     refreshCapabilities: [];
   }>();
 
-  const draft = defineModel<MessageDraft>("draft", {
+  const draft = defineModel<ComposerDraft>("draft", {
     default: () => ({ content: "", topicIds: [], mentionedMemberIds: [] }),
   });
   const content = computed(() => draft.value.content);
@@ -316,13 +345,24 @@
   const editor = ref<InstanceType<typeof SkillMessageEditor>>();
   const composing = ref(false);
   const uploading = ref(false);
-  const query = ref<{ text: string }>();
+  const query = ref<ComposerQuery>();
   const activeIndex = ref(0);
   const pickerOpen = computed(() =>
     Boolean(query.value && props.ready && !props.sending && !props.locked),
   );
+  const memberPicker = computed(() => query.value?.kind === "member");
   const options = computed(() => {
     const search = query.value?.text.toLocaleLowerCase() ?? "";
+    if (memberPicker.value) {
+      return agentMembers.value
+        .filter((member) => member.name.toLocaleLowerCase().includes(search))
+        .map((member, index) => ({
+          type: "member" as const,
+          id: member.id,
+          label: member.name,
+          index,
+        }));
+    }
     return (props.catalog?.skills ?? [])
       .filter((skill) => skill.enabled)
       .map((skill) => ({
@@ -367,33 +407,40 @@
     ]);
   }
 
-  function updateContent(content: string, skills: SkillReference[]): void {
+  function updateContent(
+    content: string,
+    skills: SkillReference[],
+    memberMentions: MemberMentionRange[],
+    addedMemberIds?: string[],
+  ): void {
     if (!props.ready || props.sending || props.locked) return;
     insertionTooLong.value = false;
-    draft.value = {
-      ...draft.value,
+    draft.value = updateComposerContent(
+      draft.value,
       content,
-      capabilities: capabilitiesForContent(content, skills),
-    };
+      capabilitiesForContent(content, skills),
+      memberMentions,
+      addedMemberIds,
+    );
   }
 
-  function selectCapability(reference: SkillReference): void {
-    if (!query.value || !props.ready || props.sending || props.locked) return;
+  function selectOption(option: (typeof options.value)[number]): void {
+    if (!pickerOpen.value) return;
+    if (option.type === "member") {
+      const member = agentMembers.value.find((candidate) => candidate.id === option.id);
+      if (member) editor.value?.insertMember(member);
+      return;
+    }
     insertionTooLong.value = false;
-    editor.value?.insertSkill(reference);
+    editor.value?.insertSkill(option);
   }
 
   function removeCapability(reference: CapabilityReference): void {
     if (props.sending || props.locked) return;
     insertionTooLong.value = false;
-    const content =
-      reference.type === "skill"
-        ? removeInlineSkill(draft.value.content, reference.id)
-        : draft.value.content;
     draft.value = {
       ...draft.value,
-      content,
-      capabilities: capabilitiesForContent(content).filter(
+      capabilities: capabilitiesForContent(content.value).filter(
         (item) => item.type !== reference.type || item.id !== reference.id,
       ),
     };
@@ -551,7 +598,7 @@
       if (event.key === "Enter" || (event.key === "Tab" && options.value.length)) {
         event.preventDefault();
         const option = options.value[activeIndex.value];
-        if (option) void selectCapability(option);
+        if (option) selectOption(option);
         return;
       }
     }
@@ -567,6 +614,7 @@
       ...draft.value,
       content: "",
       capabilities: [],
+      memberMentions: undefined,
       replyToMessageId: undefined,
     };
     query.value = undefined;
@@ -610,9 +658,7 @@
     color: hsl(var(--muted-foreground));
   }
   .capability-option {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+    display: block;
     width: 100%;
     padding: 8px 12px;
     text-align: left;
@@ -621,15 +667,26 @@
     background: hsl(var(--accent));
     color: hsl(var(--accent-foreground));
   }
-  .capability-option > svg {
-    flex: none;
-  }
-  .capability-option > span {
-    min-width: 0;
-  }
   .capability-option-label,
   .capability-option-description {
     display: block;
+  }
+  .capability-option-label {
+    overflow-wrap: anywhere;
+  }
+  .member-option-label {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 6px;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+  .capability-option-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: inherit;
   }
   .capability-option-description {
     overflow: hidden;

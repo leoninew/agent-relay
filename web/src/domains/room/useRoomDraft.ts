@@ -1,5 +1,6 @@
 import { ref, watch } from "vue";
 
+import type { ComposerDraft } from "@/domains/room/composerMemberMention";
 import type { MessageDraft } from "@/services/roomApi";
 import { createMessageDraftStorage } from "@/stores/messageDrafts";
 
@@ -7,7 +8,7 @@ export function useRoomDraft(
   storage = createMessageDraftStorage(),
   locked: () => boolean = () => false,
 ) {
-  const drafts = ref<Record<string, MessageDraft>>({});
+  const drafts = ref<Record<string, ComposerDraft>>({});
   const currentScope = ref<string>();
 
   watch(
@@ -30,7 +31,7 @@ export function useRoomDraft(
 
   function open(scope: string, pending?: MessageDraft): void {
     currentScope.value = undefined;
-    const saved = pending ?? drafts.value[scope] ?? storage.load(scope);
+    const saved: ComposerDraft | undefined = drafts.value[scope] ?? storage.load(scope) ?? pending;
     drafts.value[scope] = saved
       ? {
           content: saved.content,
@@ -38,6 +39,9 @@ export function useRoomDraft(
           mentionedMemberIds: [...saved.mentionedMemberIds],
           ...(saved.capabilities
             ? { capabilities: saved.capabilities.map((reference) => ({ ...reference })) }
+            : {}),
+          ...(saved.memberMentions?.length
+            ? { memberMentions: saved.memberMentions.map((mention) => ({ ...mention })) }
             : {}),
           ...(saved.replyToMessageId ? { replyToMessageId: saved.replyToMessageId } : {}),
         }
