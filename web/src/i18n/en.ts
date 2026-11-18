@@ -384,6 +384,8 @@ export default {
     joined: "Joined",
     archived: "Archived",
     unavailable: "Unavailable",
+    notConnected: "Not connected",
+    error: "Session error",
     busy: "Busy",
     idle: "Idle",
     unavailableReason: "This session cannot be joined. Refresh and try again.",
@@ -391,7 +393,7 @@ export default {
       "This session is archived. Restore it in Codex and connect to the shared daemon.",
     session_error: "This session has an error. Resolve it in Codex and refresh.",
     session_not_connected:
-      "This session is not connected to the shared daemon. Open it there and refresh.",
+      "The shared daemon has not loaded this session, so its running state is unknown. Open it through the shared daemon, then refresh.",
   },
   room: {
     connecting: "Connecting to workspace",

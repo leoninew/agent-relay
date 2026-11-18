@@ -5,6 +5,7 @@ import os
 import shutil
 import socket
 import subprocess
+from collections.abc import Iterator
 from contextlib import ExitStack, suppress
 from dataclasses import replace
 from pathlib import Path
@@ -27,6 +28,7 @@ from conflua.application.dto.capabilities import McpCatalog, SkillCatalog
 from conflua.application.dto.delivery import (
     InputPage,
     QueuedInput,
+    QueueEntry,
     QueueHead,
     QueuePage,
     QueueReceipt,
@@ -42,6 +44,7 @@ from conflua.application.members.sessions import (
     SessionUnavailableError,
 )
 from conflua.domain.rooms.models import SubmissionMethod
+from conflua.domain.rooms.rules import normalize_workspace_identity, normalize_workspace_path
 from conflua.infrastructure.codex.catalog import decode_skills, server_option
 from conflua.infrastructure.codex.models import McpPage, SkillBinding, SkillDiscovery
 from conflua.infrastructure.codex.session_models import public_catalog, read_models
@@ -266,7 +269,8 @@ class CodexDriver:
         values = [thread.get(key) for key in ("id", "modelProvider")]
         if any(not isinstance(value, str) or not value for value in values):
             raise RpcDisconnected("Incomplete Codex session identity")
-        status = thread.get("status", {}).get("type")
+        raw_status = thread.get("status")
+        status = raw_status.get("type") if isinstance(raw_status, dict) else None
         if status not in {"notLoaded", "idle", "active", "systemError"}:
             raise RpcDisconnected("Invalid Codex thread status")
         name = thread.get("name")
@@ -276,6 +280,9 @@ class CodexDriver:
         preview = thread.get("preview")
         if not name and isinstance(preview, str):
             name = " ".join(preview.split())
+        cwd = thread.get("cwd")
+        if cwd is not None and (not isinstance(cwd, str) or not cwd.strip()):
+            raise RpcDisconnected("Invalid Codex session directory")
         for key in ("model", "reasoningEffort"):
             value = thread.get(key)
             if value is not None and (not isinstance(value, str) or not value.strip()):
@@ -296,41 +303,15 @@ class CodexDriver:
             archived=archived,
             model=thread.get("model"),
             reasoning_effort=thread.get("reasoningEffort"),
+            cwd=cwd,
         )
 
     def list_sessions(self, working_path: str | None = None) -> list[SessionInfo]:
         result: dict[str, SessionInfo] = {}
         with ProxyRpc(self.command, self.timeout) as rpc:
             for archived in (False, True):
-                cursor: str | None = None
-                seen: set[str] = set()
-                while True:
-                    page = rpc.call(
-                        "thread/list",
-                        {
-                            "cursor": cursor,
-                            "limit": 100,
-                            "modelProviders": [],
-                            "sourceKinds": SOURCE_KINDS,
-                            "archived": archived,
-                            "useStateDbOnly": True,
-                            "cwd": working_path,
-                        },
-                    )
-                    data = page.get("data")
-                    if not isinstance(data, list):
-                        raise RpcDisconnected("Missing Codex session list")
-                    for row in data:
-                        info = self._session(row, archived=archived)
-                        result.setdefault(info.id, info)
-                    cursor = page.get("nextCursor")
-                    if cursor is None:
-                        break
-                    if not isinstance(cursor, str) or not cursor or cursor in seen:
-                        raise RpcDisconnected("Invalid Codex pagination cursor")
-                    seen.add(cursor)
-            if working_path is not None and not result:
-                return []
+                for info in self._session_history(rpc, working_path, archived=archived):
+                    result.setdefault(info.id, info)
             loaded: set[str] = set()
             cursor = None
             seen = set()
@@ -346,8 +327,6 @@ class CodexDriver:
                 if not isinstance(cursor, str) or not cursor or cursor in seen:
                     raise RpcDisconnected("Invalid loaded Codex pagination cursor")
                 seen.add(cursor)
-            if working_path is not None:
-                loaded.intersection_update(result)
             for sid, info in tuple(result.items()):
                 if sid not in loaded:
                     result[sid] = replace(info, status="unavailable")
@@ -356,10 +335,54 @@ class CodexDriver:
                 info = self._session(row.get("thread"))
                 if info.id != sid:
                     raise RpcDisconnected("Loaded Codex session identity mismatch")
+                if working_path is not None:
+                    if info.cwd is None:
+                        if sid not in result:
+                            continue
+                    else:
+                        try:
+                            in_working_path = normalize_workspace_identity(
+                                info.cwd
+                            ) == normalize_workspace_identity(working_path)
+                        except ValueError as exc:
+                            raise RpcDisconnected("Invalid Codex session directory") from exc
+                        if not in_working_path:
+                            result.pop(sid, None)
+                            continue
                 result[sid] = (
                     replace(info, archived=result[sid].archived) if sid in result else info
                 )
         return list(result.values())
+
+    def _session_history(
+        self, rpc: ProxyRpc, working_path: str | None, *, archived: bool
+    ) -> Iterator[SessionInfo]:
+        cursor: str | None = None
+        seen: set[str] = set()
+        while True:
+            page = rpc.call(
+                "thread/list",
+                {
+                    "cursor": cursor,
+                    "limit": 100,
+                    "modelProviders": [],
+                    "sourceKinds": SOURCE_KINDS,
+                    "archived": archived,
+                    "useStateDbOnly": True,
+                    "cwd": working_path,
+                },
+            )
+            data = page.get("data")
+            if not isinstance(data, list):
+                raise RpcDisconnected("Missing Codex session list")
+            for row in data:
+                yield self._session(row, archived=archived)
+            cursor = page.get("nextCursor")
+            if cursor is None:
+                return
+            if not isinstance(cursor, str) or not cursor or cursor in seen:
+                raise RpcDisconnected("Invalid Codex pagination cursor")
+            seen.add(cursor)
 
     def connected_sessions(self, session_ids: frozenset[str]) -> list[SessionInfo]:
         if not session_ids:
@@ -389,10 +412,18 @@ class CodexDriver:
                 result.append(info)
         return result
 
-    def inspect(self, thread_id: str) -> SessionInfo:
+    def inspect(self, thread_id: str, *, check_archived: bool = False) -> SessionInfo:
         with ProxyRpc(self.command, self.timeout) as rpc:
             result = rpc.call("thread/read", {"threadId": thread_id, "includeTurns": False})
-            return self._session(result.get("thread"))
+            info = self._session(result.get("thread"))
+            if not check_archived or info.id != thread_id:
+                return info
+            working_path = normalize_workspace_path(info.cwd) if info.cwd is not None else None
+            archived = any(
+                entry.id == thread_id
+                for entry in self._session_history(rpc, working_path, archived=True)
+            )
+            return replace(info, archived=archived)
 
     def model_catalog(self, thread_id: str) -> SessionModelCatalog:
         try:
@@ -832,29 +863,54 @@ class CodexDriver:
 
     def read_queue_page(self, thread_id: str, cursor: str | None = None) -> QueuePage:
         with ProxyRpc(self.command, self.timeout) as rpc:
-            page = rpc.call(
-                "thread/queue/list", {"threadId": thread_id, "cursor": cursor, "limit": 100}
-            )
-            data = page.get("data")
-            if not isinstance(data, list):
-                raise RpcDisconnected("Missing Codex queue page")
-            inputs = []
-            for row in data:
-                if not isinstance(row, dict) or not isinstance(row.get("id"), str) or not row["id"]:
-                    raise RpcDisconnected("Invalid Codex queued input")
-                client_id = row.get("clientUserMessageId")
-                if client_id is None:
-                    continue
-                if not isinstance(client_id, str) or not client_id:
-                    raise RpcDisconnected("Invalid Codex queued client identity")
+            rows, next_cursor = self._queue_page(rpc, thread_id, cursor)
+        inputs = []
+        for entry, row in rows:
+            if entry.client_message_id is not None:
                 metadata = {key: value for key, value in row.items() if key != "input"}
-                inputs.append(QueuedInput(client_id, QueueReceipt(row["id"], metadata)))
-            next_cursor = page.get("nextCursor")
-            if next_cursor is not None and (
-                not isinstance(next_cursor, str) or not next_cursor or next_cursor == cursor
-            ):
-                raise RpcDisconnected("Invalid Codex queue pagination cursor")
-            return QueuePage(tuple(inputs), next_cursor)
+                inputs.append(
+                    QueuedInput(entry.client_message_id, QueueReceipt(entry.id, metadata))
+                )
+        return QueuePage(tuple(inputs), next_cursor)
+
+    def list_queue_entries(self, thread_id: str) -> list[QueueEntry]:
+        entries: list[QueueEntry] = []
+        cursor: str | None = None
+        seen: set[str] = set()
+        with ProxyRpc(self.command, self.timeout) as rpc:
+            while True:
+                rows, cursor = self._queue_page(rpc, thread_id, cursor)
+                entries.extend(entry for entry, _row in rows)
+                if cursor is None:
+                    return entries
+                if cursor in seen:
+                    raise RpcDisconnected("Repeated Codex queue pagination cursor")
+                seen.add(cursor)
+
+    @staticmethod
+    def _queue_page(
+        rpc: ProxyRpc, thread_id: str, cursor: str | None
+    ) -> tuple[list[tuple[QueueEntry, dict[str, Any]]], str | None]:
+        page = rpc.call(
+            "thread/queue/list", {"threadId": thread_id, "cursor": cursor, "limit": 100}
+        )
+        data = page.get("data")
+        if not isinstance(data, list):
+            raise RpcDisconnected("Missing Codex queue page")
+        rows = []
+        for row in data:
+            if not isinstance(row, dict) or not isinstance(row.get("id"), str) or not row["id"]:
+                raise RpcDisconnected("Invalid Codex queued input")
+            client_id = row.get("clientUserMessageId")
+            if client_id is not None and (not isinstance(client_id, str) or not client_id):
+                raise RpcDisconnected("Invalid Codex queued client identity")
+            rows.append((QueueEntry(row["id"], client_id), row))
+        next_cursor = page.get("nextCursor")
+        if next_cursor is not None and (
+            not isinstance(next_cursor, str) or not next_cursor or next_cursor == cursor
+        ):
+            raise RpcDisconnected("Invalid Codex queue pagination cursor")
+        return rows, next_cursor
 
     def delete(self, thread_id: str, queued_submission_id: str) -> bool:
         with ProxyRpc(self.command, self.timeout) as rpc:

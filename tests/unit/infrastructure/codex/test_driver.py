@@ -156,9 +156,16 @@ def test_session_discovery_keeps_directory_filter_across_pages_and_loaded_refres
         {"data": [archived]},
         {"data": ["active", "other"], "nextCursor": "loaded-page"},
         {"data": ["archived"]},
-        {"thread": {**active, "name": "Refreshed", "status": {"type": "active"}}},
-        {"thread": archived},
-        {"thread": other},
+        {
+            "thread": {
+                **active,
+                "name": "Refreshed",
+                "cwd": "D:/Work/project",
+                "status": {"type": "active"},
+            }
+        },
+        {"thread": {**archived, "cwd": "D:/Work/project"}},
+        {"thread": {**other, "cwd": "D:/Work/other"}},
     ]
 
     sessions = CodexDriver(["unused"], 1).list_sessions(working_path)
@@ -188,23 +195,35 @@ def test_session_discovery_keeps_directory_filter_across_pages_and_loaded_refres
         for request in history_rpc.call.call_args_list
         if request.args[0] == "thread/read"
     ]
-    expected_read_ids = ["active", "archived"]
-    if working_path is None:
-        expected_read_ids.append("other")
+    expected_read_ids = ["active", "archived", "other"]
     assert read_ids == expected_read_ids
 
 
-def test_empty_directory_query_skips_loaded_session_discovery(
+def test_directory_query_includes_loaded_session_without_history(
     history_rpc: Mock,
 ) -> None:
+    new_session = {
+        "id": "new-session",
+        "modelProvider": "codex",
+        "name": "未命名会话",
+        "cwd": "D:/Work/empty",
+        "status": {"type": "idle"},
+    }
     history_rpc.call.side_effect = [
         {"data": []},
         {"data": []},
+        {"data": ["new-session"]},
+        {"thread": new_session},
     ]
-    assert CodexDriver(["unused"], 1).list_sessions("D:/Work/empty") == []
+    sessions = CodexDriver(["unused"], 1).list_sessions("D:/Work/empty")
+    assert [(item.id, item.name, item.status, item.cwd) for item in sessions] == [
+        ("new-session", "未命名会话", "idle", "D:/Work/empty")
+    ]
     assert [request.args[0] for request in history_rpc.call.call_args_list] == [
         "thread/list",
         "thread/list",
+        "thread/loaded/list",
+        "thread/read",
     ]
 
 
@@ -222,6 +241,26 @@ def test_connected_sessions_only_reads_requested_loaded_ids(history_rpc: Mock) -
         "thread/read",
     ]
     assert history_rpc.call.call_args.args[1]["threadId"] == "bound"
+
+
+def test_inspect_checks_archive_index_without_resuming(history_rpc: Mock) -> None:
+    thread = {
+        "id": "saved-session",
+        "modelProvider": "codex",
+        "cwd": "D:/Work/project",
+        "status": {"type": "notLoaded"},
+    }
+    history_rpc.call.side_effect = [
+        {"thread": thread},
+        {"data": [], "nextCursor": "next"},
+        {"data": [thread]},
+    ]
+    session = CodexDriver(["unused"], 1).inspect("saved-session", check_archived=True)
+    assert session.archived and session.status == "unavailable"
+    requests = [request.args for request in history_rpc.call.call_args_list]
+    assert [method for method, _params in requests] == ["thread/read", "thread/list", "thread/list"]
+    assert requests[1][1]["archived"] is True
+    assert requests[2][1]["cursor"] == "next"
 
 
 def test_connected_sessions_stops_when_all_requested_ids_are_found(history_rpc: Mock) -> None:
@@ -262,6 +301,22 @@ def test_queue_page_preserves_exact_identity_and_excludes_input_content(history_
     history_rpc.call.assert_called_once_with(
         "thread/queue/list", {"threadId": "original", "cursor": "previous", "limit": 100}
     )
+
+
+def test_queue_listing_keeps_all_pages_and_only_metadata(history_rpc: Mock) -> None:
+    history_rpc.call.side_effect = [
+        {"data": [{"id": "native", "input": [{"text": "not exposed"}]}], "nextCursor": "next"},
+        {"data": [{"id": "linked", "clientUserMessageId": "client"}]},
+    ]
+    entries = CodexDriver(["unused"], 1).list_queue_entries("original")
+    assert [(entry.id, entry.client_message_id) for entry in entries] == [
+        ("native", None),
+        ("linked", "client"),
+    ]
+    assert history_rpc.call.call_args_list == [
+        call("thread/queue/list", {"threadId": "original", "cursor": None, "limit": 100}),
+        call("thread/queue/list", {"threadId": "original", "cursor": "next", "limit": 100}),
+    ]
 
 
 @pytest.mark.parametrize("row", [{"id": ""}, {"id": "q", "clientUserMessageId": 123}])

@@ -18,6 +18,7 @@ class SessionInfo:
     archived: bool = False
     model: str | None = None
     reasoning_effort: str | None = None
+    cwd: str | None = None
 
     @property
     def usable(self) -> bool:

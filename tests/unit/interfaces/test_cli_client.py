@@ -33,6 +33,18 @@ class BufferedResponse:
         pass
 
 
+def test_no_arguments_displays_top_level_help(capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["--help"]) == 0
+    help_text = capsys.readouterr().out
+    assert "Usage: conflua" in help_text
+    assert "Commands:" in help_text
+
+    assert main([]) == 2
+    output = capsys.readouterr()
+    assert output.out == ""
+    assert output.err == help_text
+
+
 def test_queue_clear_unknown_transport_result_is_not_retried(
     capsys: pytest.CaptureFixture[str],
 ) -> None:

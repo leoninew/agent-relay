@@ -28,6 +28,12 @@ class SteerReceipt:
 
 
 @dataclass(frozen=True)
+class QueueEntry:
+    id: str
+    client_message_id: str | None
+
+
+@dataclass(frozen=True)
 class QueueHead:
     id: str
     client_message_id: str | None

@@ -274,11 +274,14 @@
   const topicIds = ref<string[]>([]);
   const topicSaving = ref(false);
   const errors = ref<Record<string, MessageDescriptor>>({});
+  const sortedSessions = computed(() =>
+    (props.sessions ?? []).toSorted((left, right) => right.id.localeCompare(left.id)),
+  );
   const availableSessions = computed(() =>
-    (props.sessions ?? []).filter((session) => session.usable && !session.memberId),
+    sortedSessions.value.filter((session) => session.usable && !session.memberId),
   );
   const unavailableSessions = computed(() =>
-    (props.sessions ?? []).filter((session) => !session.usable && !session.memberId),
+    sortedSessions.value.filter((session) => !session.usable && !session.memberId),
   );
   const { t, te } = useI18n();
   const title = computed(() =>
@@ -304,7 +307,12 @@
 
   function sessionStatus(session: SessionCandidate): string {
     if (session.archived) return t("session.archived");
-    if (!session.usable) return t("session.unavailable");
+    if (!session.usable) {
+      if (session.unavailableReasonCode === "session_not_connected")
+        return t("session.notConnected");
+      if (session.unavailableReasonCode === "session_error") return t("session.error");
+      return t("session.unavailable");
+    }
     return t(session.presence === "busy" ? "session.busy" : "session.idle");
   }
 

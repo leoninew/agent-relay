@@ -377,12 +377,15 @@ export default {
     joined: "已加入",
     archived: "已归档",
     unavailable: "不可用",
+    notConnected: "未接入",
+    error: "状态异常",
     busy: "忙碌",
     idle: "空闲",
     unavailableReason: "此会话暂不可加入，请刷新后重试。",
     session_archived: "会话已归档；请在 Codex 中恢复并接入共享 daemon 后刷新",
     session_error: "会话状态异常；请在原 Codex 会话处理后刷新",
-    session_not_connected: "未接入当前消息通道，请使用共享 daemon 打开此会话后刷新",
+    session_not_connected:
+      "共享 daemon 未加载此会话，无法判断它是否在运行。请通过共享 daemon 打开此会话后刷新。",
   },
   room: {
     connecting: "正在连接协作空间",
