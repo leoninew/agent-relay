@@ -1,12 +1,13 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from "vue-router";
 
 import RoomPage from "@/domains/room/RoomPage.vue";
+import SettingsPage from "@/domains/settings/SettingsPage.vue";
 
 const routes: RouteRecordRaw[] = [
   {
     path: "/settings",
     name: "settings",
-    redirect: { name: "room" },
+    component: SettingsPage,
   },
   {
     path: "/",

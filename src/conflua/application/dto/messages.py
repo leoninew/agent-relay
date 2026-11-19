@@ -6,6 +6,16 @@ from pydantic import ConfigDict, Field, field_validator, model_validator
 from conflua.domain.rooms.inline_skills import inline_skills, without_inline_skills
 from conflua.domain.rooms.models import CapabilityReference, Message, RoomModel
 
+MAX_MESSAGE_CONTENT_LENGTH = 6000
+
+
+def validate_message_content(content: str, skill_ids: set[str]) -> None:
+    inline = inline_skills(content)
+    if any(reference.id not in skill_ids for reference in inline):
+        raise ValueError("Inline skill requires a matching capability reference")
+    if not without_inline_skills(content).strip() and not inline:
+        raise ValueError("Message content cannot be blank")
+
 
 @dataclass(frozen=True)
 class CodexQueueTarget:
@@ -54,7 +64,7 @@ class CreateMessage(RoomModel):
     model_config = ConfigDict(extra="forbid")
 
     publication_id: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
-    content: str = Field(min_length=1, max_length=6000)
+    content: str = Field(min_length=1, max_length=MAX_MESSAGE_CONTENT_LENGTH)
     capabilities: list[CapabilityReference] = Field(default_factory=list, max_length=100)
     topic_ids: list[str] = Field(default_factory=list)
     mentioned_member_ids: list[str] = Field(default_factory=list)
@@ -71,11 +81,7 @@ class CreateMessage(RoomModel):
     @model_validator(mode="after")
     def require_targets(self) -> Self:
         skills = {reference.id for reference in self.capabilities if reference.type == "skill"}
-        inline = inline_skills(self.content)
-        if any(reference.id not in skills for reference in inline):
-            raise ValueError("Inline skill requires a matching capability reference")
-        if not without_inline_skills(self.content).strip() and not inline:
-            raise ValueError("Message content cannot be blank")
+        validate_message_content(self.content, skills)
         if not self.topic_ids and not self.mentioned_member_ids:
             raise ValueError("Message requires a topic or a directly mentioned member")
         return self

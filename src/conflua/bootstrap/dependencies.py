@@ -3,6 +3,7 @@ from typing import cast
 from conflua.application.capabilities.ports import CapabilityDriver
 from conflua.application.channels.service import ChannelService
 from conflua.application.delivery.ports import QueueDriver
+from conflua.application.member_roles.service import MemberRoleService
 from conflua.application.members.sessions import SessionDriver
 from conflua.application.rooms.ports import RoomStore
 from conflua.bootstrap.settings import LoggingSettings
@@ -15,6 +16,9 @@ from conflua.infrastructure.persistence.dependencies import (
     create_room_store,
 )
 from conflua.infrastructure.persistence.repositories.context import SQLAlchemyContextRepository
+from conflua.infrastructure.persistence.repositories.member_roles import (
+    SQLAlchemyMemberRoleRepository,
+)
 from conflua.infrastructure.persistence.scopes import SQLAlchemyScope
 from conflua.infrastructure.persistence.transaction import SQLAlchemyTransaction
 from conflua.interfaces.dto import HttpDependencies, HttpLogging
@@ -38,9 +42,17 @@ def create_http_dependencies(
             database.path.parent / "worktrees",
         )
 
+    def request_member_role_service(transaction: RequestTransaction) -> MemberRoleService:
+        return MemberRoleService(
+            SQLAlchemyScope(
+                database, SQLAlchemyMemberRoleRepository, cast(SQLAlchemyTransaction, transaction)
+            )
+        )
+
     return HttpDependencies(
         request_room_store=request_room_store,
         request_channel_service=request_channel_service,
+        request_member_role_service=request_member_role_service,
         room_store=create_room_store(database),
         session_driver=sessions,
         queue_driver=queue,

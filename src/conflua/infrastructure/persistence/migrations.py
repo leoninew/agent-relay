@@ -8,7 +8,7 @@ from sqlalchemy.engine import Connection
 
 from conflua.resources import resource_root
 
-MIGRATION_HEAD = "workspace_paths_20261117"
+MIGRATION_HEAD = "member_roles_20261118"
 
 
 def _configuration(path: Path, *, resources: Path | None = None) -> Config:

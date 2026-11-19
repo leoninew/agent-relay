@@ -41,12 +41,6 @@ def test_codex_session_list_uses_current_directory_and_reports_daemon_status(
             {"id": "06", "name": "New Session", "status": "idle", "daemonStatus": "idle"},
             {"id": "05", "name": "Error", "status": "error", "daemonStatus": "error"},
             {
-                "id": "04",
-                "name": "Archived",
-                "status": "archived",
-                "daemonStatus": "not_loaded",
-            },
-            {
                 "id": "03",
                 "name": "History",
                 "status": "open",
@@ -69,6 +63,7 @@ def test_codex_session_list_defaults_to_text_for_the_specified_directory(
         return [
             SessionInfo(older_id, "codex", "Running", "active"),
             SessionInfo(newer_id, "codex", "Review", "unavailable"),
+            SessionInfo("archived", "codex", "Archived", "idle", archived=True),
         ]
 
     monkeypatch.setattr(CodexDriver, "list_sessions", list_sessions)
@@ -105,6 +100,33 @@ def test_codex_session_list_only_marks_same_directory_process_as_open(
             "status": "open",
             "daemonStatus": "not_loaded",
         }
+    ]
+
+
+def test_codex_session_list_truncates_long_names_only_in_text(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    long_name = "会" * 51
+    exact_name = "话" * 50
+    monkeypatch.setattr(
+        CodexDriver,
+        "list_sessions",
+        lambda _driver, _working_path: [
+            SessionInfo("02", "codex", long_name, "idle"),
+            SessionInfo("01", "codex", exact_name, "idle"),
+        ],
+    )
+    monkeypatch.setattr(processes, "running_session_ids", lambda _cwd: set())
+
+    assert main(["codex", "session", "list"]) == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[1].endswith("会" * 47 + "...")
+    assert lines[2].endswith(exact_name)
+
+    assert main(["codex", "session", "list", "-o", "json"]) == 0
+    assert [row["name"] for row in json.loads(capsys.readouterr().out)["data"]] == [
+        long_name,
+        exact_name,
     ]
 
 

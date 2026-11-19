@@ -14,13 +14,16 @@ from conflua.application.dto.members import (
     SessionInfo,
     UpdateMember,
 )
+from conflua.application.dto.messages import CreateMessage
 from conflua.application.dto.session_models import SessionModelCatalog, UpdateSessionModel
+from conflua.application.member_roles.service import MemberRoleService
 from conflua.application.members.sessions import (
     SessionDriver,
     SessionInterruptRejected,
     SessionModelRejected,
     SessionUnavailableError,
 )
+from conflua.application.messages.service import MessageService
 from conflua.application.rooms.ports import RoomStore
 from conflua.domain.rooms.errors import RoomConflictError
 from conflua.domain.rooms.members import (
@@ -169,7 +172,9 @@ class MemberService:
         except SessionModelRejected as exc:
             raise RoomConflictError(str(exc), code=exc.code) from exc
 
-    def add(self, room_id: str, request: CreateMember) -> CreatedMember:
+    def add(
+        self, room_id: str, request: CreateMember, *, roles: MemberRoleService | None = None
+    ) -> CreatedMember:
         with self.store.read() as rooms:
             state = rooms.resources(room_id)
             self._validate_add(state, request)
@@ -187,6 +192,12 @@ class MemberService:
         with self.store.write() as rooms:
             state = rooms.resources(room_id)
             self._validate_add(state, request)
+            if request.role_id is None:
+                role = None
+            elif roles is None:
+                raise RuntimeError("Adding a member with a role requires the role service")
+            else:
+                role = roles.get(request.role_id)
             original = deepcopy(state)
             now = datetime.now(UTC)
             session = Session(
@@ -212,6 +223,16 @@ class MemberService:
             )
             state.members.append(member)
             rooms.save_resources(state, original)
+            if role is not None:
+                MessageService.post_in_scope(
+                    rooms,
+                    room_id,
+                    CreateMessage(
+                        publication_id=f"role-prompt-{uuid4().hex}",
+                        content=role.prompt,
+                        mentioned_member_ids=[member.id],
+                    ),
+                )
             return CreatedMember(
                 **member.model_dump(),
                 session=session.model_copy(deep=True),

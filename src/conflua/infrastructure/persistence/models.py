@@ -24,6 +24,14 @@ class Base(DeclarativeBase):
     pass
 
 
+class MemberRoleRecord(Base):
+    __tablename__ = "member_roles"
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    name: Mapped[str] = mapped_column(Text, unique=True)
+    prompt: Mapped[str] = mapped_column(Text)
+
+
 class RoomRecord(Base):
     __tablename__ = "rooms"
 

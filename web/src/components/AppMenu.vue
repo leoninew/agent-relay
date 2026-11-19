@@ -107,6 +107,9 @@
               </DropdownMenuSubContent>
             </DropdownMenuPortal>
           </DropdownMenuSub>
+          <DropdownMenuItem class="room-menu-action" @select="openMemberRoles">
+            <AppIcon name="skill" />{{ t("memberRoles.title") }}
+          </DropdownMenuItem>
           <DropdownMenuItem class="room-menu-action" @select="openAbout">
             <AppIcon name="info" />{{ t("appMenu.about") }}
           </DropdownMenuItem>
@@ -150,6 +153,7 @@
   } from "reka-ui";
   import { computed, ref } from "vue";
   import { useI18n } from "vue-i18n";
+  import { useRoute, useRouter } from "vue-router";
 
   import AppDialog from "@/components/AppDialog.vue";
   import AppIcon from "@/components/AppIcon.vue";
@@ -159,6 +163,8 @@
   import { useToastsStore } from "@/stores/toasts";
 
   const { t } = useI18n();
+  const route = useRoute();
+  const router = useRouter();
   const preferences = usePreferencesStore();
   const toasts = useToastsStore();
   const aboutOpen = ref(false);
@@ -203,6 +209,16 @@
     if (await preferences.saveTheme(theme)) {
       toasts.success({ key: "appMenu.themeSaved" });
     }
+  }
+
+  function openMemberRoles(): void {
+    if (route.name === "settings") {
+      return;
+    }
+    void router.push({
+      name: "settings",
+      state: { settingsFromMenu: true },
+    });
   }
 
   async function openAbout(): Promise<void> {

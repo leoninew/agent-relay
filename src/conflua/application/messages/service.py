@@ -7,7 +7,7 @@ from conflua.application.dto.messages import (
     CodexQueueClearResult,
     CreateMessage,
 )
-from conflua.application.rooms.ports import RoomStore
+from conflua.application.rooms.ports import RoomData, RoomStore
 from conflua.domain.rooms.errors import RoomConflictError, RoomInputError, RoomNotFoundError
 from conflua.domain.rooms.models import Message
 from conflua.domain.rooms.rules import (
@@ -28,45 +28,51 @@ class MessageService:
         self, room_id: str, request: CreateMessage, *, member_id: str | None = None
     ) -> Message:
         with self.store.write() as rooms:
-            rooms.room(room_id)
-            sender = rooms.publisher(room_id, member_id)
-            validate_sender_targets(sender, request.mentioned_member_ids)
-            topic_ids = list(dict.fromkeys(request.topic_ids))
-            mentions = list(dict.fromkeys(request.mentioned_member_ids))
-            existing = rooms.publication(room_id, sender.id, request.publication_id)
-            if existing is not None:
-                if not rooms.message_exists(room_id, existing.id):
-                    raise RoomConflictError(
-                        "该发布记录已清空，请使用新的发布标识", code="publication_cleared"
-                    )
-                validate_publication_replay(
-                    existing,
-                    content=request.content,
-                    topic_ids=topic_ids,
-                    mentions=mentions,
-                    reply_to_message_id=request.reply_to_message_id,
-                    capabilities=request.capabilities,
+            return self.post_in_scope(rooms, room_id, request, member_id=member_id)
+
+    @staticmethod
+    def post_in_scope(
+        rooms: RoomData, room_id: str, request: CreateMessage, *, member_id: str | None = None
+    ) -> Message:
+        rooms.room(room_id)
+        sender = rooms.publisher(room_id, member_id)
+        validate_sender_targets(sender, request.mentioned_member_ids)
+        topic_ids = list(dict.fromkeys(request.topic_ids))
+        mentions = list(dict.fromkeys(request.mentioned_member_ids))
+        existing = rooms.publication(room_id, sender.id, request.publication_id)
+        if existing is not None:
+            if not rooms.message_exists(room_id, existing.id):
+                raise RoomConflictError(
+                    "该发布记录已清空，请使用新的发布标识", code="publication_cleared"
                 )
-                return existing.model_copy(deep=True)
-            if request.reply_to_message_id is not None and not rooms.message_exists(
-                room_id, request.reply_to_message_id
-            ):
-                raise RoomInputError("引用的消息不存在", code="reply_message_not_found")
-            message = build_message(
-                rooms.resources(room_id),
+            validate_publication_replay(
+                existing,
                 content=request.content,
                 topic_ids=topic_ids,
-                mentioned_member_ids=mentions,
-                sender_id=sender.id,
-                sender_name=sender.name,
-                created_at=datetime.now(UTC),
+                mentions=mentions,
                 reply_to_message_id=request.reply_to_message_id,
-                publication_id=request.publication_id,
-                seq=rooms.next_message_seq(room_id),
                 capabilities=request.capabilities,
             )
-            rooms.insert_message(room_id, message)
-            return message.model_copy(deep=True)
+            return existing.model_copy(deep=True)
+        if request.reply_to_message_id is not None and not rooms.message_exists(
+            room_id, request.reply_to_message_id
+        ):
+            raise RoomInputError("引用的消息不存在", code="reply_message_not_found")
+        message = build_message(
+            rooms.resources(room_id),
+            content=request.content,
+            topic_ids=topic_ids,
+            mentioned_member_ids=mentions,
+            sender_id=sender.id,
+            sender_name=sender.name,
+            created_at=datetime.now(UTC),
+            reply_to_message_id=request.reply_to_message_id,
+            publication_id=request.publication_id,
+            seq=rooms.next_message_seq(room_id),
+            capabilities=request.capabilities,
+        )
+        rooms.insert_message(room_id, message)
+        return message.model_copy(deep=True)
 
     def publication(
         self, room_id: str, publication_id: str, *, member_id: str | None = None

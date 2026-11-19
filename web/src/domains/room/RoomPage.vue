@@ -327,6 +327,7 @@
   import type { DeleteTarget } from "@/domains/room/RoomDeleteDialog.vue";
   import RoomLoadingSkeleton from "@/domains/room/RoomLoadingSkeleton.vue";
   import RoomSetupDialog from "@/domains/room/RoomSetupDialog.vue";
+  import { memberRoleNotFound } from "@/domains/room/useMemberRolePicker";
   import RoomWorkbench from "@/domains/room/RoomWorkbench.vue";
   import TopicSidebar from "@/domains/room/TopicSidebar.vue";
   import { useMessageQueue } from "@/domains/room/useMessageQueue";
@@ -1398,6 +1399,9 @@
       const message = describeApiError(caught, "errors.save");
       if (roomId === currentRoomId.value && channelId === currentChannelId.value) {
         setupError.value = message;
+        if (setupMode.value === "member" && message.key === memberRoleNotFound) {
+          return;
+        }
       }
       toasts.error(message);
     } finally {

@@ -34,7 +34,9 @@ from conflua.application.dto.rooms import (
 from conflua.application.dto.session_models import SessionModelCatalog, UpdateSessionModel
 from conflua.application.images.ports import MAX_IMAGE_BYTES
 from conflua.domain.rooms.models import Member, Message, Room
+from conflua.interfaces.http.member_roles.dependencies import MemberRoleServiceDependency
 from conflua.interfaces.http.members.dependencies import (
+    MemberCreationServiceDependency,
     MemberServiceDependency,
     SessionDriverDependency,
 )
@@ -245,9 +247,12 @@ def get_session_member(room_id: str, session_id: str, queries: RoomQueriesDepend
 
 @channel_router.post("/member", status_code=201)
 def add_member(
-    room_id: str, request: CreateMember, service: MemberServiceDependency
+    room_id: str,
+    request: CreateMember,
+    service: MemberCreationServiceDependency,
+    roles: MemberRoleServiceDependency,
 ) -> CreatedMember:
-    return service.add(room_id, request)
+    return service.add(room_id, request, roles=roles)
 
 
 @channel_router.patch("/member/{member_id}")

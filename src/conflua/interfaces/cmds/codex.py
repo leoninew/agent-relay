@@ -65,7 +65,7 @@ def _codex_display(value: str | None) -> str:
     return "".join(character if character.isprintable() else " " for character in value)
 
 
-@codex_session_commands.command("list", help="列出指定目录的 Codex 会话及其状态")
+@codex_session_commands.command("list", help="列出指定目录未归档的 Codex 会话及其状态")
 @click.option(
     "--cwd",
     type=click.Path(exists=True, file_okay=False, resolve_path=True, path_type=Path),
@@ -94,6 +94,8 @@ def codex_session_list(cwd: Path, output: str) -> ApiResult | None:
     live_session_ids = running_session_ids(working_path)
     rows = []
     for session in sessions:
+        if session.archived:
+            continue
         runtime_status, daemon_status, _source = _codex_status(
             session, working_path, live_session_ids
         )
@@ -111,6 +113,8 @@ def codex_session_list(cwd: Path, output: str) -> ApiResult | None:
     click.echo(f"{'ID':36}  {'DAEMON':10}  {'STATUS':10}  NAME")
     for row in rows:
         name = _codex_display(row["name"])
+        if len(name) > 50:
+            name = name[:47] + "..."
         click.echo(f"{row['id']:36}  {row['daemonStatus']:10}  {row['status']:10}  {name}")
     return None
 

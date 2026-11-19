@@ -307,6 +307,24 @@ describe("room API", () => {
     );
   });
 
+  it("adds an optional role ID to the existing join request", async () => {
+    const request = {
+      name: "Worker",
+      sessionId: "existing",
+      topicIds: [],
+      roleId: "role-reviewer",
+    };
+    await addRoomMember("room", request, "channel-default");
+    expect(adapterMock).toHaveBeenCalledOnce();
+    expect(adapterMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        method: "post",
+        url: "/api/room/room/channel/channel-default/member",
+        data: JSON.stringify(request),
+      }),
+    );
+  });
+
   it("does not automatically retry a failed join request", async () => {
     adapterMock.mockRejectedValueOnce(new Error("connection lost"));
     await expect(

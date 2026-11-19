@@ -98,6 +98,7 @@ class UpdateMember(RoomModel):
 
 class CreateMember(UpdateMember):
     session_id: str = Field(min_length=1, max_length=128)
+    role_id: str | None = Field(default=None, min_length=1)
 
     @field_validator("session_id")
     @classmethod

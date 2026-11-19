@@ -6,7 +6,7 @@ from starlette.requests import HTTPConnection
 from conflua.application.members.service import MemberService
 from conflua.application.members.sessions import SessionDriver
 from conflua.interfaces.http.dependencies import get_http_dependencies
-from conflua.interfaces.http.persistence import IndependentRoomStoreDependency
+from conflua.interfaces.http.persistence import IndependentRoomStoreDependency, RoomStoreDependency
 
 
 def get_session_driver(connection: HTTPConnection) -> SessionDriver:
@@ -23,3 +23,12 @@ def get_member_service(
 
 
 MemberServiceDependency = Annotated[MemberService, Depends(get_member_service)]
+
+
+def get_member_creation_service(
+    store: RoomStoreDependency, driver: SessionDriverDependency
+) -> MemberService:
+    return MemberService(store, driver)
+
+
+MemberCreationServiceDependency = Annotated[MemberService, Depends(get_member_creation_service)]

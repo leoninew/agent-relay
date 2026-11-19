@@ -6,6 +6,7 @@ from starlette.requests import Request
 from conflua.application.rooms.ports import RoomStore
 from conflua.interfaces.dto import HttpDependencies, HttpLogging
 from conflua.interfaces.http.channels.dependencies import get_channel_service
+from conflua.interfaces.http.member_roles.dependencies import get_member_role_service
 from conflua.interfaces.http.persistence import get_independent_room_store, get_room_store
 from conflua.interfaces.http.transactions import RequestTransaction
 
@@ -16,9 +17,11 @@ def test_providers_separate_request_transactions_from_rpc_scopes() -> None:
     independent_store = Mock(spec=RoomStore)
     factory = Mock(return_value=request_store)
     channel_factory = Mock()
+    role_factory = Mock()
     dependencies = HttpDependencies(
         request_room_store=factory,
         request_channel_service=channel_factory,
+        request_member_role_service=role_factory,
         room_store=independent_store,
         context_for_channel=Mock(),
         session_driver=Mock(),
@@ -39,6 +42,8 @@ def test_providers_separate_request_transactions_from_rpc_scopes() -> None:
     factory.assert_called_once_with(transaction)
     assert get_channel_service(request) is channel_factory.return_value
     channel_factory.assert_called_once_with(transaction)
+    assert get_member_role_service(request) is role_factory.return_value
+    role_factory.assert_called_once_with(transaction)
     request.scope["path_params"] = {"channel_id": "channel-api"}
     assert get_independent_room_store(request) is independent_store.for_channel.return_value
     independent_store.for_channel.assert_called_once_with("channel-api")

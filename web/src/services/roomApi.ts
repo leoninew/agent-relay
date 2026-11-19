@@ -267,7 +267,7 @@ export type Room = {
 export type CreateRoom = { name: string; workspacePath: string };
 export type UpdateRoom = { name: string; workspacePath?: string };
 export type UpdateMember = { name: string; topicIds: string[] };
-export type CreateMember = UpdateMember & { sessionId: string };
+export type CreateMember = UpdateMember & { sessionId: string; roleId?: string };
 export type Session = {
   id: string;
   name: string;

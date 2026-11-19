@@ -56,6 +56,60 @@
           :channel-id="channelId"
           :disabled="saving"
         />
+        <div v-if="mode === 'member'" class="setup-field">
+          <label for="setup-role">{{ t("setup.memberRole") }}</label>
+          <SelectRoot v-model="selectedRole" :disabled="saving">
+            <div class="app-input" :class="{ 'is-invalid': !!rejectedRole, 'is-disabled': saving }">
+              <SelectTrigger
+                id="setup-role"
+                class="app-input-control role-select"
+                :aria-invalid="!!rejectedRole"
+                :aria-describedby="rejectedRole ? 'setup-role-error' : undefined"
+              >
+                <SelectValue class="truncate" />
+                <AppIcon name="chevron-down" class="size-4 shrink-0 text-muted-foreground" />
+              </SelectTrigger>
+            </div>
+            <SelectPortal>
+              <SelectContent
+                class="room-switcher-menu role-select-menu"
+                position="popper"
+                align="start"
+                :side-offset="4"
+                :collision-padding="12"
+                :aria-label="t('setup.memberRole')"
+              >
+                <SelectViewport>
+                  <SelectItem
+                    v-for="option in roleOptions"
+                    :key="option.id"
+                    :value="option.id"
+                    :disabled="option.disabled"
+                    class="room-menu-action justify-between data-disabled:cursor-default data-disabled:opacity-50"
+                  >
+                    <SelectItemText class="truncate">{{ option.name }}</SelectItemText>
+                    <SelectItemIndicator class="shrink-0">
+                      <AppIcon name="check" />
+                    </SelectItemIndicator>
+                  </SelectItem>
+                </SelectViewport>
+              </SelectContent>
+            </SelectPortal>
+          </SelectRoot>
+          <p v-if="rejectedRole" id="setup-role-error" class="field-error" role="alert">
+            {{ translateMessage(rejectedRole.error) }}
+          </p>
+          <AppLoading v-if="rolesLoading">{{ t("common.loading") }}</AppLoading>
+          <div v-else-if="rolesError" class="setup-field-heading">
+            <p class="field-error" role="alert">{{ translateMessage(rolesError) }}</p>
+            <AppButton variant="plain" :disabled="saving" @click="loadRoles">
+              {{ t("common.retry") }}
+            </AppButton>
+          </div>
+          <p v-else-if="!roles.length && !rejectedRole" class="text-muted-foreground">
+            {{ t("memberRoles.empty") }}
+          </p>
+        </div>
         <div v-if="mode === 'member'" class="setup-field grid-cols-1">
           <div class="setup-field-heading">
             <label id="setup-session-label"
@@ -192,7 +246,13 @@
             :clear-label="t('setup.clearDescription')"
           />
         </div>
-        <p v-if="error" class="field-error" role="alert">{{ translateMessage(error) }}</p>
+        <p
+          v-if="error && (mode !== 'member' || error.key !== memberRoleNotFound)"
+          class="field-error"
+          role="alert"
+        >
+          {{ translateMessage(error) }}
+        </p>
       </div>
       <footer class="dialog-actions">
         <AppButton variant="secondary" :disabled="saving || topicSaving" @click="$emit('close')">
@@ -202,7 +262,10 @@
           type="submit"
           :loading="saving"
           :loading-label="t('settings.saving')"
-          :disabled="topicSaving || (mode === 'member' && (sessionsLoading || !!sessionsError))"
+          :disabled="
+            topicSaving ||
+            (mode === 'member' && (sessionsLoading || !!sessionsError || !!rejectedRole))
+          "
         >
           {{ topic ? t("setup.saveTopic") : mode === "room" && room ? t("setup.saveName") : title }}
         </AppButton>
@@ -221,8 +284,17 @@
     CollapsibleTrigger,
     RadioGroupItem,
     RadioGroupRoot,
+    SelectContent,
+    SelectItem,
+    SelectItemIndicator,
+    SelectItemText,
+    SelectPortal,
+    SelectRoot,
+    SelectTrigger,
+    SelectValue,
+    SelectViewport,
   } from "reka-ui";
-  import { computed, ref, watch } from "vue";
+  import { computed, onScopeDispose, ref, watch } from "vue";
 
   import AppButton from "@/components/AppButton.vue";
   import AppDialog from "@/components/AppDialog.vue";
@@ -231,6 +303,7 @@
   import AppLoading from "@/components/AppLoading.vue";
   import AppTooltip from "@/components/AppTooltip.vue";
   import MemberTopicsField from "@/domains/room/MemberTopicsField.vue";
+  import { memberRoleNotFound, useMemberRolePicker } from "@/domains/room/useMemberRolePicker";
   import type {
     CreateMember,
     CreateRoom,
@@ -274,6 +347,33 @@
   const topicIds = ref<string[]>([]);
   const topicSaving = ref(false);
   const errors = ref<Record<string, MessageDescriptor>>({});
+  const {
+    roles,
+    roleId,
+    loading: rolesLoading,
+    loadError: rolesError,
+    rejected: rejectedRole,
+    load: loadRoles,
+    reset: resetRoles,
+    select: selectRole,
+    reject: rejectRole,
+    withRole,
+  } = useMemberRolePicker();
+  const { t, te } = useI18n();
+  const noRoleOption = "no-role";
+  const selectedRole = computed({
+    get: () => roleId.value || noRoleOption,
+    set: (value) => selectRole(value === noRoleOption ? "" : value),
+  });
+  const roleOptions = computed(() => [
+    { id: noRoleOption, name: t("setup.noMemberRole"), disabled: false },
+    ...[
+      ...roles.value.map(({ id, name }) => ({ id, name, disabled: false })),
+      ...(rejectedRole.value
+        ? [{ id: rejectedRole.value.id, name: rejectedRole.value.name, disabled: true }]
+        : []),
+    ].toSorted((left, right) => left.id.localeCompare(right.id)),
+  ]);
   const sortedSessions = computed(() =>
     (props.sessions ?? []).toSorted((left, right) => right.id.localeCompare(left.id)),
   );
@@ -283,7 +383,6 @@
   const unavailableSessions = computed(() =>
     sortedSessions.value.filter((session) => !session.usable && !session.memberId),
   );
-  const { t, te } = useI18n();
   const title = computed(() =>
     props.mode === "room"
       ? props.room
@@ -338,6 +437,26 @@
     topicIds.value = [];
     errors.value = {};
   });
+
+  watch(
+    [() => props.mode, () => props.roomId, () => props.channelId],
+    ([mode]) => {
+      resetRoles();
+      if (mode === "member") {
+        void loadRoles();
+      }
+    },
+    { immediate: true },
+  );
+  watch(
+    () => props.error,
+    (message) => {
+      if (props.mode === "member" && message?.key === memberRoleNotFound) {
+        void rejectRole(message);
+      }
+    },
+  );
+  onScopeDispose(resetRoles);
 
   watch(sessionId, (selected, previous) => {
     if (props.mode !== "member") {
@@ -412,11 +531,14 @@
       emit("createRoom", { name: name.value.trim(), workspacePath: workspacePath.value });
     }
     if (props.mode === "member") {
-      const request = {
+      const request = withRole({
         name: name.value.trim(),
         topicIds: [...topicIds.value],
-      };
-      emit("createMember", { ...request, sessionId: sessionId.value });
+        sessionId: sessionId.value,
+      });
+      if (request) {
+        emit("createMember", request);
+      }
     }
     if (props.mode === "topic") {
       const request = { name: name.value.trim(), description: description.value.trim() };
@@ -428,3 +550,22 @@
     }
   }
 </script>
+
+<style scoped>
+  .role-select {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding-inline-end: 12px;
+    text-align: start;
+  }
+  :global(.room-switcher-menu.role-select-menu) {
+    z-index: 60;
+    width: var(--reka-select-trigger-width);
+    min-width: 0;
+    max-width: none;
+    max-height: var(--reka-select-content-available-height);
+    overflow: hidden;
+  }
+</style>

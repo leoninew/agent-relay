@@ -100,6 +100,7 @@ def test_candidates_exclude_archived_sessions(
 ) -> None:
     session_driver.list_sessions.return_value = [
         SessionInfo("archived", "codex", "Archived", "idle", archived=True),
+        SessionInfo("archived-unavailable", "codex", "Archived", "unavailable", archived=True),
         SessionInfo("unavailable", "codex", "Unavailable", "unavailable"),
         SessionInfo("available", "codex", "Available", "idle"),
     ]

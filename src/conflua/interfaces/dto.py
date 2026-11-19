@@ -6,6 +6,7 @@ from conflua.application.channels.service import ChannelService
 from conflua.application.context.ports import ContextData
 from conflua.application.delivery.ports import QueueDriver
 from conflua.application.images.ports import ImageStore
+from conflua.application.member_roles.service import MemberRoleService
 from conflua.application.members.sessions import SessionDriver
 from conflua.application.rooms.ports import RoomStore
 from conflua.application.transactions import RepositoryScope
@@ -26,6 +27,7 @@ class HttpLogging:
 class HttpDependencies:
     request_room_store: Callable[[RequestTransaction], RoomStore]
     request_channel_service: Callable[[RequestTransaction], ChannelService]
+    request_member_role_service: Callable[[RequestTransaction], MemberRoleService]
     room_store: RoomStore
     context_for_channel: Callable[[str], RepositoryScope[ContextData]]
     session_driver: SessionDriver
