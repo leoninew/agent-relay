@@ -178,6 +178,7 @@
   import MessageTimelineSkeleton from "@/domains/room/MessageTimelineSkeleton.vue";
   import MemberRecipientButton from "@/domains/room/MemberRecipientButton.vue";
   import { deliveryStage } from "@/domains/room/deliveryStage";
+  import { memberDisplayName } from "@/domains/room/memberDisplayName";
   import { memberSessionName } from "@/domains/room/memberSessionName";
   import { messageText } from "@/domains/room/inlineSkills";
   import { renderMessage } from "@/domains/room/messageMarkdown";
@@ -310,7 +311,7 @@
   }
 
   function memberName(memberId: string): string {
-    return memberId === "user" ? t("member.you") : (findMember(memberId)?.name ?? memberId);
+    return memberDisplayName(findMember(memberId), memberId, t("member.you"));
   }
 
   function identityMember(memberId: string) {

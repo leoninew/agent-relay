@@ -17,9 +17,11 @@ Conflua 将聊天室消息路由到当前 Codex 会话。你在当前会话完�
 
 `channel_list(room_id)` 用于发现频道；catalog 的 `workspacePath` 是房间规范工作目录，`workingPath` 才是本频道执行目录。房间的 `rawWorkspacePath` 保留用户输入，仅用于查看和编辑，不作为业务工作目录。普通频道沿用房间规范工作目录，只有独立 worktree 频道保存自己的目录。同一会话可加入多个频道，各频道成员和订阅独立；添加成员时通过 Codex 的目录筛选查询当前频道工作目录下的会话，供用户选择，不保存会话目录，也不会自动移动会话。消息 `seq` 在房间全局递增，频道内出现间隔正常；话题、成员、消息、队列、图片和查阅位置均以频道为范围。
 
-管理频道使用 `channel_create(room_id, name, use_worktree=False, description="")`、`channel_get(room_id, channel_id)`、`channel_archive(room_id, target_channel_id)`；CLI 对应 `channel create/get/archive`，创建可传 `--description`。频道展示名称和描述。默认沿用房间原目录，只有显式选择 worktree 才从当前 commit 创建独立目录，不带入未提交文件，也不接受基准提交参数。
+通过 `channel_list(room_id)`（CLI `conflua channel list ROOM`）按 `isDefault: true` 找默认频道，用该项的 `id` 访问频道资源。用该频道的 `member_catalog(room_id, channel_id=CHANNEL)`（CLI `conflua --channel-id CHANNEL member catalog ROOM`）查找 `kind: "human"` 的成员，使用返回的真实 `id` 发送定向消息。
 
-创建客户端内部先生成 ID，再发送一次创建请求；结果未知时保存错误返回的 `channelId`，使用 `channel_get` 查询同一 ID，不再次调用 create。频道、固定用户、话题与事件由请求事务一起提交，失败时回滚数据库写入；错误不授权自动接管或删除遗留的 Git 目录和分支。归档只将频道状态改为 `archived`，默认列表不再展示；保留成员、消息、投递、目录和分支，不取消待投递内容。默认频道不能归档。
+用 MCP 创建频道时，先调用 `channel_issue_id(room_id)`，保存 `data.channelId`，再调用一次 `channel_create(room_id, channel_id=CHANNEL, name="API", use_worktree=False, description="")`。领号不会创建频道。CLI `conflua channel create ROOM --name API` 会先领号再创建，可传 `--description`。默认沿用房间原目录，只有显式选择 worktree 才从当前 commit 创建独立目录，不带入未提交文件，也不接受基准提交参数。
+
+创建结果未知时，用原 ID 调用 `channel_get(room_id, channel_id)` 或 `conflua channel get ROOM CHANNEL`；CLI 在创建错误的 `error.channelId` 中返回原 ID。不要重新领号、再次创建或自动接管、清理 Git 目录和分支。频道、固定人类成员、话题与事件由请求事务一起提交。`channel_archive(room_id, target_channel_id)`（CLI `channel archive`）只归档非默认频道，保留成员、消息、投递、目录和分支，不取消待投递内容。
 
 | 协作动作 | MCP 工具 | CLI |
 | --- | --- | --- |

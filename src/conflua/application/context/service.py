@@ -1,9 +1,9 @@
 from datetime import UTC, datetime
-from uuid import uuid4
 
 from conflua.application.context.ports import ContextRepository
 from conflua.application.dto.context import ContextQuery, ContextResult
 from conflua.application.transactions import RepositoryScope
+from conflua.domain.identifiers import new_tsid
 from conflua.domain.rooms.models import VisibilityScope
 from conflua.domain.rooms.positions import position_updates, require_subscribed_topic
 
@@ -20,7 +20,7 @@ class ContextService:
             messages, more = repository.select_messages(room_id, request, scope)
             query_id = None
             if messages:
-                query_id = str(uuid4())
+                query_id = new_tsid()
                 updates = position_updates(
                     subscriptions,
                     request.topic_id,

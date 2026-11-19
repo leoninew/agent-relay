@@ -2,7 +2,7 @@
 
 使用 SQL-first Alembic，配置入口为仓库根目录的 `alembic.ini`。
 
-## 执行迁移
+## 初始化空库
 
 在仓库根目录运行，默认使用 `dev`，可追加 `profile=<名称>` 覆盖。目标数据库取自对应环境的 `database.path`：
 
@@ -17,7 +17,7 @@ $env:CONFLUA_PROFILE = 'dev'
 uv run --locked python -m conflua.migrate
 ```
 
-默认数据库为 `data/conflua.db`。服务启动时自动执行迁移。
+默认数据库为 `data/conflua.db`。服务启动时也会初始化空库；该命令不会自动转换旧版数据库。不要用 `alembic stamp` 绕过版本检查。
 
 ## 修改结构
 
@@ -26,6 +26,8 @@ uv run --locked python -m conflua.migrate
 3. 同步更新 `src/conflua/infrastructure/persistence/migrations.py` 中的 `MIGRATION_HEAD`，以及对应持久化读写实现。
 
 主外键、查询和索引字段使用列或关联表；消息能力引用等附属值数组使用 JSON。不从业务模型自动生成 DDL。
+
+数据库负责列类型、非空、默认值、主外键、唯一性，以及简单的单列布尔、枚举和数值范围。频道作用域外键和发布幂等唯一索引不能用应用层先查后写替代。TSID 编码、JSON 内容、成员身份、删除或归档与时间的配对、投递状态与回执字段的组合由应用写入路径负责，不在 SQL 或 ORM 里再实现一遍。离线工具直接写 SQL 时也须遵守这些规则。
 
 ## 离线核对 SQL
 
@@ -39,10 +41,28 @@ uv run --locked alembic upgrade head --sql
 
 ## 基线与旧库
 
-`0001_baseline` 创建频道结构，revision 为 `channel_description_20261114`；当前 head 为 `member_roles_20261118`。增量 `0002_delivery_retry` 增加投递尝试计数（旧行默认 0）与下次尝试时间（旧行默认空），保留原消息、回执和状态；历史 unknown 不自动重发或作为新机制的顺序屏障。`0003_member_channels` 将活动会话绑定的唯一范围改为频道；合并后的 `0004_simplify_paths` 删除冗余路径索引键，仅为独立 worktree 保留目录、普通频道从房间目录派生，并删除会话目录字段，保留会话与成员、消息和投递历史。`0005_channel_status` 增加 `active` / `archived` 状态，旧频道默认 `active`；归档只修改状态，不修改原有删除标记或清理成员、消息、投递和目录。`0006_workspace_paths` 将房间字段 `project_path` / `raw_project_path` 重命名为 `workspace_path` / `raw_workspace_path`，并把活动路径唯一索引同步改名为 `rooms_active_workspace`。`0007_member_roles` 新增站点级角色模板表，并预置架构师、实现者和独立验证者三个角色，不修改现有成员或消息。已升级到频道基线的数据库可直接增量升级，无需重建。
+当前新库的 `0001_baseline` 对应 `schema_governance_20261119`，包含当前完整建库 SQL 和种子。开发库的离线转换只接收旧版 `member_roles_20261118`；更早的 revision 须先在停机副本上用兼容的旧版迁移链升级并复核到这个 revision。当前版本不提供原地更新或降级，新旧版本不能混用同一套数据。
 
-更早的 revision 不在合并后的迁移链上，不提供自动升级、旧数据转换或降级。需要保留旧数据时，可先使用合并前的版本升级到 `channel_description_20261114`，并在升级前停止服务及 dispatcher、备份数据库和图片目录。新旧服务不能混跑。
+不保留历史数据时，单独备份原资产，再把当前版本配置到新的空数据库及图片目录。迁移命令不会自动清理旧文件。
 
-`0004_simplify_paths` 同时保留房间的原始目录输入和规范目录。创建和编辑从请求的 `workspacePath` 原样保存 `raw_workspace_path`，去除外围空白并规整分隔符及点路径后保存 `workspace_path`，保留大小写。API 房间响应同时返回 `rawWorkspacePath` 和 `workspacePath`。`0006_workspace_paths` 只重命名列和索引，不改写已有路径值；历史房间无法恢复已丢失的输入格式。
+实体表先定义自身 `id`（事件表为 `event_id`），随后是外键。物理列序不改变复合主键的既有顺序。内置角色的 TSID 由 `tests/unit/domain/test_identifiers.py::test_generate_offline_role_seed_batch` 在离线节点一次性生成并固定到种子 SQL，建库不重新发号。
 
-需要重建时，先停止相关服务、核对路径并按需保留数据，再对空库执行迁移。迁移命令不会自动删除或重建旧库。
+## 离线转换与切换
+
+1. 获得切换授权后，核对实际 `database.path` 及其同级 `rooms/`。停止在用服务、dispatcher 和所有写入者，保持停机直到两项资产都已切换或恢复。记录旧应用版本和配置；对留在外部队列中的投递另行确认，转换脚本不查询、取消或重发。
+2. 用 SQLite Backup API 或 `sqlite3` 的 `.backup` 命令生成一致的数据库快照，关闭并核对快照没有 `-wal`、`-shm`、`-journal` 伴随文件；不要通过单独复制活库主文件或删除伴随文件来生成快照。同一停机窗口完整备份 `rooms/`，保留目录结构；没有历史图片时准备一个空目录。将数据库和图片备份作为一对保存，并用它们生成独立的转换输入副本。
+3. 在仓库根目录执行以下命令，替换为副本和新输出目录的显式路径。输出目录的父目录必须已存在，输出目录本身不得存在；脚本不读取 profile，不覆盖源或已有目录。
+
+   ```powershell
+   uv run --locked python scripts/migrate-schema-governance.py --source-db 'D:/staging/source/conflua.db' --source-images 'D:/staging/source/rooms' --output 'D:/staging/converted'
+   ```
+
+   如果曾手动合并频道且只移动了事件的频道列，可在核实历史记录后追加 `--merged-event-channel ROOM DESTINATION ORIGIN`。仅该房间、该目标频道的历史事件可以从显式来源解析缺失的选题、成员、位置实体或原频道本身。事件仍属于目标频道，普通外键和其他事件继续严格校验；报告包含来源和各类型数量。
+
+4. 只有命令退出码为 `0` 且 `report.json` 已写入，才复核同一输出目录内的 `conflua.db` 与 `rooms/`。检查两端 revision、逐表行数、键映射、历史时间及回填数、生命周期状态与图片校验和，并对输出库独立执行 `PRAGMA integrity_check;`（应仅有 `ok`）、`PRAGMA foreign_key_check;`（应无行）及 `SELECT count(*) FROM deliveries WHERE updated_at IS NULL;`（应为 `0`）。核对旧外部会话标识、回执、路径、事件高水位及业务顺序。脚本只转换应用识别且位于原消息作用域的受管图片链接，不迁移其他目录、外部链接或工作树。空值以外的历史时间若无显式时区偏移，脚本按表、记录和列报告并停止；不要猜测时区。任何失败都不使用输出；保留错误信息，排除原因后在另一个全新目录重试。
+5. 停机状态下由操作人从**同一输出**同时准备数据库和同级 `rooms/`，切换两项资产及对应新版本配置，复核放置路径、校验和及旧备份仍可恢复。不要把新图片与旧图片目录合并，也不要混用新旧版本；两项资产都就位后才启用新版本。
+
+## 失败恢复
+
+- 转换或复核失败且未切换：保持现有磁盘资产不变；需要恢复服务时继续使用旧版本和原本配对的数据。
+- 已切换后回滚：再次停止服务和 dispatcher，隔离保留新库和新图片，避免丢失切换后写入。将旧数据库快照与同一停机点的完整旧 `rooms/` 一起恢复到核对过的路径，使用旧版本和旧配置；不要复用新库的 SQLite 伴随文件。核对旧 revision、完整性及图片后再恢复旧服务。切换后产生的业务或外部队列变化不能靠还原 SQLite 自动撤销，须单独核对。

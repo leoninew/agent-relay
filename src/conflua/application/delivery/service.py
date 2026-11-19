@@ -166,7 +166,7 @@ class DeliveryService:
                     datetime.now(UTC) + timedelta(seconds=delay),
                 )
                 return None
-            saved = self.store.finish_delivery(work.room_id, delivery)
+            saved = self.store.finish_delivery(work.room_id, delivery, channel_id=work.channel_id)
         except Exception:
             self.logger.exception("Unable to save delivery outcome delivery=%s", work.delivery.id)
             return outcome

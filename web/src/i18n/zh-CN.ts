@@ -277,7 +277,7 @@ export default {
     messageLoad: "消息加载失败，请重试。",
     detailLoad: "消息详情更新失败，请重新打开。",
     historyLoad: "历史消息加载失败，请重试。",
-    publish: "发布结果待确认，草稿已保留，请核对发布结果。",
+    publish: "消息发送失败，草稿已保留。",
     sessionLoad: "会话加载失败，请刷新重试。",
     sessionRefresh: "会话状态刷新失败。",
     memberInterrupt: "打断结果待确认，请先检查会话状态再决定是否重试。",
@@ -414,8 +414,6 @@ export default {
     loadingShort: "加载中…",
     clear: "清空",
     clearing: "清空中…",
-    pending: "发布结果待确认，请核对后继续。",
-    checkPublication: "核对发布结果",
     clearTitle: "清空聊天室",
     clearConfirm: "确定清空聊天室“{name}”吗？",
     clearWarning:

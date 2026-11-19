@@ -5,11 +5,13 @@ import json
 from collections.abc import Awaitable, Callable
 from functools import wraps
 from typing import Any, cast
+from urllib.parse import quote
 
 from mcp.server.mcpserver import Context, MCPServer
 from mcp.types import CallToolResult, TextContent, ToolAnnotations
 from starlette.concurrency import run_in_threadpool
 
+from conflua.application.dto.channels import ChannelId
 from conflua.interfaces.client import ConfluaClient, ConfluaClientError
 from conflua.interfaces.dto import ApiResult
 
@@ -47,6 +49,7 @@ WRITE_TOOLS = frozenset(
         "member_delete",
         "member_context",
         "message_publish",
+        "channel_issue_id",
         "channel_create",
         "channel_archive",
     }
@@ -131,6 +134,8 @@ def create_mcp_server(client: ConfluaClient) -> MCPServer[None]:
             "the MCP request's Codex threadId, room_id and channel_id. Use member_catalog to "
             "discover topics and members, including the human member named 你. Use channel_list "
             "to discover channels; pass channel_id explicitly for channel operations. "
+            "For a new channel, first use channel_issue_id, then call channel_create once with "
+            "that ID. For an unknown outcome, use channel_get with the same ID. "
             "Publish explicit messages "
             "using topics and/or member mentions; ordinary model output is not published. "
             "Human recipients never enter the Codex queue. queue_list reads active unfinished "
@@ -232,7 +237,45 @@ def create_mcp_server(client: ConfluaClient) -> MCPServer[None]:
             )
         )
 
-    member_tools: dict[str, Callable[..., Awaitable[CallToolResult]]] = {
+    async def channel_issue_id(room_id: ChannelId, ctx: Context[None, Any]) -> CallToolResult:
+        """Issue a channel ID without creating a channel or worktree."""
+        return await _invoke(
+            lambda: _caller(client, ctx).request(
+                "POST", f"/api/room/{quote(room_id, safe='')}/channel/issue-id"
+            )
+        )
+
+    async def channel_create(
+        room_id: ChannelId,
+        channel_id: ChannelId,
+        name: str,
+        ctx: Context[None, Any],
+        use_worktree: bool = False,
+        description: str = "",
+    ) -> CallToolResult:
+        """Create once with an issued ID; look it up with channel_get if the outcome is unknown."""
+
+        def create() -> ApiResult:
+            try:
+                return _caller(client, ctx).request(
+                    "POST",
+                    f"/api/room/{quote(room_id, safe='')}/channel",
+                    body={
+                        "channelId": channel_id,
+                        "name": name,
+                        "description": description,
+                        "useWorktree": use_worktree,
+                    },
+                )
+            except ConfluaClientError as exc:
+                exc.error["channelId"] = channel_id
+                raise
+
+        return await _invoke(create)
+
+    custom_tools: dict[str, Callable[..., Awaitable[CallToolResult]]] = {
+        "channel_issue_id": channel_issue_id,
+        "channel_create": channel_create,
         "member_catalog": member_catalog,
         "member_context": member_context,
         "member_positions": member_positions,
@@ -241,8 +284,8 @@ def create_mcp_server(client: ConfluaClient) -> MCPServer[None]:
     }
     for name in sorted(READ_TOOLS | WRITE_TOOLS):
         handler = (
-            member_tools[name]
-            if name in member_tools
+            custom_tools[name]
+            if name in custom_tools
             else _tool_handler(getattr(client, name), client)
         )
         read_only = name in READ_TOOLS

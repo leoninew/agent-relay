@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from sqlalchemy import select, update
+from sqlalchemy import false, select, update
 
 from conflua.domain.rooms.errors import RoomConflictError, RoomNotFoundError
 from conflua.domain.rooms.models import Channel, RoomState
@@ -28,6 +28,9 @@ def channel_from_record(record: ChannelRecord, workspace_path: str) -> Channel:
 
 
 class SQLAlchemyChannelRepository(SQLAlchemyRoomRepository):
+    def channel_id_exists(self, room_id: str, channel_id: str) -> bool:
+        return self.session.get(ChannelRecord, (room_id, channel_id)) is not None
+
     def channels(self, room_id: str) -> list[Channel]:
         room = self.room(room_id)
         return [
@@ -36,7 +39,7 @@ class SQLAlchemyChannelRepository(SQLAlchemyRoomRepository):
                 select(ChannelRecord)
                 .where(
                     ChannelRecord.room_id == room_id,
-                    ChannelRecord.archived_at.is_(None),
+                    ChannelRecord.is_deleted == false(),
                     ChannelRecord.status == "active",
                 )
                 .order_by(
@@ -50,6 +53,8 @@ class SQLAlchemyChannelRepository(SQLAlchemyRoomRepository):
         record = self.session.get(ChannelRecord, (room_id, channel_id))
         if record is None:
             raise RoomNotFoundError("频道不存在", code="channel_not_found")
+        if record.is_deleted:
+            raise RoomConflictError("频道已删除", code="channel_unavailable")
         return channel_from_record(record, room.workspace_path)
 
     def insert(self, channel: Channel, state: RoomState) -> None:
@@ -59,7 +64,8 @@ class SQLAlchemyChannelRepository(SQLAlchemyRoomRepository):
                 select(ChannelRecord.id).where(
                     ChannelRecord.room_id == channel.room_id,
                     ChannelRecord.name == channel.name,
-                    ChannelRecord.archived_at.is_(None),
+                    ChannelRecord.is_deleted == false(),
+                    ChannelRecord.status == "active",
                 )
             )
             is not None
@@ -97,8 +103,10 @@ class SQLAlchemyChannelRepository(SQLAlchemyRoomRepository):
         record = self.session.get(ChannelRecord, (room_id, channel_id))
         if record is None:
             raise RoomNotFoundError("频道不存在", code="channel_not_found")
-        if record.archived_at is not None:
+        if record.is_deleted:
             raise RoomConflictError("频道已删除", code="channel_unavailable")
+        if record.status == "archived":
+            raise RoomConflictError("频道已归档", code="channel_unavailable")
         if record.is_default:
             raise RoomConflictError("默认频道不能编辑", code="default_channel_read_only")
         self._check_name_available(room_id, channel_id, name)
@@ -116,7 +124,8 @@ class SQLAlchemyChannelRepository(SQLAlchemyRoomRepository):
                     ChannelRecord.room_id == room_id,
                     ChannelRecord.id != channel_id,
                     ChannelRecord.name == name,
-                    ChannelRecord.archived_at.is_(None),
+                    ChannelRecord.is_deleted == false(),
+                    ChannelRecord.status == "active",
                 )
             )
             is not None
@@ -130,14 +139,14 @@ class SQLAlchemyChannelRepository(SQLAlchemyRoomRepository):
             raise RoomNotFoundError("频道不存在", code="channel_not_found")
         if record.is_default:
             raise RoomConflictError("默认频道不能归档", code="default_channel_archive_forbidden")
-        if record.archived_at is not None and record.status != "archived":
+        if record.is_deleted:
             raise RoomConflictError("频道已删除", code="channel_unavailable")
-        if record.status != "archived" or record.archived_at is None:
+        if record.status != "archived":
             if name is not None and name != record.name:
                 self._check_name_available(room_id, channel_id, name)
                 record.name = name
             record.status = "archived"
-            record.archived_at = record.archived_at or datetime.now(UTC)
+            record.archived_at = datetime.now(UTC)
             self.session.flush()
             SQLAlchemyRoomRepository(self.session, channel_id)._event(room_id, "room", channel_id)
         elif name is not None and name != record.name:
@@ -151,7 +160,7 @@ class SQLAlchemyChannelRepository(SQLAlchemyRoomRepository):
             raise RoomNotFoundError("频道不存在", code="channel_not_found")
         if record.is_default:
             raise RoomConflictError("默认频道不能单独删除", code="default_channel_required")
-        if record.archived_at is not None:
+        if record.is_deleted or record.status == "archived":
             return
         if (
             self.session.scalar(
@@ -160,7 +169,7 @@ class SQLAlchemyChannelRepository(SQLAlchemyRoomRepository):
                     DeliveryRecord.room_id == room_id,
                     DeliveryRecord.channel_id == channel_id,
                     DeliveryRecord.status == "submitting",
-                    DeliveryRecord.deleted_at.is_(None),
+                    (DeliveryRecord.is_deleted == false()),
                 )
                 .limit(1)
             )
@@ -168,16 +177,18 @@ class SQLAlchemyChannelRepository(SQLAlchemyRoomRepository):
         ):
             raise RoomConflictError("频道操作正在进行", code="channel_operation_busy")
         now = datetime.now(UTC)
-        record.archived_at = now
+        record.is_deleted = True
+        record.deleted_at = now
+        record.updated_at = now
         self.session.execute(
             update(MemberRecord)
             .where(
                 MemberRecord.room_id == room_id,
                 MemberRecord.channel_id == channel_id,
                 MemberRecord.kind == "agent",
-                MemberRecord.deleted_at.is_(None),
+                (MemberRecord.is_deleted == false()),
             )
-            .values(deleted_at=now)
+            .values(is_deleted=True, deleted_at=now, updated_at=now)
         )
         self.session.execute(
             update(DeliveryRecord)
@@ -185,7 +196,8 @@ class SQLAlchemyChannelRepository(SQLAlchemyRoomRepository):
                 DeliveryRecord.room_id == room_id,
                 DeliveryRecord.channel_id == channel_id,
                 DeliveryRecord.status == "pending",
-                DeliveryRecord.deleted_at.is_(None),
+                (DeliveryRecord.is_deleted == false()),
             )
-            .values(deleted_at=now, updated_at=now)
+            .values(is_deleted=True, deleted_at=now, updated_at=now)
         )
+        self.session.flush()

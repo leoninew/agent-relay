@@ -1,22 +1,19 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  DEFAULT_CHANNEL_ID,
-  draftScope,
-  roomResourcePath,
-  snapshotScope,
-} from "@/domains/channel/channelRoutes";
+import { draftScope, roomResourcePath, snapshotScope } from "@/domains/channel/channelRoutes";
+
+const DEFAULT_CHANNEL_ID = "0000000000123";
 
 describe("channel scoping", () => {
   it("uses explicit channel paths for the default channel", () => {
     expect(roomResourcePath("room/one", DEFAULT_CHANNEL_ID)).toBe(
-      "/api/room/room%2Fone/channel/channel-default/snapshot",
+      `/api/room/room%2Fone/channel/${DEFAULT_CHANNEL_ID}/snapshot`,
     );
     expect(roomResourcePath("room/one", DEFAULT_CHANNEL_ID, "/message")).toBe(
-      "/api/room/room%2Fone/channel/channel-default/message",
+      `/api/room/room%2Fone/channel/${DEFAULT_CHANNEL_ID}/message`,
     );
     expect(roomResourcePath("room/one", DEFAULT_CHANNEL_ID, "/event/stream")).toBe(
-      "/api/room/room%2Fone/channel/channel-default/event/stream",
+      `/api/room/room%2Fone/channel/${DEFAULT_CHANNEL_ID}/event/stream`,
     );
   });
 
@@ -31,7 +28,7 @@ describe("channel scoping", () => {
 
   it("separates non-default snapshot and draft scopes", () => {
     expect(snapshotScope("room", DEFAULT_CHANNEL_ID)).toBe(
-      "conflua:room:room:channel:channel-default",
+      `conflua:room:room:channel:${DEFAULT_CHANNEL_ID}`,
     );
     expect(snapshotScope("room", "channel-a")).toBe("conflua:room:room:channel:channel-a");
     expect(draftScope("room", "channel-a")).toBe("conflua:room:room:channel:channel-a");

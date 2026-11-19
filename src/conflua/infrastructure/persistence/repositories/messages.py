@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import select, update
+from sqlalchemy import false, select, true, update
 
 from conflua.application.dto.messages import CodexQueueTarget
 from conflua.domain.rooms.delivery import ACTIVE_DELIVERY_STATUSES
@@ -21,10 +21,11 @@ from conflua.infrastructure.persistence.repositories._message_reads import (
 
 class SQLAlchemyMessageRepository(SQLAlchemyMessageReads):
     def insert_message(self, room_id: str, message: Message) -> None:
+        channel_id = self.channel_id_for(room_id)
         self.session.add(
             MessageRecord(
                 room_id=room_id,
-                channel_id=self.channel_id,
+                channel_id=channel_id,
                 id=message.id,
                 seq=message.seq,
                 publisher_id=message.sender_id,
@@ -39,7 +40,7 @@ class SQLAlchemyMessageRepository(SQLAlchemyMessageReads):
         self.session.add_all(
             MessageTopicRecord(
                 room_id=room_id,
-                channel_id=self.channel_id,
+                channel_id=channel_id,
                 message_id=message.id,
                 topic_id=topic_id,
                 position=position,
@@ -49,7 +50,7 @@ class SQLAlchemyMessageRepository(SQLAlchemyMessageReads):
         self.session.add_all(
             MessageMentionRecord(
                 room_id=room_id,
-                channel_id=self.channel_id,
+                channel_id=channel_id,
                 message_id=message.id,
                 member_id=member_id,
                 position=position,
@@ -59,7 +60,7 @@ class SQLAlchemyMessageRepository(SQLAlchemyMessageReads):
         self.session.add_all(
             MessageRecipientRecord(
                 room_id=room_id,
-                channel_id=self.channel_id,
+                channel_id=channel_id,
                 message_id=message.id,
                 member_id=member_id,
                 position=position,
@@ -69,7 +70,7 @@ class SQLAlchemyMessageRepository(SQLAlchemyMessageReads):
         self.session.add(
             RoomEventRecord(
                 room_id=room_id,
-                channel_id=self.channel_id,
+                channel_id=channel_id,
                 kind="message",
                 entity_id=message.id,
                 message_id=message.id,
@@ -78,12 +79,12 @@ class SQLAlchemyMessageRepository(SQLAlchemyMessageReads):
         self.session.flush()
         for delivery in message.deliveries:
             record = delivery_to_model(room_id, message.id, delivery)
-            record.channel_id = self.channel_id
+            record.channel_id = channel_id
             self.session.add(record)
             self.session.add(
                 RoomEventRecord(
                     room_id=room_id,
-                    channel_id=self.channel_id,
+                    channel_id=channel_id,
                     kind="delivery",
                     entity_id=delivery.id,
                     message_id=message.id,
@@ -100,13 +101,14 @@ class SQLAlchemyMessageRepository(SQLAlchemyMessageReads):
         deleted_at: datetime,
         message_id: str | None = None,
     ) -> int:
+        channel_id = self.channel_id_for(room_id)
         scope = self.scope(room_id, topic_id=topic_id, member_id=member_id)
         if message_id is not None:
             scope &= MessageRecord.id == message_id
         criteria = (
             (DeliveryRecord.room_id == room_id)
-            & (DeliveryRecord.channel_id == self.channel_id)
-            & DeliveryRecord.deleted_at.is_(None)
+            & (DeliveryRecord.channel_id == channel_id)
+            & (DeliveryRecord.is_deleted == false())
             & DeliveryRecord.status.in_(ACTIVE_DELIVERY_STATUSES)
             & DeliveryRecord.message_id.in_(select(MessageRecord.id).where(scope))
         )
@@ -120,13 +122,13 @@ class SQLAlchemyMessageRepository(SQLAlchemyMessageReads):
         self.session.execute(
             update(DeliveryRecord)
             .where(criteria)
-            .values(deleted_at=deleted_at, updated_at=deleted_at)
+            .values(is_deleted=True, deleted_at=deleted_at, updated_at=deleted_at)
             .execution_options(synchronize_session="fetch")
         )
         self.session.add_all(
             RoomEventRecord(
                 room_id=room_id,
-                channel_id=self.channel_id,
+                channel_id=channel_id,
                 kind="delivery",
                 entity_id=delivery_id,
                 message_id=message_id,
@@ -145,8 +147,8 @@ class SQLAlchemyMessageRepository(SQLAlchemyMessageReads):
             for session_id, submission_id in self.session.execute(
                 select(DeliveryRecord.target_session_id, DeliveryRecord.queued_submission_id).where(
                     DeliveryRecord.room_id == room_id,
-                    DeliveryRecord.channel_id == self.channel_id,
-                    DeliveryRecord.deleted_at.is_not(None),
+                    DeliveryRecord.channel_id == self.channel_id_for(room_id),
+                    (DeliveryRecord.is_deleted == true()),
                     DeliveryRecord.status.in_(("submitting", "queued")),
                     DeliveryRecord.submission_method.is_distinct_from("steer"),
                     DeliveryRecord.message_id.in_(select(MessageRecord.id).where(scope)),

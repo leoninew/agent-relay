@@ -4,6 +4,7 @@ from alembic import context
 from sqlalchemy import engine_from_config, event, pool
 
 from conflua.bootstrap.config import load_settings
+from conflua.infrastructure.persistence.migrations import check_database_revision
 
 config = context.config
 if config.config_file_name and not config.attributes.get("skip_logging_config", False):
@@ -36,6 +37,7 @@ def run_migrations_online() -> None:
             connection=supplied_connection, target_metadata=None, transactional_ddl=True
         )
         with context.begin_transaction():
+            check_database_revision(supplied_connection, allow_empty=True)
             context.run_migrations()
         return
     config.set_main_option("sqlalchemy.url", database_url().replace("%", "%%"))
@@ -63,6 +65,7 @@ def run_migrations_online() -> None:
         with connectable.connect() as connection:
             context.configure(connection=connection, target_metadata=None, transactional_ddl=True)
             with context.begin_transaction():
+                check_database_revision(connection, allow_empty=True)
                 context.run_migrations()
     finally:
         connectable.dispose()

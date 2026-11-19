@@ -9,8 +9,6 @@ from conflua.domain.rooms.models.context import VisibilityScope
 from conflua.domain.rooms.models.delivery import Delivery, SubmissionFailure, SubmissionMethod
 from conflua.domain.rooms.models.messages import Message
 from conflua.domain.rooms.models.rooms import (
-    DEFAULT_CHANNEL_ID,
-    USER_MEMBER_ID,
     Channel,
     ChannelStatus,
     Member,
@@ -22,8 +20,6 @@ from conflua.domain.rooms.models.rooms import (
 )
 
 __all__ = [
-    "DEFAULT_CHANNEL_ID",
-    "USER_MEMBER_ID",
     "CapabilityReference",
     "CapabilityReferenceModel",
     "Channel",

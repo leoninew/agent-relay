@@ -2,9 +2,9 @@ import { effectScope } from "vue";
 import type { EffectScope } from "vue";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { useRoomDraft } from "@/domains/room/useRoomDraft";
+import { draftSnapshot, useRoomDraft } from "@/domains/room/useRoomDraft";
 import { formatSkillReference, referencedCapabilities } from "@/domains/room/inlineSkills";
-import type { CreateMessage } from "@/services/roomApi";
+import { channelResourceKey } from "@/services/cacheKeys";
 import { createMessageDraftStorage } from "@/stores/messageDrafts";
 
 describe("room draft editing", () => {
@@ -16,10 +16,10 @@ describe("room draft editing", () => {
   });
   const scopes: EffectScope[] = [];
 
-  function editor(locked: () => boolean = () => false) {
+  function editor() {
     const scope = effectScope();
     scopes.push(scope);
-    return scope.run(() => useRoomDraft(storage, locked))!;
+    return scope.run(() => useRoomDraft(storage))!;
   }
 
   beforeEach(() => saved.clear());
@@ -96,7 +96,7 @@ describe("room draft editing", () => {
     expect(editing.drafts.value.room.content).toBe("");
   });
 
-  it("keeps the editable draft and its mention offsets independent of a pending request", () => {
+  it("restores an editable draft independently of a cached publication and respects clearing it", () => {
     const original = {
       content: "  @Worker  ",
       topicIds: ["topic"],
@@ -104,46 +104,30 @@ describe("room draft editing", () => {
       memberMentions: [{ id: "agent", name: "Worker", start: 2, end: 9 }],
     };
     storage.save("room", original);
-    const pending: CreateMessage = {
+    const pending = {
       publicationId: "original-id",
       content: "sent snapshot",
       topicIds: ["original-topic"],
       mentionedMemberIds: ["original-member"],
     };
-    const editing = editor(() => true);
-    editing.open("room", pending);
-    expect(editing.drafts.value.room).toEqual(original);
-    editing.drafts.value.room.topicIds = [];
-
-    expect(pending.topicIds).toEqual(["original-topic"]);
-    expect(pending.publicationId).toBe("original-id");
-    expect(storage.load("room")).toEqual(original);
-    expect(editing.drafts.value.room).not.toHaveProperty("publicationId");
-    const fallback = editor(() => true);
-    fallback.open("missing", pending);
-    expect(fallback.drafts.value.missing.content).toBe(pending.content);
-    expect(fallback.drafts.value.missing).not.toHaveProperty("publicationId");
-  });
-
-  it("keeps unsent content when a send is rejected and editing resumes", () => {
-    let locked = false;
-    const editing = editor(() => locked);
+    const key = channelResourceKey("room", "publication");
+    saved.set(key, JSON.stringify(pending));
+    const editing = editor();
     editing.open("room");
-    editing.drafts.value.room.content = "original text";
-    locked = true;
-
-    expect(storage.load("room")?.content).toBe("original text");
-    locked = false;
+    expect(editing.drafts.value.room).toEqual(original);
     editing.drafts.value.room.content = "corrected text";
-
     const restored = editor();
     restored.open("room");
     expect(restored.drafts.value.room.content).toBe("corrected text");
+    restored.drafts.value.room = { content: "", topicIds: [], mentionedMemberIds: [] };
+    const reopened = editor();
+    reopened.open("room");
+    expect(reopened.drafts.value.room.content).toBe("");
+    expect(saved.get(key)).toBe(JSON.stringify(pending));
   });
 
   it("clears sent content while retaining routing for the next message", () => {
-    let locked = false;
-    const editing = editor(() => locked);
+    const editing = editor();
     editing.open("other");
     editing.drafts.value.other.content = "other draft";
     editing.open("sent");
@@ -154,9 +138,8 @@ describe("room draft editing", () => {
       capabilities: [{ type: "skill", id: "skill", name: "example" }],
       replyToMessageId: "quote",
     };
-    locked = true;
-    editing.finish("sent", editing.drafts.value.sent);
-    locked = false;
+    const sent = editing.drafts.value.sent;
+    expect(editing.finish("sent", sent, draftSnapshot(sent))).toBe(true);
 
     expect(storage.load("sent")).toEqual({
       content: "",

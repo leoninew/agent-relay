@@ -1,10 +1,10 @@
 from datetime import UTC, datetime
 from pathlib import Path
-from uuid import uuid4
 
 from conflua.application.channels.ports import ChannelQueries, ChannelStore, WorktreeDriver
-from conflua.application.dto.channels import CreateChannel, UpdateChannel
-from conflua.domain.rooms.errors import RoomConflictError, RoomNotFoundError
+from conflua.application.dto.channels import CreateChannel, IssuedChannelId, UpdateChannel
+from conflua.domain.identifiers import new_tsid
+from conflua.domain.rooms.errors import RoomConflictError
 from conflua.domain.rooms.models import Channel
 from conflua.domain.rooms.resources import new_room_state
 from conflua.domain.rooms.rules import normalize_workspace_path
@@ -24,25 +24,17 @@ class ChannelService(ChannelQueries):
         with self.store.read() as channels:
             return channels.channel(room_id, channel_id)
 
+    def issue_id(self, room_id: str) -> IssuedChannelId:
+        with self.store.read() as channels:
+            channels.room(room_id)
+        return IssuedChannelId(channel_id=new_tsid())
+
     def create(self, room_id: str, request: CreateChannel) -> Channel:
-        channel_id = request.channel_id or f"channel-{uuid4().hex[:12]}"
+        channel_id = request.channel_id
         with self.store.guard(room_id), self.store.write() as channels:
             room = channels.room(room_id)
-            try:
-                existing = channels.channel(room_id, channel_id)
-            except RoomNotFoundError as exc:
-                if exc.code != "channel_not_found":
-                    raise
-            else:
-                if existing.archived_at is not None:
-                    raise RoomConflictError("频道已删除", code="channel_unavailable")
-                if (
-                    existing.name != request.name
-                    or existing.description != request.description
-                    or (existing.workspace_kind == "worktree") != request.use_worktree
-                ):
-                    raise RoomConflictError("频道创建参数不一致", code="channel_creation_conflict")
-                return existing
+            if channels.channel_id_exists(room_id, channel_id):
+                raise RoomConflictError("频道编号已被使用", code="channel_id_conflict")
             source = room.workspace_path
             path = normalize_workspace_path(
                 str(self.root / room_id / channel_id) if request.use_worktree else source

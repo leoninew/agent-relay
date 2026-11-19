@@ -39,6 +39,7 @@ def test_tool_catalog_exposes_typed_collaboration_and_management() -> None:
         "delivery_get",
         "channel_list",
         "channel_get",
+        "channel_issue_id",
         "channel_create",
         "channel_archive",
     }
@@ -54,7 +55,7 @@ def test_tool_catalog_exposes_typed_collaboration_and_management() -> None:
         "room_create",
         "channel_list",
         "channel_get",
-        "channel_create",
+        "channel_issue_id",
         "channel_archive",
     }:
         assert "channel_id" in tools[name].input_schema["required"]

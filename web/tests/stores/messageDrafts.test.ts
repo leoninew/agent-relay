@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import type { MessageDraft } from "@/services/roomApi";
-import { channelKey, DEFAULT_CHANNEL_ID } from "@/domains/channel/channelRoutes";
+import { channelKey } from "@/domains/channel/channelRoutes";
 import { channelResourceKey } from "@/services/cacheKeys";
 import { createMessageDraftStorage } from "@/stores/messageDrafts";
+
+const DEFAULT_CHANNEL_ID = "0000000000123";
 
 function storageFixture() {
   const saved = new Map<string, string>();

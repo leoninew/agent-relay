@@ -5,20 +5,12 @@ from unittest.mock import Mock
 
 import httpx2
 import pytest
-from alembic import command
 from fastapi import FastAPI
 
 from conflua.application.dto.member_roles import MemberRoleInput
-from conflua.application.member_roles.service import MemberRoleService
 from conflua.bootstrap.http import create_app
 from conflua.infrastructure.persistence.database import Database
 from conflua.infrastructure.persistence.dependencies import create_database
-from conflua.infrastructure.persistence.migrations import _configuration, run_migrations
-from conflua.infrastructure.persistence.repositories.member_roles import (
-    SQLAlchemyMemberRoleRepository,
-)
-from conflua.infrastructure.persistence.scopes import SQLAlchemyScope
-from conflua.infrastructure.persistence.sqlite import create_sqlite_engine
 
 ROLE_PATH = "/api/member-role"
 SEEDED_ROLE_NAMES = {
@@ -127,53 +119,3 @@ def test_role_get_reuses_open_request_session(app: FastAPI, database: Database) 
     finally:
         request_scope.finish(commit=False)
     assert {role["name"] for role in request(app, "GET").json()} == SEEDED_ROLE_NAMES
-
-
-def test_upgrade_keeps_members_and_messages_and_persists_roles(tmp_path: Path) -> None:
-    path = tmp_path / "previous.sqlite3"
-    command.upgrade(_configuration(path), "workspace_paths_20261117")
-    engine = create_sqlite_engine(path)
-    try:
-        with engine.begin() as conn:
-            conn.exec_driver_sql(
-                "INSERT INTO rooms (id, workspace_path, raw_workspace_path, name, description) "
-                "VALUES ('room', '/example', '/example', 'Test', '')"
-            )
-            conn.exec_driver_sql(
-                "INSERT INTO channels (room_id, id, name, is_default, workspace_kind) "
-                "VALUES ('room', 'channel-default', 'Default', 1, 'existing')"
-            )
-            conn.exec_driver_sql(
-                "INSERT INTO members (room_id, channel_id, id, name, kind, initials, presence, "
-                "activity, activity_source) VALUES "
-                "('room', 'channel-default', 'user', '你', 'human', 'U', 'available', '', '')"
-            )
-            conn.exec_driver_sql(
-                "INSERT INTO messages (room_id, channel_id, id, seq, publisher_id, content, "
-                "created_at) VALUES "
-                "('room', 'channel-default', 'message', 1, 'user', 'History', "
-                "'2026-11-17T00:00:00')"
-            )
-            member = conn.exec_driver_sql("SELECT * FROM members").one()
-            message = conn.exec_driver_sql("SELECT * FROM messages").one()
-    finally:
-        engine.dispose()
-
-    run_migrations(path)
-    database = Database(path)
-    try:
-        with database.read() as session:
-            assert session.connection().exec_driver_sql("SELECT * FROM members").one() == member
-            assert session.connection().exec_driver_sql("SELECT * FROM messages").one() == message
-        service = MemberRoleService(SQLAlchemyScope(database, SQLAlchemyMemberRoleRepository))
-        assert {role.name for role in service.list_roles()} == SEEDED_ROLE_NAMES
-        created = service.create(MemberRoleInput(name="Reviewer", prompt="First\nSecond"))
-    finally:
-        database.close()
-
-    reopened = Database(path)
-    try:
-        service = MemberRoleService(SQLAlchemyScope(reopened, SQLAlchemyMemberRoleRepository))
-        assert service.get(created.id) == created
-    finally:
-        reopened.close()

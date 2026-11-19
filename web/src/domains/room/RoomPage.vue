@@ -49,7 +49,7 @@
         <MemberPanel
           v-model:members="activeAgents"
           :snapshot="snapshot"
-          :busy="sending || saving || clearing || Boolean(pendingPublication)"
+          :busy="sending || saving || clearing"
           :selected-member-id="selectedMemberId"
           :interrupting-member-ids="interruptingMemberIds"
           @move="moveMember"
@@ -120,9 +120,7 @@
               class="conversation-clear-button"
               :loading="clearing"
               :loading-label="t('room.clearing')"
-              :disabled="
-                loading || refreshingSessions || sending || saving || Boolean(pendingPublication)
-              "
+              :disabled="loading || refreshingSessions || sending || saving"
               @click="openClear"
             >
               {{ t("room.clear") }}
@@ -172,18 +170,12 @@
         :reply-to="replyTo"
         :sending="sending || clearing"
         :ready="true"
-        :locked="Boolean(pendingPublication)"
-        :error="sendError"
         :catalog="capabilities.catalog.value"
         :skill-descriptions="skillDescriptions"
         @refresh-capabilities="capabilities.refresh"
         @send="sendMessage"
         @cancel-reply="cancelReply"
       />
-      <div v-if="pendingPublication && !sending" class="room-alert" role="status">
-        <span>{{ t("room.pending") }}</span>
-        <AppButton @click="resumePublication">{{ t("room.checkPublication") }}</AppButton>
-      </div>
     </section>
 
     <template #details="{ collapse }">
@@ -195,7 +187,7 @@
         :topics="orderedTopics"
         :members="orderedMembers"
         :sessions="snapshot.sessions"
-        :busy="sending || saving || clearing || Boolean(pendingPublication)"
+        :busy="sending || saving || clearing"
         @close="roomPanel.closeDetails"
         @collapse="collapse"
         @edit-channel="editChannel"
@@ -313,7 +305,8 @@
   import ChannelArchiveDialog from "@/domains/channel/ChannelArchiveDialog.vue";
   import ChannelCreateDialog from "@/domains/channel/ChannelCreateDialog.vue";
   import ChannelEditDialog from "@/domains/channel/ChannelEditDialog.vue";
-  import { DEFAULT_CHANNEL_ID, draftScope } from "@/domains/channel/channelRoutes";
+  import { draftScope } from "@/domains/channel/channelRoutes";
+  import { createMessagePublication } from "@/domains/room/messagePublication";
   import { useChannelOrder } from "@/domains/channel/useChannelOrder";
   import { useChannelArchive } from "@/domains/channel/useChannelArchive";
   import MemberEditDialog from "@/domains/room/MemberEditDialog.vue";
@@ -334,13 +327,13 @@
   import { useMemberInterrupt } from "@/domains/room/useMemberInterrupt";
   import { useRoomPanel } from "@/domains/room/useRoomPanel";
   import { useRoomCapabilities } from "@/domains/room/useRoomCapabilities";
-  import { useRoomDraft } from "@/domains/room/useRoomDraft";
+  import { draftSnapshot, useRoomDraft } from "@/domains/room/useRoomDraft";
   import { useRoomResourceOrder } from "@/domains/room/useRoomResourceOrder";
   import { loadRoomEventUpdates } from "@/domains/room/roomEventUpdates";
   import { messageQueryKey, mergeRefreshedSnapshot } from "@/domains/room/roomMessageQuery";
   import { useDelayedSkeleton } from "@/domains/room/useDelayedSkeleton";
   import { ApiClientError, describeApiError } from "@/services/api";
-  import { channelResourceKey, roomCacheKey } from "@/services/cacheKeys";
+  import { roomCacheKey } from "@/services/cacheKeys";
   import {
     addRoomMember,
     addRoomTopic,
@@ -351,14 +344,11 @@
     fetchRoomMessage,
     fetchRoomMetadata,
     fetchRoomSessions,
-    fetchPublication,
-    postRoomMessage,
     updateRoomMember,
     updateRoomTopic,
   } from "@/services/roomApi";
   import type {
     CreateMember,
-    CreateMessage,
     CreateTopic,
     Member,
     MessageDraft,
@@ -495,7 +485,6 @@
   const loadingOlder = ref(false);
   const sending = ref(false);
   const loadError = ref<MessageDescriptor | null>(null);
-  const sendError = ref<MessageDescriptor | null>(null);
   const replyTo = ref<RoomMessage>();
   const composer = ref<InstanceType<typeof RoomComposer>>();
   const timeline = ref<InstanceType<typeof MessageTimeline>>();
@@ -525,12 +514,13 @@
       activity.presented(roomId, channelId, last.seq);
     }
   });
-  const pendingPublication = ref<CreateMessage>();
-  const {
-    drafts,
-    open: openDraft,
-    finish: finishDraft,
-  } = useRoomDraft(undefined, () => sending.value || Boolean(pendingPublication.value));
+  const { drafts, open: openDraft, finish: finishDraft } = useRoomDraft();
+  const publication = createMessagePublication(sessionStorage, toasts, (scope, sent, snapshot) => {
+    if (finishDraft(scope, sent, snapshot) && scope === requestScope.value) {
+      composer.value?.reset();
+      replyTo.value = undefined;
+    }
+  });
   const capabilities = useRoomCapabilities(
     () => roomsStore.rooms.find((room) => room.id === currentRoomId.value),
     () => currentChannelId.value,
@@ -556,7 +546,7 @@
   } = useChannelArchive(
     () => currentRoomId.value,
     () => currentChannelId.value,
-    () => saving.value || sending.value || clearing.value || Boolean(pendingPublication.value),
+    () => saving.value || sending.value || clearing.value,
   );
   const clearError = ref<MessageDescriptor | null>(null);
   const setupError = ref<MessageDescriptor | null>(null);
@@ -847,7 +837,7 @@
       if (!current()) {
         return;
       }
-      if (caught instanceof ApiClientError && caught.status === 404 && !pendingPublication.value) {
+      if (caught instanceof ApiClientError && caught.status === 404) {
         cancelReply();
       }
       toasts.error(describeApiError(caught, "errors.detailLoad"));
@@ -907,15 +897,10 @@
       if (!active.value || version !== initializationVersion) {
         return;
       }
-      if (props.roomId && props.channelId) {
+      if (props.roomId) {
         await openRoom(props.roomId, props.channelId);
       } else if (roomsStore.rooms.length) {
-        await router.replace(
-          channelRoute(
-            roomsStore.rooms[0].id,
-            channelsStore.preferredChannel(roomsStore.rooms[0].id) ?? DEFAULT_CHANNEL_ID,
-          ),
-        );
+        await router.replace({ name: "room-entry", params: { roomId: roomsStore.rooms[0].id } });
       } else {
         loading.value = false;
       }
@@ -929,12 +914,11 @@
     }
   }
 
-  async function openRoom(roomId: string, requestedChannelId: string): Promise<void> {
+  async function openRoom(roomId: string, requestedChannelId?: string): Promise<void> {
     initializationVersion++;
     const version = cancelQueries();
     loading.value = true;
     loadError.value = null;
-    const previouslySelectedChannel = channelsStore.preferredChannel(roomId);
     resetSearch();
     roomPanel.reset();
     currentRoomId.value = roomId;
@@ -956,12 +940,9 @@
     if (version !== loadVersion || !active.value) {
       return;
     }
-    const requested = channelsStore.resolveChannelId(roomId, requestedChannelId);
-    const cachedFallback =
-      requestedChannelId === previouslySelectedChannel
-        ? channelsStore.resolveChannelId(roomId, DEFAULT_CHANNEL_ID)
-        : undefined;
-    const channelId = requested ?? cachedFallback;
+    const channelId = requestedChannelId
+      ? channelsStore.resolveChannelId(roomId, requestedChannelId)
+      : channelsStore.entryChannelId(roomId);
     if (!channelId) {
       loadError.value = { key: "errors.channel_not_found" };
       loading.value = false;
@@ -1012,10 +993,7 @@
     }
     messageQueue.reset();
     replyTo.value = undefined;
-    sendError.value = null;
-    const saved = sessionStorage.getItem(channelResourceKey(scope, "publication"));
-    pendingPublication.value = saved ? (JSON.parse(saved) as CreateMessage) : undefined;
-    openDraft(scope, pendingPublication.value);
+    openDraft(scope);
     if (!(await loadRoom())) {
       return;
     }
@@ -1026,7 +1004,7 @@
   }
 
   async function retry(): Promise<void> {
-    if (currentRoomId.value && props.channelId && !currentChannelId.value) {
+    if (currentRoomId.value && !currentChannelId.value) {
       await openRoom(currentRoomId.value, props.channelId);
     } else if (currentRoomId.value) {
       await loadRoom();
@@ -1101,7 +1079,7 @@
   }
 
   function quoteMessage(message: RoomMessage): void {
-    if (sending.value || pendingPublication.value) {
+    if (sending.value) {
       return;
     }
     replyTo.value = message;
@@ -1119,85 +1097,36 @@
 
   async function sendMessage(draft: MessageDraft): Promise<void> {
     const scope = requestScope.value;
-    if (sending.value || clearing.value || !scope) {
-      return;
-    }
-    if (pendingPublication.value) {
-      return;
-    }
-    const request = { ...draft, publicationId: crypto.randomUUID() };
-    sessionStorage.setItem(channelResourceKey(scope, "publication"), JSON.stringify(request));
-    pendingPublication.value = request;
-    await publish(request);
-  }
-
-  async function resumePublication(): Promise<void> {
-    if (pendingPublication.value && !sending.value) {
-      await publish(pendingPublication.value, true);
-    }
-  }
-
-  async function publish(request: CreateMessage, lookup = false): Promise<void> {
-    const scope = requestScope.value;
-    if (!currentRoomId.value || !currentChannelId.value || !scope) {
-      return;
-    }
     const roomId = currentRoomId.value;
     const channelId = currentChannelId.value;
+    const editing = scope ? drafts.value[scope] : undefined;
+    if (sending.value || clearing.value || !scope || !roomId || !channelId || !editing) {
+      return;
+    }
+    const current = () => scope === requestScope.value;
     sending.value = true;
-    sendError.value = null;
-    let sentMessage: RoomMessage;
     try {
-      if (lookup) {
-        try {
-          sentMessage = await fetchPublication(roomId, request.publicationId, channelId);
-        } catch (caught) {
-          if (!(caught instanceof ApiClientError) || caught.status !== 404) {
-            throw caught;
-          }
-          sentMessage = await postRoomMessage(roomId, request, channelId);
-        }
-      } else {
-        sentMessage = await postRoomMessage(roomId, request, channelId);
+      const sentMessage = await publication.send(roomId, channelId, draft, draftSnapshot(editing));
+      if (!sentMessage) {
+        return;
       }
-    } catch (caught) {
-      if (
-        caught instanceof ApiClientError &&
-        caught.kind === "http_error" &&
-        [404, 409, 422].includes(caught.status ?? 0)
-      ) {
-        sessionStorage.removeItem(channelResourceKey(scope, "publication"));
-        if (scope === requestScope.value) {
-          pendingPublication.value = undefined;
-        }
+      toasts.success({ key: "notice.published" });
+      if (!current()) {
+        return;
       }
-      const message = describeApiError(caught, "errors.publish");
-      if (scope === requestScope.value) {
-        sendError.value = message;
+      roomPanel.selectMessage(sentMessage);
+      selectedMemberId.value = undefined;
+      if (selectedTopicId.value && !draft.topicIds.includes(selectedTopicId.value)) {
+        selectedTopicId.value = draft.topicIds[0];
       }
-      toasts.error(message);
+      await loadRoom({ preservePosition: false });
+    } finally {
       sending.value = false;
-      return;
     }
-    sessionStorage.removeItem(channelResourceKey(scope, "publication"));
-    finishDraft(scope, request);
-    if (scope !== requestScope.value) {
-      sending.value = false;
-      return;
-    }
-    roomPanel.selectMessage(sentMessage);
-    pendingPublication.value = undefined;
-    composer.value?.reset();
-    replyTo.value = undefined;
-    toasts.success({ key: "notice.published" });
-    selectedMemberId.value = undefined;
-    if (selectedTopicId.value && !request.topicIds.includes(selectedTopicId.value)) {
-      selectedTopicId.value = request.topicIds[0];
-    }
-    await loadRoom({ preservePosition: false });
-    sending.value = false;
     await nextTick();
-    timeline.value?.scrollToEnd();
+    if (current()) {
+      timeline.value?.scrollToEnd();
+    }
   }
 
   function openSetup(mode: "member" | "topic"): void {
@@ -1291,7 +1220,7 @@
   }
 
   async function saveChannel(channelId: string, request: UpdateChannel): Promise<void> {
-    if (!currentRoomId.value || channelId === DEFAULT_CHANNEL_ID) {
+    if (!currentRoomId.value || channelsStore.channel(currentRoomId.value, channelId)?.isDefault) {
       return;
     }
     const roomId = currentRoomId.value;
@@ -1334,14 +1263,7 @@
   async function clearCurrentRoom(): Promise<void> {
     const roomId = currentRoomId.value;
     const channelId = currentChannelId.value;
-    if (
-      !roomId ||
-      !channelId ||
-      !clearOpen.value ||
-      saving.value ||
-      sending.value ||
-      pendingPublication.value
-    ) {
+    if (!roomId || !channelId || !clearOpen.value || saving.value || sending.value) {
       return;
     }
     clearing.value = true;
@@ -1482,7 +1404,7 @@
     const roomId = currentRoomId.value;
     const channelId = currentChannelId.value;
     const target = deleteTarget.value;
-    if (target.kind === "channel" && (target.node.isDefault || pendingPublication.value)) {
+    if (target.kind === "channel" && target.node.isDefault) {
       return;
     }
     saving.value = true;
@@ -1494,8 +1416,7 @@
         if (currentRoomId.value === roomId) {
           deleteTarget.value = undefined;
           if (currentChannelId.value === target.node.id) {
-            await openChannel(roomId, DEFAULT_CHANNEL_ID);
-            await router.replace(channelRoute(roomId, DEFAULT_CHANNEL_ID));
+            await router.replace({ name: "room-entry", params: { roomId } });
           } else if (
             detailTarget.value?.kind === "channel" &&
             detailTarget.value.id === target.node.id
@@ -1611,18 +1532,18 @@
   });
 
   watch([() => props.roomId, () => props.channelId], ([roomId, channelId]) => {
-    if (!roomId || !channelId) {
+    if (!roomId) {
       cancelQueries();
       messageQueue.reset();
       roomPanel.reset();
       sessionsVersion++;
       currentRoomId.value = undefined;
       currentChannelId.value = undefined;
-      pendingPublication.value = undefined;
       void initialize();
       return;
     }
     if (
+      !channelId ||
       currentRoomId.value !== roomId ||
       !currentChannelId.value ||
       !channelsStore.loadedRooms[roomCacheKey(roomId, "channels")]

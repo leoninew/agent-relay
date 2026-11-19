@@ -11,6 +11,7 @@ from conflua.interfaces.cli import main
 from conflua.interfaces.client import ConfluaClient, HttpResponse
 
 ROOM = "conflua"
+ISSUED_CHANNEL_ID = "0000000000124"
 
 
 @pytest.fixture(autouse=True)
@@ -111,6 +112,38 @@ def test_channel_resources_require_an_explicit_scope(
     assert json.loads(capsys.readouterr().err)["error"]["code"] == "channel_required"
 
 
+def test_channel_creation_issues_id_then_creates_with_same_id(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    calls: list[str] = []
+
+    def open_request(request: Request, *, timeout: float) -> HttpResponse:
+        path = urlsplit(request.full_url).path
+        calls.append(path)
+        assert request.get_method() == "POST"
+        if path.endswith("/issue-id"):
+            assert request.data is None
+            return BufferedResponse(200, {}, json.dumps({"channelId": ISSUED_CHANNEL_ID}).encode())
+        assert isinstance(request.data, bytes)
+        assert json.loads(request.data) == {
+            "channelId": ISSUED_CHANNEL_ID,
+            "name": "API",
+            "description": "Backend work",
+            "useWorktree": False,
+        }
+        return BufferedResponse(201, {}, json.dumps({"id": ISSUED_CHANNEL_ID}).encode())
+
+    assert (
+        main(
+            ["channel", "create", ROOM, "--name", "API", "--description", "Backend work"],
+            opener=open_request,
+        )
+        == 0
+    )
+    assert calls == [f"/api/room/{ROOM}/channel/issue-id", f"/api/room/{ROOM}/channel"]
+    assert json.loads(capsys.readouterr().out)["data"]["id"] == ISSUED_CHANNEL_ID
+
+
 def test_channel_creation_preserves_operation_id_when_response_is_unknown(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -118,10 +151,12 @@ def test_channel_creation_preserves_operation_id_when_response_is_unknown(
 
     def open_request(request: Request, *, timeout: float) -> HttpResponse:
         calls.append(request)
+        if urlsplit(request.full_url).path.endswith("/issue-id"):
+            return BufferedResponse(200, {}, json.dumps({"channelId": ISSUED_CHANNEL_ID}).encode())
         assert isinstance(request.data, bytes)
         body = json.loads(request.data)
         assert body["name"] == "API" and body["description"] == "Backend work"
-        assert body["useWorktree"] is True and body["channelId"].startswith("channel-")
+        assert body["useWorktree"] is True and body["channelId"] == ISSUED_CHANNEL_ID
         raise URLError("response lost")
 
     assert (
@@ -141,9 +176,12 @@ def test_channel_creation_preserves_operation_id_when_response_is_unknown(
         == 5
     )
     error = json.loads(capsys.readouterr().err)["error"]
-    assert len(calls) == 1 and isinstance(calls[0].data, bytes)
+    assert [urlsplit(request.full_url).path for request in calls] == [
+        f"/api/room/{ROOM}/channel/issue-id",
+        f"/api/room/{ROOM}/channel",
+    ]
     assert error["outcome"] == "unknown"
-    assert error["channelId"] == json.loads(calls[0].data)["channelId"]
+    assert error["channelId"] == ISSUED_CHANNEL_ID
 
 
 def test_clear_codex_rejects_old_conflua_response(capsys: pytest.CaptureFixture[str]) -> None:

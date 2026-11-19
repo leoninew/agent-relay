@@ -1,6 +1,5 @@
 from copy import deepcopy
 from datetime import UTC, datetime
-from uuid import uuid4
 
 from conflua.application.dto.rooms import (
     ChangedTopic,
@@ -11,9 +10,10 @@ from conflua.application.dto.rooms import (
 )
 from conflua.application.members.sessions import SessionDriver, SessionUnavailableError
 from conflua.application.rooms.ports import RoomStore
+from conflua.domain.identifiers import new_tsid
 from conflua.domain.rooms.errors import RoomConflictError
 from conflua.domain.rooms.members import retire_member
-from conflua.domain.rooms.models import DEFAULT_CHANNEL_ID, Room, RoomState, Topic
+from conflua.domain.rooms.models import Room, Topic
 from conflua.domain.rooms.resources import (
     new_room_state,
     require_topic,
@@ -35,7 +35,7 @@ class RoomService:
                     "该路径已有聊天室，请直接打开", code="workspace_room_exists"
                 )
             room = Room(
-                id=f"room-{uuid4().hex[:12]}",
+                id=new_tsid(),
                 name=request.name,
                 workspace_path=workspace_path,
                 raw_workspace_path=request.workspace_path,
@@ -44,19 +44,10 @@ class RoomService:
             state = new_room_state(
                 room,
                 datetime.now(UTC),
-                channel_id=DEFAULT_CHANNEL_ID,
+                channel_id=new_tsid(),
                 working_path=room.workspace_path,
             )
-            rooms.insert_room(room, state.members[0])
-            rooms.save_resources(
-                state,
-                RoomState(
-                    room=room,
-                    channel_id=state.channel_id,
-                    working_path=state.working_path,
-                    members=[state.members[0]],
-                ),
-            )
+            rooms.insert_room(state)
             return room.model_copy(deep=True)
 
     def delete_room(self, room_id: str) -> None:
@@ -122,7 +113,7 @@ class RoomService:
             original = deepcopy(state)
             validate_topic_name(state, request.name)
             topic = Topic(
-                id=f"topic-{uuid4().hex[:12]}",
+                id=new_tsid(),
                 name=request.name,
                 description=request.description.strip(),
                 created_at=datetime.now(UTC),

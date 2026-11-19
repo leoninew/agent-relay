@@ -1,6 +1,5 @@
 from contextlib import AbstractContextManager
 
-from conflua.domain.rooms.models import DEFAULT_CHANNEL_ID
 from conflua.infrastructure.persistence.channel_guard import room_operation
 from conflua.infrastructure.persistence.database import Database
 from conflua.infrastructure.persistence.repositories.channels import SQLAlchemyChannelRepository
@@ -15,7 +14,7 @@ class SQLAlchemyChannelStore(SQLAlchemyScope[SQLAlchemyChannelRepository]):
         self.database = database
         super().__init__(
             database,
-            lambda session: SQLAlchemyChannelRepository(session, DEFAULT_CHANNEL_ID),
+            SQLAlchemyChannelRepository,
             transaction,
         )
 

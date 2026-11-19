@@ -104,6 +104,14 @@ export const useChannelsStore = defineStore("channels", () => {
     return recent.value[roomCacheKey(roomId, "selected-channel")] ?? selectionStorage.load(roomId);
   }
 
+  function entryChannelId(roomId: string): string | undefined {
+    const preferred = preferredChannel(roomId);
+    return (
+      (preferred ? resolveChannelId(roomId, preferred) : undefined) ??
+      activeChannels(roomId).find((channel) => channel.isDefault)?.id
+    );
+  }
+
   async function create(roomId: string, request: CreateChannel): Promise<Channel> {
     const channel = await createChannelRequest(roomId, request);
     byRoom.value[roomCacheKey(roomId, "channels")] = [
@@ -187,6 +195,7 @@ export const useChannelsStore = defineStore("channels", () => {
     channel,
     resolveChannelId,
     preferredChannel,
+    entryChannelId,
     load,
     remember,
     create,

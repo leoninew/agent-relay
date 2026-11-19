@@ -6,8 +6,6 @@ from pydantic import model_validator
 
 from conflua.domain.rooms.models.base import RoomModel
 
-USER_MEMBER_ID = "user"
-DEFAULT_CHANNEL_ID = "channel-default"
 type ChannelStatus = Literal["active", "archived"]
 RoomChangeKind = Literal[
     "room", "topic", "member", "session", "message", "delivery", "position", "clear"

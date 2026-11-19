@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 import pytest
 from pydantic import ValidationError
 
+from conflua.domain.identifiers import is_tsid
 from conflua.domain.rooms.errors import RoomConflictError, RoomInputError
 from conflua.domain.rooms.members import rename_member, retire_member
 from conflua.domain.rooms.models import Member, Room, RoomState
@@ -39,7 +40,7 @@ def test_initial_resources_are_a_business_value_with_a_fixed_human(state: RoomSt
     assert [topic.name for topic in state.topics] == list(DEFAULT_TOPIC_NAMES)
     assert all(topic.created_at == now for topic in state.topics)
     assert len(state.members) == 1
-    assert state.members[0].id == "user"
+    assert is_tsid(state.members[0].id)
     assert state.members[0].kind == "human"
     assert state.members[0].session_id is None
 
@@ -60,10 +61,10 @@ def test_retiring_a_topic_removes_subscriptions_and_allows_reusing_its_name(
 
 
 def test_fixed_user_cannot_be_bound_renamed_or_retired(state: RoomState) -> None:
-    user = next(member for member in state.members if member.id == "user")
+    user = next(member for member in state.members if member.kind == "human")
     with pytest.raises(ValidationError, match="Human members cannot bind"):
         Member.model_validate({**user.model_dump(), "session_id": "session"})
     with pytest.raises(RoomInputError):
-        rename_member(state, "user", "Changed", [])
+        rename_member(state, user.id, "Changed", [])
     with pytest.raises(RoomInputError):
-        retire_member(state, "user", datetime.now(UTC))
+        retire_member(state, user.id, datetime.now(UTC))

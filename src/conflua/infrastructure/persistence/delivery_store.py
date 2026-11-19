@@ -25,9 +25,9 @@ class SQLAlchemyDeliveryStore:
             room = session.get(RoomRecord, work.room_id)
             return (
                 room is not None
-                and room.archived_at is None
+                and not room.is_deleted
                 and channel is not None
-                and (channel.archived_at is None or channel.status == "archived")
+                and not channel.is_deleted
             )
 
     def interrupt_submissions(self) -> None:
@@ -54,9 +54,11 @@ class SQLAlchemyDeliveryStore:
                 excluded_sessions, datetime.now(UTC)
             )
 
-    def finish_delivery(self, room_id: str, delivery: Delivery) -> bool:
+    def finish_delivery(self, room_id: str, delivery: Delivery, *, channel_id: str) -> bool:
         with self.database.write() as session:
-            return SQLAlchemyDeliveryRepository(session).finish_delivery(room_id, delivery)
+            return SQLAlchemyDeliveryRepository(session).finish_delivery(
+                room_id, delivery, channel_id=channel_id
+            )
 
     def claim_activation(self, session_id: str, head: QueueHead) -> bool:
         if head.client_message_id is None:

@@ -22,7 +22,7 @@ export function imageReferences(content: string, roomId: string, channelId: stri
       return;
     }
     const match =
-      /^!\[((?:\\[^\r\n]|[^\]\\\r\n])*)\]\((\/api\/room\/[A-Za-z0-9_-]+\/channel\/[A-Za-z0-9_-]+\/image\/(img-[a-f0-9]{32}))\)/.exec(
+      /^!\[((?:\\[^\r\n]|[^\]\\\r\n])*)\]\((\/api\/room\/[0-7][0-9A-HJKMNP-TV-Z]{12}\/channel\/[0-7][0-9A-HJKMNP-TV-Z]{12}\/image\/(img-[a-f0-9]{32}))\)/.exec(
         content.slice(start),
       );
     if (!match || match[2] !== roomResourcePath(roomId, channelId, `/image/${match[3]}`)) {

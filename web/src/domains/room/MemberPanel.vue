@@ -29,7 +29,7 @@
           :class="{ 'is-active': selectedMemberId === humanMember.id }"
           :aria-label="
             t('sidebar.filterMember', {
-              name: humanMember.id === 'user' ? t('member.you') : humanMember.name,
+              name: t('member.you'),
             })
           "
           :aria-pressed="selectedMemberId === humanMember.id"

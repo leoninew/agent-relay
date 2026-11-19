@@ -1,6 +1,6 @@
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import and_, literal_column, or_, select, update
+from sqlalchemy import and_, false, literal_column, or_, select, update
 from sqlalchemy.orm import Session, aliased
 from sqlalchemy.orm.util import AliasedClass
 from sqlalchemy.sql.dml import Update
@@ -65,7 +65,7 @@ class SQLAlchemyDeliveryRepository:
     def interrupt_submissions(self) -> None:
         self._update(
             update(DeliveryRecord)
-            .where(DeliveryRecord.status == "submitting", DeliveryRecord.deleted_at.is_(None))
+            .where(DeliveryRecord.status == "submitting", (DeliveryRecord.is_deleted == false()))
             .values(
                 status=INTERRUPTED_SUBMISSION.status,
                 updated_at=datetime.now(UTC),
@@ -90,9 +90,9 @@ class SQLAlchemyDeliveryRepository:
                 MemberRecord.id == delivery.target_member_id,
                 MemberRecord.session_id == delivery.target_session_id,
                 MemberRecord.kind == "agent",
-                MemberRecord.deleted_at.is_(None),
-                or_(ChannelRecord.archived_at.is_(None), ChannelRecord.status == "archived"),
-                RoomRecord.archived_at.is_(None),
+                (MemberRecord.is_deleted == false()),
+                ChannelRecord.is_deleted == false(),
+                (RoomRecord.is_deleted == false()),
             )
             .correlate(delivery)
             .exists()
@@ -107,7 +107,7 @@ class SQLAlchemyDeliveryRepository:
             .where(
                 active.target_session_id == DeliveryRecord.target_session_id,
                 active.status == "submitting",
-                active.deleted_at.is_(None),
+                (active.is_deleted == false()),
             )
             .exists()
         )
@@ -120,7 +120,7 @@ class SQLAlchemyDeliveryRepository:
                     earlier.status == "pending",
                     and_(earlier.status == "unknown", earlier.attempt_count > 0),
                 ),
-                earlier.deleted_at.is_(None),
+                (earlier.is_deleted == false()),
                 self._dispatchable(earlier),
                 literal_column("earlier.rowid") < insertion_order("deliveries"),
             )
@@ -130,7 +130,7 @@ class SQLAlchemyDeliveryRepository:
             select(DeliveryRecord)
             .where(
                 DeliveryRecord.status == "pending",
-                DeliveryRecord.deleted_at.is_(None),
+                (DeliveryRecord.is_deleted == false()),
                 self._dispatchable(DeliveryRecord),
                 DeliveryRecord.target_session_id.not_in(excluded_sessions),
                 or_(
@@ -149,9 +149,10 @@ class SQLAlchemyDeliveryRepository:
             update(DeliveryRecord)
             .where(
                 DeliveryRecord.room_id == candidate.room_id,
+                DeliveryRecord.channel_id == candidate.channel_id,
                 DeliveryRecord.id == candidate.id,
                 DeliveryRecord.status == "pending",
-                DeliveryRecord.deleted_at.is_(None),
+                (DeliveryRecord.is_deleted == false()),
             )
             .values(
                 status="submitting",
@@ -189,9 +190,10 @@ class SQLAlchemyDeliveryRepository:
                 update(DeliveryRecord)
                 .where(
                     DeliveryRecord.room_id == work.room_id,
+                    DeliveryRecord.channel_id == work.channel_id,
                     DeliveryRecord.id == work.delivery.id,
                     DeliveryRecord.status == "submitting",
-                    DeliveryRecord.deleted_at.is_(None),
+                    (DeliveryRecord.is_deleted == false()),
                     DeliveryRecord.client_message_id == work.delivery.client_message_id,
                     DeliveryRecord.attempt_count == work.attempt_count,
                 )
@@ -206,7 +208,7 @@ class SQLAlchemyDeliveryRepository:
             == 1
         )
 
-    def finish_delivery(self, room_id: str, delivery: Delivery) -> bool:
+    def finish_delivery(self, room_id: str, delivery: Delivery, *, channel_id: str) -> bool:
         values = delivery_values(delivery)
         for field in ("id", "target_member_id", "target_session_id", "client_message_id"):
             del values[field]
@@ -220,9 +222,10 @@ class SQLAlchemyDeliveryRepository:
                 update(DeliveryRecord)
                 .where(
                     DeliveryRecord.room_id == room_id,
+                    DeliveryRecord.channel_id == channel_id,
                     DeliveryRecord.id == delivery.id,
                     DeliveryRecord.status == "submitting",
-                    DeliveryRecord.deleted_at.is_(None),
+                    (DeliveryRecord.is_deleted == false()),
                     DeliveryRecord.client_message_id == delivery.client_message_id,
                 )
                 .values(**values)
@@ -243,7 +246,7 @@ class SQLAlchemyDeliveryRepository:
                 DeliveryRecord.queued_submission_id.is_not(None),
                 DeliveryRecord.receipt_metadata.is_not(None),
                 DeliveryRecord.activation_attempted_at.is_(None),
-                DeliveryRecord.deleted_at.is_(None),
+                (DeliveryRecord.is_deleted == false()),
                 DeliveryRecord.next_attempt_at.is_not(None),
                 time_at_or_before(DeliveryRecord.next_attempt_at, now),
                 DeliveryRecord.target_session_id.not_in(excluded_sessions),
@@ -252,7 +255,7 @@ class SQLAlchemyDeliveryRepository:
                 .where(
                     busy.target_session_id == DeliveryRecord.target_session_id,
                     busy.status == "submitting",
-                    busy.deleted_at.is_(None),
+                    (busy.is_deleted == false()),
                 )
                 .exists(),
             )
@@ -276,7 +279,7 @@ class SQLAlchemyDeliveryRepository:
                     DeliveryRecord.target_session_id == session_id,
                     DeliveryRecord.status == "queued",
                     DeliveryRecord.submission_method.is_distinct_from("steer"),
-                    DeliveryRecord.deleted_at.is_(None),
+                    (DeliveryRecord.is_deleted == false()),
                     DeliveryRecord.queued_submission_id == head.id,
                     DeliveryRecord.client_message_id == head.client_message_id,
                     DeliveryRecord.activation_attempted_at.is_(None),
@@ -286,16 +289,14 @@ class SQLAlchemyDeliveryRepository:
                         MemberRecord.channel_id == DeliveryRecord.channel_id,
                         MemberRecord.id == DeliveryRecord.target_member_id,
                         MemberRecord.session_id == session_id,
-                        MemberRecord.deleted_at.is_(None),
+                        (MemberRecord.is_deleted == false()),
                     )
                     .exists(),
                     select(ChannelRecord.id)
                     .where(
                         ChannelRecord.room_id == DeliveryRecord.room_id,
                         ChannelRecord.id == DeliveryRecord.channel_id,
-                        or_(
-                            ChannelRecord.archived_at.is_(None), ChannelRecord.status == "archived"
-                        ),
+                        ChannelRecord.is_deleted == false(),
                     )
                     .exists(),
                 )
@@ -310,7 +311,7 @@ class SQLAlchemyDeliveryRepository:
             .where(
                 DeliveryRecord.target_session_id == session_id,
                 DeliveryRecord.status == "queued",
-                DeliveryRecord.deleted_at.is_(None),
+                (DeliveryRecord.is_deleted == false()),
                 DeliveryRecord.client_message_id == client_message_id,
             )
             .values(note=note)
@@ -322,7 +323,7 @@ class SQLAlchemyDeliveryRepository:
             select(DeliveryRecord.target_session_id, DeliveryRecord.client_message_id)
             .where(
                 DeliveryRecord.status.in_(UNCONFIRMED_DELIVERY_STATUSES),
-                DeliveryRecord.deleted_at.is_(None),
+                (DeliveryRecord.is_deleted == false()),
             )
             .order_by(insertion_order("deliveries"))
         )
@@ -337,7 +338,7 @@ class SQLAlchemyDeliveryRepository:
             .where(
                 DeliveryRecord.target_session_id == session_id,
                 DeliveryRecord.status.in_(UNCONFIRMED_DELIVERY_STATUSES),
-                DeliveryRecord.deleted_at.is_(None),
+                (DeliveryRecord.is_deleted == false()),
                 DeliveryRecord.client_message_id == received.client_message_id,
             )
             .values(
@@ -368,7 +369,7 @@ class SQLAlchemyDeliveryRepository:
                 DeliveryRecord.status == "unknown",
                 DeliveryRecord.attempt_count > 0,
                 DeliveryRecord.submission_method.is_distinct_from("steer"),
-                DeliveryRecord.deleted_at.is_(None),
+                (DeliveryRecord.is_deleted == false()),
             )
             .values(
                 status="queued",

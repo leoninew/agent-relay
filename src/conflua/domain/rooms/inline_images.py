@@ -1,11 +1,12 @@
 import re
 from dataclasses import dataclass
 
+from conflua.domain.identifiers import TSID_BODY
 from conflua.domain.rooms.markdown import inline_matches
 
 _IMAGE_LINK = re.compile(
     r"!\[(?:\\[^\r\n]|[^\]\\\r\n])*\]"
-    r"\((/api/room/(room-[A-Za-z0-9_-]+)/channel/([A-Za-z0-9][A-Za-z0-9_-]*)/image/(img-[a-f0-9]{32}))\)"
+    rf"\((/api/room/({TSID_BODY})/channel/({TSID_BODY})/image/(img-[a-f0-9]{{32}}))\)"
 )
 
 

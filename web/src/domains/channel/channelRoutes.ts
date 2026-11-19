@@ -1,7 +1,5 @@
 import { channelCacheKey } from "@/services/cacheKeys";
 
-export const DEFAULT_CHANNEL_ID = "channel-default";
-
 export function channelKey(roomId: string, channelId: string): string {
   return channelCacheKey(roomId, channelId);
 }

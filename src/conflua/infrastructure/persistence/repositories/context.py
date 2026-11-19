@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import or_, select, update
+from sqlalchemy import false, or_, select, update
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement
 
@@ -45,7 +45,7 @@ class SQLAlchemyContextRepository:
                 MemberRecord.room_id == room_id,
                 MemberRecord.channel_id == self.channel_id,
                 MemberRecord.id == member_id,
-                MemberRecord.deleted_at.is_(None),
+                (MemberRecord.is_deleted == false()),
             )
         )
         if member is None:
@@ -58,7 +58,7 @@ class SQLAlchemyContextRepository:
                     (TopicRecord.room_id == MemberTopicRecord.room_id)
                     & (TopicRecord.channel_id == MemberTopicRecord.channel_id)
                     & (TopicRecord.id == MemberTopicRecord.topic_id)
-                    & TopicRecord.deleted_at.is_(None),
+                    & (TopicRecord.is_deleted == false()),
                 )
                 .where(
                     MemberTopicRecord.room_id == room_id,
@@ -83,7 +83,7 @@ class SQLAlchemyContextRepository:
                 .where(
                     TopicRecord.room_id == room_id,
                     TopicRecord.channel_id == self.channel_id,
-                    TopicRecord.deleted_at.is_(None),
+                    (TopicRecord.is_deleted == false()),
                 )
                 .order_by(insertion_order("topics"))
             )
@@ -112,7 +112,7 @@ class SQLAlchemyContextRepository:
                 .where(
                     MemberRecord.room_id == room_id,
                     MemberRecord.channel_id == self.channel_id,
-                    MemberRecord.deleted_at.is_(None),
+                    (MemberRecord.is_deleted == false()),
                 )
                 .order_by(insertion_order("members"))
             )

@@ -4,7 +4,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useChannelCreation } from "@/domains/channel/useChannelCreation";
 import { ApiClientError } from "@/services/api";
 import type { Channel } from "@/services/channelApi";
-import { createChannel, fetchChannel } from "@/services/channelApi";
+import { createChannel, fetchChannel, issueChannelId } from "@/services/channelApi";
+
+const SOURCE_CHANNEL_ID = "0000000000123";
+const ISSUED_CHANNEL_ID = "0000000000124";
 
 vi.mock("@/services/channelApi", () => ({
   archiveChannel: vi.fn(),
@@ -12,6 +15,7 @@ vi.mock("@/services/channelApi", () => ({
   deleteChannel: vi.fn(),
   fetchChannel: vi.fn(),
   fetchChannels: vi.fn(),
+  issueChannelId: vi.fn(),
 }));
 
 function channel(id: string, worktree = false): Channel {
@@ -32,26 +36,32 @@ describe("channel creation", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     setActivePinia(createPinia());
+    vi.mocked(issueChannelId).mockResolvedValue(ISSUED_CHANNEL_ID);
     vi.mocked(createChannel).mockImplementation(async (_room, request) =>
-      channel(request.channelId!, request.useWorktree),
+      channel(request.channelId, request.useWorktree),
     );
   });
 
-  it("creates the name and description in one request with worktree disabled by default", async () => {
+  it("issues the ID before creating once with that exact ID and no worktree by default", async () => {
     const creation = useChannelCreation(
       () => "room-1",
-      () => "channel-default",
+      () => SOURCE_CHANNEL_ID,
     );
     creation.name.value = " API ";
     creation.description.value = " Backend work ";
 
     expect(creation.useWorktree.value).toBe(false);
     expect(await creation.submit()).toBe(true);
+    expect(issueChannelId).toHaveBeenCalledOnce();
+    expect(issueChannelId).toHaveBeenCalledWith("room-1");
+    expect(vi.mocked(issueChannelId).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(createChannel).mock.invocationCallOrder[0],
+    );
     expect(createChannel).toHaveBeenCalledOnce();
     expect(createChannel).toHaveBeenCalledWith("room-1", {
       name: "API",
       description: "Backend work",
-      channelId: creation.channelId.value,
+      channelId: ISSUED_CHANNEL_ID,
       useWorktree: false,
     });
   });
@@ -59,7 +69,7 @@ describe("channel creation", () => {
   it("creates a worktree channel without a base override", async () => {
     const creation = useChannelCreation(
       () => "room-1",
-      () => "channel-default",
+      () => SOURCE_CHANNEL_ID,
     );
     creation.name.value = "API";
     creation.useWorktree.value = true;
@@ -83,7 +93,7 @@ describe("channel creation", () => {
     );
     const creation = useChannelCreation(
       () => "room-1",
-      () => "channel-default",
+      () => SOURCE_CHANNEL_ID,
     );
     creation.name.value = "API";
 
@@ -103,7 +113,7 @@ describe("channel creation", () => {
     vi.mocked(createChannel).mockRejectedValue(new Error("timeout"));
     const first = useChannelCreation(
       () => "room-1",
-      () => "channel-default",
+      () => SOURCE_CHANNEL_ID,
       storage,
     );
     first.name.value = "API";
@@ -115,7 +125,7 @@ describe("channel creation", () => {
     setActivePinia(createPinia());
     const restored = useChannelCreation(
       () => "room-1",
-      () => "channel-default",
+      () => SOURCE_CHANNEL_ID,
       storage,
     );
     expect(restored.step.value).toBe("unknown");
@@ -126,7 +136,7 @@ describe("channel creation", () => {
     expect(
       useChannelCreation(
         () => "room-2",
-        () => "channel-default",
+        () => SOURCE_CHANNEL_ID,
         storage,
       ).step.value,
     ).toBe("form");
@@ -141,6 +151,8 @@ describe("channel creation", () => {
     vi.mocked(fetchChannel).mockResolvedValue(channel(channelId));
     expect(await restored.lookup(channelId)).toBe(true);
     expect(fetchChannel).toHaveBeenCalledWith("room-1", channelId);
+    expect(issueChannelId).toHaveBeenCalledOnce();
+    expect(createChannel).toHaveBeenCalledOnce();
     expect(saved.size).toBe(0);
   });
 });

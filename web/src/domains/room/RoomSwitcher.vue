@@ -43,8 +43,8 @@
               <NavigationMenuLink as-child :active="route.params.roomId === room.id">
                 <RouterLink
                   :to="{
-                    name: 'channel',
-                    params: { roomId: room.id, channelId: channelForRoom(room.id) },
+                    name: 'room-entry',
+                    params: { roomId: room.id },
                   }"
                   class="room-tab"
                   :aria-label="t('navigation.switchRoom', { name: room.name })"
@@ -177,7 +177,6 @@
   import type { MessageDescriptor } from "@/i18n";
 
   import AppIcon from "@/components/AppIcon.vue";
-  import { DEFAULT_CHANNEL_ID } from "@/domains/channel/channelRoutes";
   import { useStoredOrder } from "@/composables/useStoredOrder";
   import RoomDeleteDialog from "@/domains/room/RoomDeleteDialog.vue";
   import RoomSetupDialog from "@/domains/room/RoomSetupDialog.vue";
@@ -220,10 +219,6 @@
     editingRoom.value ? renameError.value : createError.value,
   );
 
-  function channelForRoom(roomId: string): string {
-    return channelsStore.preferredChannel(roomId) ?? DEFAULT_CHANNEL_ID;
-  }
-
   async function load(): Promise<void> {
     loading.value = true;
     loadError.value = null;
@@ -254,8 +249,8 @@
       roomsStore.createOpen = false;
       toasts.success({ key: "notice.roomCreated" });
       await router.push({
-        name: "channel",
-        params: { roomId: room.id, channelId: DEFAULT_CHANNEL_ID },
+        name: "room-entry",
+        params: { roomId: room.id },
       });
     } catch (caught) {
       createError.value = describeApiError(caught, "errors.create");
@@ -338,8 +333,8 @@
       await router.replace(
         nextRoom
           ? {
-              name: "channel",
-              params: { roomId: nextRoom.id, channelId: channelForRoom(nextRoom.id) },
+              name: "room-entry",
+              params: { roomId: nextRoom.id },
             }
           : { name: "room" },
       );

@@ -1,7 +1,6 @@
 from collections.abc import Sequence
 
-from sqlalchemy import Select, and_, func, or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy import Select, and_, false, func, or_, select
 from sqlalchemy.sql.elements import ColumnElement
 
 from conflua.application.dto.messages import MessagePage, MessageQueuePage, MessageUpdatesQuery
@@ -18,14 +17,11 @@ from conflua.infrastructure.persistence.models import (
     MessageTopicRecord,
     TopicRecord,
 )
+from conflua.infrastructure.persistence.repositories._channel_scope import SQLAlchemyChannelScope
 from conflua.infrastructure.persistence.sqlite import insertion_order, literal_contains
 
 
-class SQLAlchemyMessageReads:
-    def __init__(self, session: Session, channel_id: str) -> None:
-        self.session = session
-        self.channel_id = channel_id
-
+class SQLAlchemyMessageReads(SQLAlchemyChannelScope):
     @staticmethod
     def statement(*, include_deleted: bool = False) -> Select[tuple[MessageRecord, str]]:
         statement = select(MessageRecord, MemberRecord.name).join(
@@ -34,20 +30,23 @@ class SQLAlchemyMessageReads:
             & (MemberRecord.channel_id == MessageRecord.channel_id)
             & (MemberRecord.id == MessageRecord.publisher_id),
         )
-        return statement if include_deleted else statement.where(MessageRecord.deleted_at.is_(None))
+        if include_deleted:
+            return statement
+        return statement.where(MessageRecord.is_deleted == false())
 
     def scope(
         self, room_id: str, *, topic_id: str | None, member_id: str | None
     ) -> ColumnElement[bool]:
+        channel_id = self.channel_id_for(room_id)
         criteria: list[ColumnElement[bool]] = [
             MessageRecord.room_id == room_id,
-            MessageRecord.channel_id == self.channel_id,
-            MessageRecord.deleted_at.is_(None),
+            MessageRecord.channel_id == channel_id,
+            (MessageRecord.is_deleted == false()),
         ]
         if topic_id is not None:
             if (
                 self.session.get(
-                    TopicRecord, {"room_id": room_id, "channel_id": self.channel_id, "id": topic_id}
+                    TopicRecord, {"room_id": room_id, "channel_id": channel_id, "id": topic_id}
                 )
                 is None
             ):
@@ -67,7 +66,7 @@ class SQLAlchemyMessageReads:
             if (
                 self.session.get(
                     MemberRecord,
-                    {"room_id": room_id, "channel_id": self.channel_id, "id": member_id},
+                    {"room_id": room_id, "channel_id": channel_id, "id": member_id},
                 )
                 is None
             ):
@@ -107,7 +106,7 @@ class SQLAlchemyMessageReads:
             self.statement()
             .where(
                 MessageRecord.room_id == room_id,
-                MessageRecord.channel_id == self.channel_id,
+                MessageRecord.channel_id == self.channel_id_for(room_id),
                 MessageRecord.id.in_(request.message_ids),
                 or_(matches, MessageRecord.id.in_(request.retained_ids)),
             )
@@ -123,12 +122,13 @@ class SQLAlchemyMessageReads:
     ) -> list[Message]:
         if not rows:
             return []
+        channel_id = self.channel_id_for(room_id)
         message_ids = [record.id for record, sender_name in rows]
         topics = self._relations(
             select(MessageTopicRecord.message_id, MessageTopicRecord.topic_id)
             .where(
                 MessageTopicRecord.room_id == room_id,
-                MessageTopicRecord.channel_id == self.channel_id,
+                MessageTopicRecord.channel_id == channel_id,
                 MessageTopicRecord.message_id.in_(message_ids),
             )
             .order_by(MessageTopicRecord.position)
@@ -137,7 +137,7 @@ class SQLAlchemyMessageReads:
             select(MessageMentionRecord.message_id, MessageMentionRecord.member_id)
             .where(
                 MessageMentionRecord.room_id == room_id,
-                MessageMentionRecord.channel_id == self.channel_id,
+                MessageMentionRecord.channel_id == channel_id,
                 MessageMentionRecord.message_id.in_(message_ids),
             )
             .order_by(MessageMentionRecord.position)
@@ -146,7 +146,7 @@ class SQLAlchemyMessageReads:
             select(MessageRecipientRecord.message_id, MessageRecipientRecord.member_id)
             .where(
                 MessageRecipientRecord.room_id == room_id,
-                MessageRecipientRecord.channel_id == self.channel_id,
+                MessageRecipientRecord.channel_id == channel_id,
                 MessageRecipientRecord.message_id.in_(message_ids),
             )
             .order_by(MessageRecipientRecord.position)
@@ -157,7 +157,7 @@ class SQLAlchemyMessageReads:
                 select(DeliveryRecord)
                 .where(
                     DeliveryRecord.room_id == room_id,
-                    DeliveryRecord.channel_id == self.channel_id,
+                    DeliveryRecord.channel_id == channel_id,
                     DeliveryRecord.message_id.in_(message_ids),
                 )
                 .order_by(insertion_order("deliveries"))
@@ -193,7 +193,7 @@ class SQLAlchemyMessageReads:
             room_id,
             self.statement().where(
                 MessageRecord.room_id == room_id,
-                MessageRecord.channel_id == self.channel_id,
+                MessageRecord.channel_id == self.channel_id_for(room_id),
                 MessageRecord.id == message_id,
             ),
         )
@@ -206,7 +206,7 @@ class SQLAlchemyMessageReads:
             room_id,
             self.statement(include_deleted=True).where(
                 MessageRecord.room_id == room_id,
-                MessageRecord.channel_id == self.channel_id,
+                MessageRecord.channel_id == self.channel_id_for(room_id),
                 MessageRecord.publisher_id == publisher_id,
                 MessageRecord.publication_id == publication_id,
             ),
@@ -218,9 +218,9 @@ class SQLAlchemyMessageReads:
             self.session.scalar(
                 select(MessageRecord.id).where(
                     MessageRecord.room_id == room_id,
-                    MessageRecord.channel_id == self.channel_id,
+                    MessageRecord.channel_id == self.channel_id_for(room_id),
                     MessageRecord.id == message_id,
-                    MessageRecord.deleted_at.is_(None),
+                    (MessageRecord.is_deleted == false()),
                 )
             )
             is not None
@@ -291,7 +291,7 @@ class SQLAlchemyMessageReads:
                 DeliveryRecord.room_id == MessageRecord.room_id,
                 DeliveryRecord.channel_id == MessageRecord.channel_id,
                 DeliveryRecord.message_id == MessageRecord.id,
-                DeliveryRecord.deleted_at.is_(None),
+                (DeliveryRecord.is_deleted == false()),
                 DeliveryRecord.status.in_(ACTIVE_DELIVERY_STATUSES),
             )
             .correlate(MessageRecord)

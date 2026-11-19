@@ -5,11 +5,35 @@ import { readMessageClipboard, writeMessageClipboard } from "@/domains/room/mess
 import {
   decodeMessage,
   documentMemberMentions,
+  imageReferences,
   messageSlice,
 } from "@/domains/room/messageEditorCodec";
 import { Schema } from "@tiptap/pm/model";
 import { NodeSelection } from "@tiptap/pm/state";
 import type { SkillReference } from "@/services/roomApi";
+import { roomResourcePath } from "@/domains/channel/channelRoutes";
+
+describe("managed channel images", () => {
+  it("decodes and displays a pasted image marker under the actual room and channel IDs", () => {
+    const roomId = "0000000000122";
+    const channelId = "0000000000123";
+    const id = "img-0123456789abcdef0123456789abcdef";
+    const url = roomResourcePath(roomId, channelId, `/image/${id}`);
+    const marker = `![图\\[1\\]](${url})`;
+    const expected = { type: "imageReference", attrs: { id, url, alt: "图[1]", marker } };
+
+    expect(imageReferences(marker, roomId, channelId)[0].node).toEqual(expected);
+    expect(decodeMessage(marker, [], roomId, channelId).content?.[0].content).toEqual([expected]);
+  });
+
+  it("does not decode managed images from a different channel or a legacy path", () => {
+    const id = "img-0123456789abcdef0123456789abcdef";
+    const path = `/api/room/0000000000122/channel/0000000000123/image/${id}`;
+    const legacy = `/api/room/room-old/channel/channel-default/image/${id}`;
+    expect(imageReferences(`![img](${path})`, "0000000000122", "0000000000223")).toEqual([]);
+    expect(imageReferences(`![img](${legacy})`, "room-old", "channel-default")).toEqual([]);
+  });
+});
 
 const check: SkillReference = { type: "skill", id: "skill-check", name: "best:dev-check" };
 const fix: SkillReference = { type: "skill", id: "skill-fix", name: "best:fix" };

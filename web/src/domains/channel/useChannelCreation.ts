@@ -1,6 +1,7 @@
 import { computed, ref } from "vue";
 
 import { ApiClientError, describeApiError } from "@/services/api";
+import { issueChannelId } from "@/services/channelApi";
 import type { CreateChannel } from "@/services/channelApi";
 import type { JSONStorage } from "@/services/storage";
 import { readJSON } from "@/services/storage";
@@ -80,17 +81,24 @@ export function useChannelCreation(
     if (!room || !sourceChannel || !name.value.trim()) {
       return false;
     }
-    channelId.value = `channel-${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}`;
-    const request: CreateChannel = {
+    const form = {
       name: name.value.trim(),
       description: description.value.trim(),
-      channelId: channelId.value,
       useWorktree: useWorktree.value,
     };
     step.value = "creating";
     error.value = undefined;
-    savePending(room, sourceChannel, { roomId: room, ...request });
+    channelId.value = undefined;
     try {
+      channelId.value = await issueChannelId(room);
+    } catch (caught) {
+      error.value = errorKey(caught, "errors.channelCreate");
+      step.value = "form";
+      return false;
+    }
+    const request: CreateChannel = { ...form, channelId: channelId.value };
+    try {
+      savePending(room, sourceChannel, { roomId: room, ...request });
       await channels.create(room, request);
       savePending(room, sourceChannel);
       step.value = "form";
@@ -98,7 +106,11 @@ export function useChannelCreation(
     } catch (caught) {
       error.value = errorKey(caught, "errors.channelCreate");
       step.value =
-        caught instanceof ApiClientError && caught.status && caught.status < 500
+        caught instanceof ApiClientError &&
+        caught.kind === "http_error" &&
+        caught.status &&
+        caught.status >= 400 &&
+        caught.status < 500
           ? "form"
           : "unknown";
       if (step.value === "form") {

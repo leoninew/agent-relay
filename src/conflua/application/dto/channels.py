@@ -4,6 +4,7 @@ from pydantic import AfterValidator, ConfigDict, Field
 
 from conflua.application.dto.messages import MessagePage
 from conflua.application.dto.rooms import RoomMetadata
+from conflua.domain.identifiers import TSID_BODY, require_tsid
 from conflua.domain.rooms.models import Channel, RoomModel
 
 
@@ -16,6 +17,9 @@ def _strip_channel_name(value: str) -> str:
 
 ChannelName = Annotated[
     str, Field(min_length=1, max_length=40), AfterValidator(_strip_channel_name)
+]
+ChannelId = Annotated[
+    str, Field(min_length=13, max_length=13, pattern=f"^{TSID_BODY}$"), AfterValidator(require_tsid)
 ]
 
 
@@ -33,10 +37,12 @@ class ArchiveChannel(RoomModel):
 
 
 class CreateChannel(UpdateChannel):
-    channel_id: str | None = Field(
-        default=None, min_length=1, max_length=80, pattern=r"^[a-zA-Z0-9][a-zA-Z0-9_-]*$"
-    )
+    channel_id: ChannelId
     use_worktree: bool = False
+
+
+class IssuedChannelId(RoomModel):
+    channel_id: ChannelId
 
 
 class ChannelSnapshot(RoomMetadata, MessagePage):

@@ -11,7 +11,7 @@
     >
       <AppIcon name="at" class="member-marker" />
       <span :class="appearance === 'author' ? 'message-author' : 'member-name'">
-        {{ member.id === "user" ? t("member.you") : member.name }}
+        {{ memberDisplayName(member, member.id, t("member.you")) }}
       </span>
     </span>
   </AppTooltip>
@@ -23,20 +23,21 @@
 
   import AppIcon from "@/components/AppIcon.vue";
   import AppTooltip from "@/components/AppTooltip.vue";
+  import { memberDisplayName } from "@/domains/room/memberDisplayName";
   import type { Member } from "@/services/roomApi";
 
   defineOptions({ inheritAttrs: false });
   const { t } = useI18n();
   const props = withDefaults(
     defineProps<{
-      member: Pick<Member, "id" | "name">;
+      member: Pick<Member, "id" | "name"> & Partial<Pick<Member, "kind">>;
       sessionName?: string;
       appearance?: "default" | "author" | "text";
     }>(),
     { appearance: "default", sessionName: undefined },
   );
   const tooltipText = computed(() =>
-    props.member.id === "user"
+    props.member.kind === "human"
       ? undefined
       : props.sessionName?.trim()
         ? t("member.session", { name: props.sessionName })

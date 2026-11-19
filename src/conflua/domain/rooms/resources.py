@@ -1,15 +1,15 @@
 from datetime import datetime
-from uuid import uuid4
 
+from conflua.domain.identifiers import new_tsid
 from conflua.domain.rooms.errors import RoomConflictError, RoomNotFoundError
-from conflua.domain.rooms.models import USER_MEMBER_ID, Member, Room, RoomState, Topic
+from conflua.domain.rooms.models import Member, Room, RoomState, Topic
 
 DEFAULT_TOPIC_NAMES = ("产品", "架构", "开发", "测试")
 
 
 def fixed_user() -> Member:
     return Member(
-        id=USER_MEMBER_ID,
+        id=new_tsid(),
         name="你",
         session_id=None,
         kind="human",
@@ -31,7 +31,7 @@ def new_room_state(
         members=[fixed_user()],
         topics=[
             Topic(
-                id=f"topic-{uuid4().hex[:12]}",
+                id=new_tsid(),
                 name=name,
                 description="",
                 created_at=created_at,

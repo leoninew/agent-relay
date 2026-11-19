@@ -25,7 +25,7 @@ def room_from_model(record: RoomRecord) -> Room:
         workspace_path=record.workspace_path,
         raw_workspace_path=record.raw_workspace_path,
         description=record.description,
-        archived_at=record.archived_at,
+        archived_at=record.deleted_at,
     )
 
 
@@ -72,6 +72,7 @@ def member_from_model(record: MemberRecord, topic_ids: list[str]) -> Member:
 def delivery_values(delivery: Delivery) -> dict[str, object]:
     delivery = Delivery.model_validate(delivery.model_dump())
     values = delivery.model_dump(exclude={"receipt"})
+    values["is_deleted"] = delivery.deleted_at is not None
     receipt = delivery.receipt
     if receipt is not None and (
         delivery.queued_submission_id is None
@@ -108,7 +109,7 @@ def delivery_from_model(record: DeliveryRecord) -> Delivery:
             "target_session_id": record.target_session_id,
             "client_message_id": record.client_message_id,
             "status": record.status,
-            "updated_at": record.updated_at,
+            "updated_at": record.updated_at or record.created_at,
             "deleted_at": record.deleted_at,
             "queued_at": record.queued_at,
             "received_at": record.received_at,

@@ -6,11 +6,13 @@ from unittest.mock import Mock
 import httpx2
 import pytest
 from fastapi import FastAPI
+from sqlalchemy import select
 
 from conflua.application.dto.members import SessionInfo
 from conflua.bootstrap.http import create_app
 from conflua.infrastructure.persistence.database import Database
 from conflua.infrastructure.persistence.dependencies import create_database
+from conflua.infrastructure.persistence.models import MemberRecord
 
 ROLE_PATH = "/api/member-role"
 
@@ -23,6 +25,16 @@ def request(app: FastAPI, method: str, path: str, body: object = None) -> httpx2
             return await client.request(method, path, json=body)
 
     return asyncio.run(send())
+
+
+def default_channel(app: FastAPI, room: str) -> tuple[str, str]:
+    response = request(app, "GET", f"{room}/channel")
+    assert response.status_code == 200
+    channels = response.json()
+    defaults = [channel for channel in channels if channel["isDefault"]]
+    assert len(defaults) == 1
+    channel_id = defaults[0]["id"]
+    return f"{room}/channel/{channel_id}", channel_id
 
 
 @pytest.fixture
@@ -52,11 +64,20 @@ def binding_api(tmp_path: Path) -> Iterator[tuple[FastAPI, Database, str, Mock]]
 def test_add_member_posts_only_to_new_member_and_copies_current_role(
     binding_api: tuple[FastAPI, Database, str, Mock],
 ) -> None:
-    app, _, room, _ = binding_api
-    channel = f"{room}/channel/channel-default"
-    archive = request(app, "POST", f"{room}/channel", {"name": "Other"})
-    assert archive.status_code == 201
-    other = f"{room}/channel/{archive.json()['id']}"
+    app, database, room, _ = binding_api
+    channel, default_id = default_channel(app, room)
+    issued = request(app, "POST", f"{room}/channel/issue-id")
+    assert issued.status_code == 200
+    channel_id = issued.json()["channelId"]
+    before = request(app, "GET", f"{room}/channel").json()
+    assert all(item["id"] != channel_id for item in before)
+    created_channel = request(
+        app, "POST", f"{room}/channel", {"name": "Other", "channelId": channel_id}
+    )
+    assert created_channel.status_code == 201
+    assert created_channel.json()["id"] == channel_id
+    assert not created_channel.json()["isDefault"]
+    other = f"{room}/channel/{channel_id}"
     topic = request(app, "POST", f"{channel}/topic", {"name": "Backend"})
     assert topic.status_code == 201
     topic_ids = [topic.json()["id"]]
@@ -94,7 +115,15 @@ def test_add_member_posts_only_to_new_member_and_copies_current_role(
     assert request(app, "DELETE", role_path).status_code == 204
 
     (message,) = request(app, "GET", f"{channel}/message").json()["messages"]
-    assert message["senderId"] == "user"
+    with database.read() as session:
+        human_id = session.scalar(
+            select(MemberRecord.id).where(
+                MemberRecord.room_id == room.rsplit("/", maxsplit=1)[-1],
+                MemberRecord.channel_id == default_id,
+                MemberRecord.kind == "human",
+            )
+        )
+    assert human_id is not None and message["senderId"] == human_id
     assert message["content"] == "Current\nversion"
     assert message["topicIds"] == []
     assert message["mentionedMemberIds"] == message["recipientIds"] == [created["id"]]
@@ -107,11 +136,60 @@ def test_add_member_posts_only_to_new_member_and_copies_current_role(
     assert request(app, "GET", f"{other}/message").json()["messages"] == []
 
 
+def test_issued_channel_and_human_role_message_use_discovered_ids(
+    binding_api: tuple[FastAPI, Database, str, Mock],
+) -> None:
+    app, database, room, _ = binding_api
+    default_path, default_id = default_channel(app, room)
+    issued = request(app, "POST", f"{room}/channel/issue-id")
+    assert issued.status_code == 200
+    channel_id = issued.json()["channelId"]
+    assert [item["id"] for item in request(app, "GET", f"{room}/channel").json()] == [default_id]
+
+    created_channel = request(
+        app, "POST", f"{room}/channel", {"name": "Other", "channelId": channel_id}
+    )
+    assert created_channel.status_code == 201
+    other_path = f"{room}/channel/{channel_id}"
+    role = request(app, "POST", ROLE_PATH, {"name": "Reviewer", "prompt": "Review"})
+    assert role.status_code == 201
+    member = request(
+        app,
+        "POST",
+        f"{default_path}/member",
+        {"name": "Worker", "sessionId": "worker", "topicIds": [], "roleId": role.json()["id"]},
+    )
+    assert member.status_code == 201
+
+    (message,) = request(app, "GET", f"{default_path}/message").json()["messages"]
+    with database.read() as session:
+        human_id = session.scalar(
+            select(MemberRecord.id).where(
+                MemberRecord.room_id == room.rsplit("/", maxsplit=1)[-1],
+                MemberRecord.channel_id == default_id,
+                MemberRecord.kind == "human",
+            )
+        )
+        other_human_id = session.scalar(
+            select(MemberRecord.id).where(
+                MemberRecord.room_id == room.rsplit("/", maxsplit=1)[-1],
+                MemberRecord.channel_id == channel_id,
+                MemberRecord.kind == "human",
+            )
+        )
+    assert human_id is not None and message["senderId"] == human_id
+    assert other_human_id is not None and other_human_id != human_id
+    assert message["content"] == "Review"
+    assert message["mentionedMemberIds"] == [member.json()["id"]]
+    assert message["recipientIds"] == [member.json()["id"]]
+    assert request(app, "GET", f"{other_path}/message").json()["messages"] == []
+
+
 def test_invalid_and_deleted_roles_do_not_bind_members(
     binding_api: tuple[FastAPI, Database, str, Mock],
 ) -> None:
     app, _, room, driver = binding_api
-    channel = f"{room}/channel/channel-default"
+    channel, _ = default_channel(app, room)
     member = {"name": "New", "sessionId": "new", "topicIds": []}
     invalid = request(app, "POST", f"{channel}/member", {**member, "roleId": ["role"]})
     assert invalid.status_code == 422
@@ -129,7 +207,7 @@ def test_delivery_event_failure_rolls_back_member_message_and_delivery(
     binding_api: tuple[FastAPI, Database, str, Mock],
 ) -> None:
     app, database, room, driver = binding_api
-    channel = f"{room}/channel/channel-default"
+    channel, _ = default_channel(app, room)
     role = request(app, "POST", ROLE_PATH, {"name": "Reviewer", "prompt": "Read"}).json()
     member = {"name": "New", "sessionId": "new", "topicIds": [], "roleId": role["id"]}
     baseline = request(app, "GET", f"{channel}/metadata").json()

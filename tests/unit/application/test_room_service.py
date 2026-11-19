@@ -8,6 +8,7 @@ from conflua.application.dto.members import SessionInfo
 from conflua.application.dto.rooms import CreateRoom, CreateTopic, UpdateRoom
 from conflua.application.members.sessions import SessionDriver, SessionUnavailableError
 from conflua.application.rooms.service import RoomService
+from conflua.domain.identifiers import is_tsid
 from conflua.domain.rooms.errors import RoomConflictError, RoomInputError, RoomNotFoundError
 from conflua.domain.rooms.models import RoomState
 
@@ -19,11 +20,13 @@ def test_room_creation_persists_business_initialization_without_database_default
     room = RoomService(room_store).create_room(
         CreateRoom(name="Another", workspace_path="D:/another")
     )
-    state, original = room_repository.save_resources.call_args.args
+    (state,) = room_repository.insert_room.call_args.args
     assert state.room == room and room.workspace_path == "D:/another"
     assert room.raw_workspace_path == "D:/another"
-    assert original.topics == [] and original.members == state.members
-    room_repository.insert_room.assert_called_once_with(room, state.members[0])
+    assert is_tsid(room.id) and is_tsid(state.channel_id)
+    assert state.members[0].kind == "human" and is_tsid(state.members[0].id)
+    assert state.topics and all(is_tsid(topic.id) for topic in state.topics)
+    room_repository.insert_room.assert_called_once_with(state)
     room_store.write.return_value.__exit__.assert_called_once_with(None, None, None)
 
 
@@ -38,7 +41,7 @@ def test_room_creation_preserves_input_and_uses_normalized_working_path(
     room_store: MagicMock, room_repository: Mock, raw_path: str, normalized_path: str
 ) -> None:
     room = RoomService(room_store).create_room(CreateRoom(name="Project", workspace_path=raw_path))
-    state, _ = room_repository.save_resources.call_args.args
+    (state,) = room_repository.insert_room.call_args.args
     assert room.raw_workspace_path == raw_path
     assert room.workspace_path == state.working_path == normalized_path
     room_repository.workspace_exists.assert_called_once_with(normalized_path)

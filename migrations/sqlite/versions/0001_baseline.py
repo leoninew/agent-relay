@@ -4,14 +4,16 @@ from pathlib import Path
 
 from conflua.infrastructure.persistence.migration_sql import execute_sql_file
 
-revision = "channel_description_20261114"
+revision = "schema_governance_20261119"
 down_revision = None
 branch_labels = None
 depends_on = None
 
 
 def upgrade() -> None:
-    execute_sql_file(Path(__file__).resolve().parents[1] / "sql/0001_baseline/01_schema.up.sql")
+    sql_directory = Path(__file__).resolve().parents[1] / "sql/0001_baseline"
+    execute_sql_file(sql_directory / "01_schema.up.sql")
+    execute_sql_file(sql_directory / "02_seed.up.sql")
 
 
 def downgrade() -> None:

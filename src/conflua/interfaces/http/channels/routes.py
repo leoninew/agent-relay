@@ -5,8 +5,10 @@ from fastapi import APIRouter, Query
 from conflua.application.dto.channels import (
     ArchiveChannel,
     Channel,
+    ChannelId,
     ChannelSnapshot,
     CreateChannel,
+    IssuedChannelId,
     UpdateChannel,
 )
 from conflua.interfaces.http.channels.dependencies import (
@@ -20,19 +22,26 @@ router = APIRouter(prefix="/room/{room_id}/channel", tags=["channel"])
 
 
 @router.get("")
-def list_channels(room_id: str, queries: ChannelQueriesDependency) -> list[Channel]:
+def list_channels(room_id: ChannelId, queries: ChannelQueriesDependency) -> list[Channel]:
     return queries.channels(room_id)
 
 
+@router.post("/issue-id")
+def issue_channel_id(room_id: ChannelId, service: ChannelServiceDependency) -> IssuedChannelId:
+    return service.issue_id(room_id)
+
+
 @router.get("/{channel_id}")
-def get_channel(room_id: str, channel_id: str, queries: ChannelQueriesDependency) -> Channel:
+def get_channel(
+    room_id: ChannelId, channel_id: ChannelId, queries: ChannelQueriesDependency
+) -> Channel:
     return queries.channel(room_id, channel_id)
 
 
 @router.get("/{channel_id}/snapshot")
 def get_channel_snapshot(
-    room_id: str,
-    channel_id: str,
+    room_id: ChannelId,
+    channel_id: ChannelId,
     queries: ChannelQueriesDependency,
     rooms: RoomQueriesDependency,
     output: MessageOutputDependency,
@@ -63,27 +72,32 @@ def get_channel_snapshot(
 
 @router.post("", status_code=201)
 def create_channel(
-    room_id: str, request: CreateChannel, service: ChannelServiceDependency
+    room_id: ChannelId, request: CreateChannel, service: ChannelServiceDependency
 ) -> Channel:
     return service.create(room_id, request)
 
 
 @router.patch("/{channel_id}")
 def update_channel(
-    room_id: str, channel_id: str, request: UpdateChannel, service: ChannelServiceDependency
+    room_id: ChannelId,
+    channel_id: ChannelId,
+    request: UpdateChannel,
+    service: ChannelServiceDependency,
 ) -> Channel:
     return service.update(room_id, channel_id, request)
 
 
 @router.delete("/{channel_id}", status_code=204)
-def delete_channel(room_id: str, channel_id: str, service: ChannelServiceDependency) -> None:
+def delete_channel(
+    room_id: ChannelId, channel_id: ChannelId, service: ChannelServiceDependency
+) -> None:
     service.delete(room_id, channel_id)
 
 
 @router.post("/{channel_id}/archive")
 def archive_channel(
-    room_id: str,
-    channel_id: str,
+    room_id: ChannelId,
+    channel_id: ChannelId,
     service: ChannelServiceDependency,
     request: ArchiveChannel | None = None,
 ) -> Channel:

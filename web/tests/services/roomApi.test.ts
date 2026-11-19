@@ -24,6 +24,7 @@ import {
   interruptRoomMember,
   postRoomMessage,
   updateRoom,
+  uploadRoomImage,
 } from "@/services/roomApi";
 
 import { roomFixture } from "../fixtures/room";
@@ -52,6 +53,39 @@ describe("room API", () => {
   afterEach(() => {
     apiClient.defaults.adapter = originalAdapter;
     vi.clearAllMocks();
+  });
+
+  it("uploads pasted image bytes to the actual room and channel URL", async () => {
+    const id = "img-0123456789abcdef0123456789abcdef";
+    const url = `/api/room/0000000000122/channel/0000000000123/image/${id}`;
+    const file = new File([new Uint8Array([137, 80, 78, 71])], "paste.png", { type: "image/png" });
+    const image = {
+      id,
+      url,
+      markdown: `![paste.png](${url})`,
+      mediaType: file.type,
+      size: file.size,
+    };
+    const signal = new AbortController().signal;
+    adapterMock.mockImplementationOnce(async (config: InternalAxiosRequestConfig) => ({
+      config,
+      data: image,
+      headers: { "content-type": "application/json" },
+      status: 201,
+      statusText: "Created",
+    }));
+
+    await expect(uploadRoomImage("0000000000122", file, signal, "0000000000123")).resolves.toEqual(
+      image,
+    );
+
+    const [request] = adapterMock.mock.calls[0];
+    expect(request).toMatchObject({
+      method: "post",
+      url: "/api/room/0000000000122/channel/0000000000123/image",
+      signal,
+    });
+    expect(request.data.get("file")).toBe(file);
   });
 
   it("sends a scoped batch body and a separate lightweight activity request", async () => {

@@ -2,8 +2,8 @@ from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
-from sqlalchemy import func, or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy import false, func, select
+from sqlalchemy.sql.elements import ColumnElement
 
 from conflua.application.dto.desktop import ShutdownNotificationTarget
 from conflua.application.dto.members import SessionChannel
@@ -18,7 +18,6 @@ from conflua.application.dto.rooms import (
 )
 from conflua.domain.rooms.errors import RoomConflictError, RoomNotFoundError
 from conflua.domain.rooms.models import (
-    USER_MEMBER_ID,
     Member,
     Room,
     RoomState,
@@ -43,32 +42,41 @@ from conflua.infrastructure.persistence.models import (
     TopicPositionRecord,
     TopicRecord,
 )
+from conflua.infrastructure.persistence.repositories._channel_scope import SQLAlchemyChannelScope
 from conflua.infrastructure.persistence.sqlite import insertion_order
 
 
-class SQLAlchemyRoomReads:
-    def __init__(self, session: Session, channel_id: str) -> None:
-        self.session = session
-        self.channel_id = channel_id
+def _human_publisher() -> ColumnElement[bool]:
+    return (
+        select(MemberRecord.id)
+        .where(
+            MemberRecord.room_id == MessageRecord.room_id,
+            MemberRecord.channel_id == MessageRecord.channel_id,
+            MemberRecord.id == MessageRecord.publisher_id,
+            MemberRecord.kind == "human",
+        )
+        .correlate(MessageRecord)
+        .exists()
+    )
 
+
+class SQLAlchemyRoomReads(SQLAlchemyChannelScope):
     def room(self, room_id: str) -> Room:
         record = self.session.get(RoomRecord, room_id)
-        if record is None or record.archived_at is not None:
+        if record is None or record.is_deleted:
             raise RoomNotFoundError("聊天室不存在", code="room_not_found")
-        channel = self.session.get(ChannelRecord, (room_id, self.channel_id))
+        channel = self.session.get(ChannelRecord, (room_id, self.channel_id_for(room_id)))
         if channel is None:
             raise RoomNotFoundError("频道不存在", code="channel_not_found")
-        if channel.archived_at is not None and channel.status != "archived":
+        if channel.is_deleted:
             raise RoomConflictError("频道当前不可用", code="channel_unavailable")
         return room_from_model(record)
 
     def working_path(self, room_id: str) -> str:
         room = self.room(room_id)
-        channel = self.session.get(ChannelRecord, (room_id, self.channel_id))
+        channel = self.session.get(ChannelRecord, (room_id, self.channel_id_for(room_id)))
         if channel is None:
             raise RoomNotFoundError("频道不存在", code="channel_not_found")
-        if channel.archived_at is not None and channel.status != "archived":
-            raise RoomConflictError("频道当前不可用", code="channel_unavailable")
         if channel.workspace_kind == "existing":
             return room.workspace_path
         if not channel.worktree_path or not Path(channel.worktree_path).is_dir():
@@ -80,7 +88,7 @@ class SQLAlchemyRoomReads:
             room_from_model(record)
             for record in self.session.scalars(
                 select(RoomRecord)
-                .where(RoomRecord.archived_at.is_(None))
+                .where(RoomRecord.is_deleted == false())
                 .order_by(insertion_order("rooms"))
             )
         ]
@@ -91,18 +99,19 @@ class SQLAlchemyRoomReads:
             .where(
                 MessageRecord.room_id == ChannelRecord.room_id,
                 MessageRecord.channel_id == ChannelRecord.id,
-                MessageRecord.publisher_id != USER_MEMBER_ID,
-                MessageRecord.deleted_at.is_(None),
+                ~_human_publisher(),
+                (MessageRecord.is_deleted == false()),
             )
+            .correlate(ChannelRecord)
             .scalar_subquery()
         )
         rows = self.session.execute(
             select(ChannelRecord.room_id, ChannelRecord.id, func.coalesce(latest, 0))
             .join(RoomRecord, RoomRecord.id == ChannelRecord.room_id)
             .where(
-                RoomRecord.archived_at.is_(None),
+                (RoomRecord.is_deleted == false()),
                 ChannelRecord.status == "active",
-                ChannelRecord.archived_at.is_(None),
+                ChannelRecord.is_deleted == false(),
             )
         )
         return [
@@ -112,7 +121,7 @@ class SQLAlchemyRoomReads:
 
     def workspace_exists(self, workspace_path: str, *, exclude_room_id: str | None = None) -> bool:
         identity = normalize_workspace_identity(workspace_path)
-        statement = select(RoomRecord.workspace_path).where(RoomRecord.archived_at.is_(None))
+        statement = select(RoomRecord.workspace_path).where(RoomRecord.is_deleted == false())
         if exclude_room_id is not None:
             statement = statement.where(RoomRecord.id != exclude_room_id)
         room_paths = self.session.scalars(statement)
@@ -121,7 +130,7 @@ class SQLAlchemyRoomReads:
         channel_paths = self.session.scalars(
             select(ChannelRecord.worktree_path).where(
                 ChannelRecord.workspace_kind == "worktree",
-                or_(ChannelRecord.archived_at.is_(None), ChannelRecord.status == "archived"),
+                ChannelRecord.is_deleted == false(),
             )
         )
         return any(
@@ -144,12 +153,15 @@ class SQLAlchemyRoomReads:
         return member_from_model(record, topic_ids)
 
     def publisher(self, room_id: str, member_id: str | None) -> Member:
+        identity = (
+            MemberRecord.kind == "human" if member_id is None else MemberRecord.id == member_id
+        )
         record = self.session.scalar(
             select(MemberRecord).where(
                 MemberRecord.room_id == room_id,
-                MemberRecord.channel_id == self.channel_id,
-                MemberRecord.id == (member_id if member_id is not None else USER_MEMBER_ID),
-                MemberRecord.deleted_at.is_(None),
+                MemberRecord.channel_id == self.channel_id_for(room_id),
+                identity,
+                (MemberRecord.is_deleted == false()),
             )
         )
         if record is None:
@@ -161,9 +173,9 @@ class SQLAlchemyRoomReads:
         record = self.session.scalar(
             select(MemberRecord).where(
                 MemberRecord.room_id == room_id,
-                MemberRecord.channel_id == self.channel_id,
+                MemberRecord.channel_id == self.channel_id_for(room_id),
                 MemberRecord.session_id == session_id,
-                MemberRecord.deleted_at.is_(None),
+                (MemberRecord.is_deleted == false()),
             )
         )
         if record is None:
@@ -176,8 +188,8 @@ class SQLAlchemyRoomReads:
             for session_id, member_id in self.session.execute(
                 select(MemberRecord.session_id, MemberRecord.id).where(
                     MemberRecord.room_id == room_id,
-                    MemberRecord.channel_id == self.channel_id,
-                    MemberRecord.deleted_at.is_(None),
+                    MemberRecord.channel_id == self.channel_id_for(room_id),
+                    (MemberRecord.is_deleted == false()),
                     MemberRecord.session_id.is_not(None),
                     MemberRecord.kind == "agent",
                 )
@@ -203,8 +215,8 @@ class SQLAlchemyRoomReads:
                 MemberRecord.room_id == room_id,
                 MemberRecord.kind == "agent",
                 MemberRecord.session_id.is_not(None),
-                MemberRecord.deleted_at.is_(None),
-                ChannelRecord.archived_at.is_(None),
+                (MemberRecord.is_deleted == false()),
+                ChannelRecord.is_deleted == false(),
                 ChannelRecord.status == "active",
             )
             .order_by(ChannelRecord.is_default.desc(), ChannelRecord.created_at, ChannelRecord.id)
@@ -226,7 +238,7 @@ class SQLAlchemyRoomReads:
                 select(
                     MemberRecord.room_id, MemberRecord.channel_id, MemberRecord.session_id
                 ).where(
-                    MemberRecord.deleted_at.is_(None),
+                    (MemberRecord.is_deleted == false()),
                     MemberRecord.session_id.is_not(None),
                     MemberRecord.kind == "agent",
                 )
@@ -237,13 +249,14 @@ class SQLAlchemyRoomReads:
     def resources(self, room_id: str) -> RoomState:
         room = self.room(room_id)
         working_path = self.working_path(room_id)
+        channel_id = self.channel_id_for(room_id)
         topics = [
             topic_from_model(record)
             for record in self.session.scalars(
                 select(TopicRecord)
                 .where(
                     TopicRecord.room_id == room_id,
-                    TopicRecord.channel_id == self.channel_id,
+                    TopicRecord.channel_id == channel_id,
                 )
                 .order_by(insertion_order("topics"))
             )
@@ -253,7 +266,7 @@ class SQLAlchemyRoomReads:
             select(MemberTopicRecord.member_id, MemberTopicRecord.topic_id)
             .where(
                 MemberTopicRecord.room_id == room_id,
-                MemberTopicRecord.channel_id == self.channel_id,
+                MemberTopicRecord.channel_id == channel_id,
             )
             .order_by(MemberTopicRecord.position)
         ):
@@ -264,7 +277,7 @@ class SQLAlchemyRoomReads:
                 select(MemberRecord)
                 .where(
                     MemberRecord.room_id == room_id,
-                    MemberRecord.channel_id == self.channel_id,
+                    MemberRecord.channel_id == channel_id,
                 )
                 .order_by(MemberRecord.session_id.is_(None), insertion_order("members"))
             )
@@ -278,7 +291,7 @@ class SQLAlchemyRoomReads:
                     select(MemberRecord.id)
                     .where(
                         MemberRecord.room_id == SessionRecord.room_id,
-                        MemberRecord.channel_id == self.channel_id,
+                        MemberRecord.channel_id == channel_id,
                         MemberRecord.session_id == SessionRecord.id,
                     )
                     .exists(),
@@ -288,7 +301,7 @@ class SQLAlchemyRoomReads:
         ]
         return RoomState(
             room=room,
-            channel_id=self.channel_id,
+            channel_id=channel_id,
             working_path=working_path,
             topics=topics,
             members=members,
@@ -314,7 +327,7 @@ class SQLAlchemyRoomReads:
             .where(
                 MessageRecord.room_id == MemberTopicRecord.room_id,
                 MessageRecord.channel_id == MemberTopicRecord.channel_id,
-                MessageRecord.deleted_at.is_(None),
+                (MessageRecord.is_deleted == false()),
                 MessageRecord.seq > position_seq,
                 topic_matches,
             )
@@ -336,7 +349,7 @@ class SQLAlchemyRoomReads:
                     (MemberRecord.room_id == MemberTopicRecord.room_id)
                     & (MemberRecord.channel_id == MemberTopicRecord.channel_id)
                     & (MemberRecord.id == MemberTopicRecord.member_id)
-                    & MemberRecord.deleted_at.is_(None)
+                    & (MemberRecord.is_deleted == false())
                 ),
             )
             .join(
@@ -345,7 +358,7 @@ class SQLAlchemyRoomReads:
                     (TopicRecord.room_id == MemberTopicRecord.room_id)
                     & (TopicRecord.channel_id == MemberTopicRecord.channel_id)
                     & (TopicRecord.id == MemberTopicRecord.topic_id)
-                    & TopicRecord.deleted_at.is_(None)
+                    & (TopicRecord.is_deleted == false())
                 ),
             )
             .outerjoin(
@@ -359,7 +372,7 @@ class SQLAlchemyRoomReads:
             )
             .where(
                 MemberTopicRecord.room_id == room_id,
-                MemberTopicRecord.channel_id == self.channel_id,
+                MemberTopicRecord.channel_id == self.channel_id_for(room_id),
             )
         )
         if member_id is not None:
@@ -381,14 +394,15 @@ class SQLAlchemyRoomReads:
 
     def activity(self, room_id: str) -> RoomActivity:
         self.room(room_id)
+        channel_id = self.channel_id_for(room_id)
         statuses = {
             status: count
             for status, count in self.session.execute(
                 select(DeliveryRecord.status, func.count())
                 .where(
                     DeliveryRecord.room_id == room_id,
-                    DeliveryRecord.channel_id == self.channel_id,
-                    DeliveryRecord.deleted_at.is_(None),
+                    DeliveryRecord.channel_id == channel_id,
+                    (DeliveryRecord.is_deleted == false()),
                 )
                 .group_by(DeliveryRecord.status)
             )
@@ -399,8 +413,8 @@ class SQLAlchemyRoomReads:
                 .select_from(MessageRecord)
                 .where(
                     MessageRecord.room_id == room_id,
-                    MessageRecord.channel_id == self.channel_id,
-                    MessageRecord.deleted_at.is_(None),
+                    MessageRecord.channel_id == channel_id,
+                    (MessageRecord.is_deleted == false()),
                 )
             )
             or 0
@@ -409,7 +423,7 @@ class SQLAlchemyRoomReads:
             self.session.scalar(
                 select(func.max(RoomEventRecord.event_id)).where(
                     RoomEventRecord.room_id == room_id,
-                    RoomEventRecord.channel_id == self.channel_id,
+                    RoomEventRecord.channel_id == channel_id,
                 )
             )
             or 0
@@ -430,12 +444,13 @@ class SQLAlchemyRoomReads:
 
     def events(self, room_id: str, after_event_id: int, limit: int = 200) -> RoomEventPage:
         self.working_path(room_id)
+        channel_id = self.channel_id_for(room_id)
         if (
             self.session.scalar(
                 select(RoomEventRecord.event_id)
                 .where(
                     RoomEventRecord.room_id == room_id,
-                    RoomEventRecord.channel_id == self.channel_id,
+                    RoomEventRecord.channel_id == channel_id,
                     RoomEventRecord.kind == "clear",
                     RoomEventRecord.event_id > after_event_id,
                 )
@@ -461,7 +476,7 @@ class SQLAlchemyRoomReads:
                 .where(
                     RoomEventRecord.room_id == room_id,
                     RoomEventRecord.event_id > after_event_id,
-                    RoomEventRecord.channel_id == self.channel_id,
+                    RoomEventRecord.channel_id == channel_id,
                 )
                 .order_by(RoomEventRecord.event_id)
                 .limit(limit + 1)
@@ -488,7 +503,8 @@ class SQLAlchemyRoomReads:
     def _resync(self, room_id: str) -> RoomEventPage:
         latest = self.session.scalar(
             select(func.max(RoomEventRecord.event_id)).where(
-                RoomEventRecord.room_id == room_id, RoomEventRecord.channel_id == self.channel_id
+                RoomEventRecord.room_id == room_id,
+                RoomEventRecord.channel_id == self.channel_id_for(room_id),
             )
         )
         return RoomEventPage(
@@ -503,18 +519,18 @@ class SQLAlchemyRoomReads:
                 (MemberRecord.room_id == MessageRecord.room_id)
                 & (MemberRecord.channel_id == MessageRecord.channel_id)
                 & (MemberRecord.kind == "agent")
-                & MemberRecord.deleted_at.is_(None)
+                & (MemberRecord.is_deleted == false())
                 & MemberRecord.session_id.is_not(None),
             )
             .join(
                 ChannelRecord,
                 (ChannelRecord.room_id == MessageRecord.room_id)
                 & (ChannelRecord.id == MessageRecord.channel_id)
-                & or_(ChannelRecord.archived_at.is_(None), ChannelRecord.status == "archived"),
+                & (ChannelRecord.is_deleted == false()),
             )
             .where(
-                MessageRecord.publisher_id == USER_MEMBER_ID,
-                MessageRecord.deleted_at.is_(None),
+                _human_publisher(),
+                (MessageRecord.is_deleted == false()),
                 MessageRecord.created_at >= started_at,
             )
             .distinct()

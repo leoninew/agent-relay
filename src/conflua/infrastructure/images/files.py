@@ -7,6 +7,7 @@ from uuid import uuid4
 from PIL import Image, UnidentifiedImageError
 
 from conflua.application.images.ports import MAX_IMAGE_BYTES, StoredImage
+from conflua.domain.identifiers import is_tsid
 from conflua.domain.rooms.errors import RoomInputError, RoomNotFoundError
 
 _FORMATS = {
@@ -19,9 +20,9 @@ _FORMATS = {
 class FileImageStore:
     """Store images under <rooms root>/<room ID>/channels/<channel ID>/images."""
 
-    def __init__(self, root: Path, channel_id: str) -> None:
+    def __init__(self, root: Path, channel_id: str | None = None) -> None:
         self.root = root.expanduser().resolve()
-        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", channel_id):
+        if channel_id is not None and not is_tsid(channel_id):
             raise RoomNotFoundError("频道不存在", code="channel_not_found")
         self.channel_id = channel_id
 
@@ -29,8 +30,10 @@ class FileImageStore:
         return FileImageStore(self.root, channel_id)
 
     def _directory(self, room_id: str) -> Path:
-        if not re.fullmatch(r"room-[A-Za-z0-9_-]+", room_id):
-            raise RoomNotFoundError("Room not found")
+        if not is_tsid(room_id):
+            raise RoomNotFoundError("Room not found", code="room_not_found")
+        if self.channel_id is None:
+            raise RuntimeError("Image storage requires an explicit channel")
         return self.root / room_id / "channels" / self.channel_id / "images"
 
     def save(self, room_id: str, content: bytes) -> StoredImage:

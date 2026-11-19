@@ -288,6 +288,7 @@ def test_steer_receipt_is_saved_without_queue_activation_or_false_history_confir
     queue_driver.submit.return_value = SteerReceipt("active-turn")
     DeliveryService(delivery_store, queue_driver, logging.getLogger("tests.delivery")).submit(work)
     saved = delivery_store.finish_delivery.call_args.args[1]
+    assert delivery_store.finish_delivery.call_args.kwargs["channel_id"] == work.channel_id
     assert saved.status == "queued" and saved.submission_method == "steer"
     assert saved.steered_turn_id == "active-turn"
     assert saved.received_at is None and saved.received_turn_id is None

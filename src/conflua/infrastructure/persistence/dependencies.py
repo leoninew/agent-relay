@@ -2,7 +2,6 @@ from pathlib import Path
 
 from conflua.application.delivery.ports import DeliveryRepository
 from conflua.application.rooms.ports import RoomStore
-from conflua.domain.rooms.models import DEFAULT_CHANNEL_ID
 from conflua.infrastructure.persistence.database import Database
 from conflua.infrastructure.persistence.delivery_store import SQLAlchemyDeliveryStore
 from conflua.infrastructure.persistence.migrations import run_migrations
@@ -18,7 +17,7 @@ def create_database(path: Path) -> Database:
 def create_room_store(
     database: Database, transaction: SQLAlchemyTransaction | None = None
 ) -> RoomStore:
-    return SQLAlchemyRoomStore(database, transaction, channel_id=DEFAULT_CHANNEL_ID)
+    return SQLAlchemyRoomStore(database, transaction)
 
 
 def create_delivery_store(database: Database) -> DeliveryRepository:

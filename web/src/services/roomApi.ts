@@ -456,17 +456,6 @@ export async function postRoomMessage(
   return data;
 }
 
-export async function fetchPublication(
-  roomId: string,
-  publicationId: string,
-  channelId: string,
-): Promise<RoomMessage> {
-  const { data } = await apiClient.get<RoomMessage>(
-    roomResourcePath(roomId, channelId, `/publication/${encodeURIComponent(publicationId)}`),
-  );
-  return data;
-}
-
 export async function addRoomMember(
   roomId: string,
   request: CreateMember,

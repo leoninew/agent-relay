@@ -3,12 +3,13 @@ import { effectScope, ref } from "vue";
 import type { EffectScope } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { DEFAULT_CHANNEL_ID } from "@/domains/channel/channelRoutes";
 import { canArchiveChannel, useChannelArchive } from "@/domains/channel/useChannelArchive";
 import { archiveChannel } from "@/services/channelApi";
 import type { Channel } from "@/services/channelApi";
 import { useChannelsStore } from "@/stores/channels";
 import { roomCacheKey } from "@/services/cacheKeys";
+
+const DEFAULT_CHANNEL_ID = "0000000000123";
 
 vi.mock("@/services/channelApi", () => ({
   archiveChannel: vi.fn(),

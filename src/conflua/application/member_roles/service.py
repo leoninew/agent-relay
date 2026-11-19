@@ -1,8 +1,7 @@
-from uuid import uuid4
-
 from conflua.application.dto.member_roles import MemberRole, MemberRoleInput
 from conflua.application.member_roles.ports import MemberRoleData, MemberRoleNameConflict
 from conflua.application.transactions import RepositoryScope
+from conflua.domain.identifiers import new_tsid
 from conflua.domain.rooms.errors import RoomConflictError, RoomNotFoundError
 
 
@@ -30,7 +29,7 @@ class MemberRoleService:
             return role
 
     def create(self, request: MemberRoleInput) -> MemberRole:
-        role = MemberRole(id=f"role-{uuid4().hex}", name=request.name, prompt=request.prompt)
+        role = MemberRole(id=new_tsid(), name=request.name, prompt=request.prompt)
         with self.store.write() as roles:
             try:
                 roles.insert(role)

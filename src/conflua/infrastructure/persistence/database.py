@@ -2,12 +2,10 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-from sqlalchemy import Text, column, select, table
 from sqlalchemy.engine import Engine
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
-from conflua.infrastructure.persistence.migrations import MIGRATION_HEAD
+from conflua.infrastructure.persistence.migrations import check_database_revision
 from conflua.infrastructure.persistence.sqlite import create_sqlite_engine
 from conflua.infrastructure.persistence.transaction import SQLAlchemyTransaction
 
@@ -24,25 +22,11 @@ class Database:
             self.engine, autoflush=False, expire_on_commit=False, autobegin=False
         )
         try:
-            self._check_revision()
+            with self.read() as session:
+                check_database_revision(session.connection())
         except BaseException:
             self.close()
             raise
-
-    def _check_revision(self) -> None:
-        version = table("alembic_version", column("version_num", Text))
-        try:
-            with self.read() as session:
-                revisions = list(session.scalars(select(version.c.version_num)))
-        except SQLAlchemyError as exc:
-            raise RuntimeError(
-                "Room database is not migrated; run `python -m conflua.migrate`"
-            ) from exc
-        if revisions != [MIGRATION_HEAD]:
-            raise RuntimeError(
-                f"Room database revisions are {revisions!r}; expected {MIGRATION_HEAD!r}. "
-                "Run `python -m conflua.migrate`"
-            )
 
     def _open_session(self, *, write: bool) -> Session:
         session = self._sessions()

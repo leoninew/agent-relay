@@ -19,7 +19,7 @@ class SQLAlchemyRoomStore(SQLAlchemyScope[SQLAlchemyRoomData]):
         database: Database,
         transaction: SQLAlchemyTransaction | None = None,
         *,
-        channel_id: str,
+        channel_id: str | None = None,
     ) -> None:
         self.database = database
         self.channel_id = channel_id

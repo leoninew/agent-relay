@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import en from "@/i18n/en";
 import zhCN from "@/i18n/zh-CN";
 import { i18n, translateMessage } from "@/i18n";
-import { formatDate, sameLocalDay } from "@/utils/time";
+import { formatDate, formatMinute, sameLocalDay } from "@/utils/time";
 
 function entries(value: Record<string, unknown>, prefix = ""): Record<string, string[]> {
   return Object.fromEntries(
@@ -18,6 +18,17 @@ function entries(value: Record<string, unknown>, prefix = ""): Record<string, st
 }
 
 describe("translations", () => {
+  it("groups equal instants and crosses midnight in local time with explicit-offset input", () => {
+    const previous = new Date(2026, 10, 19, 23, 59).toISOString();
+    const next = new Date(2026, 10, 20, 0, 1).toISOString();
+    const nextWithOffset = `${new Date(Date.parse(next) + 8 * 60 * 60 * 1000).toISOString().slice(0, -1)}+08:00`;
+
+    expect(formatMinute(previous)).toBe("23:59");
+    expect(formatMinute(next)).toBe("00:01");
+    expect(formatMinute(nextWithOffset)).toBe("00:01");
+    expect(sameLocalDay(previous, next)).toBe(false);
+    expect(sameLocalDay(next, nextWithOffset)).toBe(true);
+  });
   it("has matching keys and interpolation parameters", () => {
     expect(entries(zhCN)).toEqual(entries(en));
   });

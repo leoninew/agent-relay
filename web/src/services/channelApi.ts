@@ -1,4 +1,4 @@
-import { apiClient } from "@/services/api";
+import { ApiClientError, apiClient } from "@/services/api";
 import type { RoomSnapshot } from "@/services/roomApi";
 
 export type ChannelWorkspaceKind = "existing" | "worktree";
@@ -32,7 +32,7 @@ export type Channel = {
 export type CreateChannel = {
   name: string;
   description: string;
-  channelId?: string;
+  channelId: string;
   useWorktree: boolean;
 };
 
@@ -59,6 +59,14 @@ export async function fetchChannels(roomId: string, signal?: AbortSignal): Promi
 export async function createChannel(roomId: string, request: CreateChannel): Promise<Channel> {
   const { data } = await apiClient.post<Channel>(channelBase(roomId), request);
   return data;
+}
+
+export async function issueChannelId(roomId: string): Promise<string> {
+  const { data } = await apiClient.post<{ channelId: string }>(`${channelBase(roomId)}/issue-id`);
+  if (typeof data?.channelId !== "string" || !data.channelId) {
+    throw new ApiClientError("Missing issued channel ID.", "contract_mismatch");
+  }
+  return data.channelId;
 }
 
 export async function fetchChannel(

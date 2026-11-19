@@ -6,9 +6,9 @@ from pathlib import PurePosixPath, PureWindowsPath
 from posixpath import normpath as posix_normpath
 from uuid import uuid4
 
+from conflua.domain.identifiers import new_tsid
 from conflua.domain.rooms.errors import RoomConflictError, RoomInputError
 from conflua.domain.rooms.models import (
-    USER_MEMBER_ID,
     CapabilityReference,
     Delivery,
     Member,
@@ -70,7 +70,7 @@ def resolve_recipient_ids(
         and (member.id in mentions or topics.intersection(member.topic_ids))
     ]
     if not recipients:
-        if sender_id != USER_MEMBER_ID:
+        if not any(member.id == sender_id and member.kind == "human" for member in state.members):
             raise RoomInputError(
                 "排除发布成员后没有实际接收人，请选择其他话题或 @ 其他成员",
                 code="no_other_recipients",
@@ -80,7 +80,7 @@ def resolve_recipient_ids(
 
 
 def validate_sender_targets(sender: Member, mentioned_member_ids: list[str]) -> None:
-    if sender.kind == "human" and USER_MEMBER_ID in mentioned_member_ids:
+    if sender.kind == "human" and sender.id in mentioned_member_ids:
         raise RoomInputError("不能将消息发送给自己", code="self_recipient_forbidden")
 
 
@@ -124,9 +124,8 @@ def build_message(
     references: dict[tuple[str, str], CapabilityReference] = {}
     for capability in capabilities:
         references.setdefault((capability.type, capability.id), capability)
-    message_id = f"{state.room.id}-msg-{seq:04d}"
     return Message(
-        id=message_id,
+        id=new_tsid(),
         publication_id=publication_id,
         seq=seq,
         sender_id=sender_id,
@@ -140,7 +139,7 @@ def build_message(
         created_at=created_at,
         deliveries=[
             Delivery(
-                id=f"{message_id}:{member.id}",
+                id=new_tsid(),
                 target_member_id=member.id,
                 target_session_id=member.session_id,
                 client_message_id=str(uuid4()),

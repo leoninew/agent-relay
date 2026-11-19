@@ -7,7 +7,6 @@ from conflua.application.member_roles.service import MemberRoleService
 from conflua.application.members.sessions import SessionDriver
 from conflua.application.rooms.ports import RoomStore
 from conflua.bootstrap.settings import LoggingSettings
-from conflua.domain.rooms.models import DEFAULT_CHANNEL_ID
 from conflua.infrastructure.git.worktrees import GitWorktrees
 from conflua.infrastructure.images.files import FileImageStore
 from conflua.infrastructure.persistence.channel_store import SQLAlchemyChannelStore
@@ -57,7 +56,7 @@ def create_http_dependencies(
         session_driver=sessions,
         queue_driver=queue,
         capability_driver=capabilities,
-        image_store=FileImageStore(database.path.parent / "rooms", DEFAULT_CHANNEL_ID),
+        image_store=FileImageStore(database.path.parent / "rooms"),
         context_for_channel=lambda channel_id: SQLAlchemyScope(
             database, lambda session: SQLAlchemyContextRepository(session, channel_id)
         ),

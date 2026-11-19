@@ -30,7 +30,7 @@ def create_delivery_runner(
             store,
             driver,
             logger,
-            FileImageStore(database.path.parent / "rooms", "channel-default"),
+            FileImageStore(database.path.parent / "rooms"),
             request_presence=request_presence,
         ),
         SubmitterLock(database.path),

@@ -1,7 +1,9 @@
 from datetime import UTC, datetime
+from uuid import UUID
 
 import pytest
 
+from conflua.domain.identifiers import is_tsid
 from conflua.domain.rooms.errors import RoomConflictError, RoomInputError
 from conflua.domain.rooms.models import (
     McpServerReference,
@@ -88,6 +90,11 @@ def test_routing_freezes_distinct_recipients_and_only_agents_have_deliveries(
         seq=1,
     )
     assert message.recipient_ids == recipients
+    assert is_tsid(message.id) and message.seq == 1
+    assert all(
+        is_tsid(item.id) and UUID(item.client_message_id).version == 4
+        for item in message.deliveries
+    )
     assert [item.target_member_id for item in message.deliveries] == [
         member_id for member_id in recipients if member_id != "user"
     ]

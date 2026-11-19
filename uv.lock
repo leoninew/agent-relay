@@ -290,6 +290,7 @@ dependencies = [
     { name = "pyyaml" },
     { name = "sqlalchemy" },
     { name = "sqlparse" },
+    { name = "tsidpy" },
     { name = "uvicorn", extra = ["standard"] },
     { name = "websockets" },
 ]
@@ -327,6 +328,7 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "sqlalchemy", specifier = ">=2.0,<2.1" },
     { name = "sqlparse", specifier = ">=0.5,<1" },
+    { name = "tsidpy", specifier = "==1.1.5" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.34" },
     { name = "websockets", specifier = ">=17.4,<18" },
 ]
@@ -1860,6 +1862,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/ee/9f/c5201d42a484c061e528825fc8e2d565f5abd50a4ced6fb7d29c4ec99b2b/truststore-0.10.5.tar.gz", hash = "sha256:30d36967ccaded5cbb38d602c433f53600036c79d502f4533a49b60a03bbefcd", size = 28091, upload-time = "2026-10-12T22:27:31.808Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/51/e9/3a7820be2bb0fe53b6bc9c3be26d3d1158004e4c3ab953aa6840b955b1e9/truststore-0.10.5-py3-none-any.whl", hash = "sha256:9aaaedaefaf06d8b206278cf8b5012bc897f485a874503501e12d776df78951c", size = 19017, upload-time = "2026-10-12T22:27:30.377Z" },
+]
+
+[[package]]
+name = "tsidpy"
+version = "1.1.5"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/09/83/b16246bef8ce1e490a6bd7af5335bfc60c8d32513aa2d66e5b9a92976846/tsidpy-1.1.5.tar.gz", hash = "sha256:1a97201fe5697e54ed48ec5e5474358edc6fa3379f26ac29d1ce22c0fc4c375b", size = 12459, upload-time = "2023-11-28T22:22:56.144Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/16/c3/0e30c9e55340db0a986eddbdf11d7ca33537fb33c34d82170f780680be56/tsidpy-1.1.5-py3-none-any.whl", hash = "sha256:e7b951a03cbb57c238c7511bbad2c2f855ae943df46916efea26f85a9f93b3b4", size = 10520, upload-time = "2023-11-28T22:22:54.861Z" },
 ]
 
 [[package]]

@@ -4,10 +4,18 @@ import type { ComposerDraft } from "@/domains/room/composerMemberMention";
 import type { MessageDraft } from "@/services/roomApi";
 import { createMessageDraftStorage } from "@/stores/messageDrafts";
 
-export function useRoomDraft(
-  storage = createMessageDraftStorage(),
-  locked: () => boolean = () => false,
-) {
+export function draftSnapshot(draft: ComposerDraft): string {
+  return JSON.stringify([
+    draft.content,
+    draft.topicIds,
+    draft.mentionedMemberIds,
+    draft.replyToMessageId ?? null,
+    draft.capabilities?.map(({ type, id, name }) => [type, id, name]) ?? [],
+    draft.memberMentions?.map(({ id, name, start, end }) => [id, name, start, end]) ?? [],
+  ]);
+}
+
+export function useRoomDraft(storage = createMessageDraftStorage()) {
   const drafts = ref<Record<string, ComposerDraft>>({});
   const currentScope = ref<string>();
 
@@ -15,7 +23,7 @@ export function useRoomDraft(
     () => (currentScope.value ? drafts.value[currentScope.value] : undefined),
     (draft) => {
       const scope = currentScope.value;
-      if (!scope || !draft || locked()) {
+      if (!scope || !draft) {
         return;
       }
       if (
@@ -33,9 +41,9 @@ export function useRoomDraft(
     { deep: true, flush: "sync" },
   );
 
-  function open(scope: string, pending?: MessageDraft): void {
+  function open(scope: string): void {
     currentScope.value = undefined;
-    const saved: ComposerDraft | undefined = drafts.value[scope] ?? storage.load(scope) ?? pending;
+    const saved = drafts.value[scope] ?? storage.load(scope);
     drafts.value[scope] = saved
       ? {
           content: saved.content,
@@ -53,7 +61,16 @@ export function useRoomDraft(
     currentScope.value = scope;
   }
 
-  function finish(scope: string, sent: MessageDraft): void {
+  function finish(scope: string, sent: MessageDraft, snapshot: string): boolean {
+    const saved = storage.load(scope);
+    const editing = drafts.value[scope];
+    if (
+      !saved ||
+      draftSnapshot(saved) !== snapshot ||
+      (editing && draftSnapshot(editing) !== snapshot)
+    ) {
+      return false;
+    }
     const draft: MessageDraft = {
       content: "",
       topicIds: [...sent.topicIds],
@@ -65,6 +82,7 @@ export function useRoomDraft(
     } else {
       storage.remove(scope);
     }
+    return true;
   }
 
   return { drafts, open, finish };

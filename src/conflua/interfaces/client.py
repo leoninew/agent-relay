@@ -8,7 +8,6 @@ from typing import Annotated, Any, NoReturn, Protocol, cast
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
-from uuid import uuid4
 
 from pydantic import Field
 
@@ -246,11 +245,19 @@ class ConfluaClient:
         self, room_id: str, name: str, use_worktree: bool = False, description: str = ""
     ) -> ApiResult:
         """Create a channel, optionally with a worktree from current HEAD. Keep the returned ID."""
-        channel_id = f"channel-{uuid4().hex[:12]}"
+        path = f"{_room_path(room_id)}/channel"
+        issued = self.request("POST", f"{path}/issue-id")
+        channel_id = (
+            _string(issued.data.get("channelId")) if isinstance(issued.data, dict) else None
+        )
+        if channel_id is None:
+            raise ConfluaClientError(
+                4, "invalid_response", "Conflua 未返回频道编号", request_id=issued.request_id
+            )
         try:
             return self.request(
                 "POST",
-                f"{_room_path(room_id)}/channel",
+                path,
                 body={
                     "name": name,
                     "description": description,

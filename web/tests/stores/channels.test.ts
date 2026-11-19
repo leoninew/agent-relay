@@ -1,7 +1,6 @@
 import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { DEFAULT_CHANNEL_ID } from "@/domains/channel/channelRoutes";
 import type { Channel } from "@/services/channelApi";
 import {
   archiveChannel,
@@ -13,6 +12,8 @@ import {
 } from "@/services/channelApi";
 import { useChannelsStore } from "@/stores/channels";
 import { roomCacheKey } from "@/services/cacheKeys";
+
+const DEFAULT_CHANNEL_ID = "0000000000123";
 
 vi.mock("@/services/channelApi", () => ({
   archiveChannel: vi.fn(),
@@ -46,6 +47,22 @@ describe("channel state", () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it("discovers each room's default by flag and enters a valid recent channel when available", async () => {
+    const otherDefault = channel({ id: "0000000000223", roomId: "room-2" });
+    const additional = channel({ id: "0000000000124", isDefault: false });
+    vi.mocked(fetchChannels).mockResolvedValueOnce([additional, channel()]);
+    vi.mocked(fetchChannels).mockResolvedValueOnce([otherDefault]);
+    const store = useChannelsStore();
+    await store.load("room-1");
+    await store.load("room-2");
+
+    expect(store.entryChannelId("room-1")).toBe(DEFAULT_CHANNEL_ID);
+    expect(store.entryChannelId("room-2")).toBe(otherDefault.id);
+    store.remember("room-1", additional.id);
+    expect(store.entryChannelId("room-1")).toBe(additional.id);
+    expect(store.entryChannelId("room-2")).toBe(otherDefault.id);
   });
 
   it("loads channels once and excludes archived channels from selection", async () => {

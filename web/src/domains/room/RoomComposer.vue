@@ -9,9 +9,7 @@
       <AppIcon name="reply" />
       <span>
         {{ t("composer.replyTo") }}
-        <strong>{{
-          replyTo.senderId === "user" ? t("member.you") : (replyToMember?.name ?? replyTo.senderId)
-        }}</strong>
+        <strong>{{ memberDisplayName(replyToMember, replyTo.senderId, t("member.you")) }}</strong>
         · {{ messageText(replyTo.content, replyTo.capabilities) }}
       </span>
       <button
@@ -24,7 +22,7 @@
       </button>
     </div>
     <div class="composer-fields">
-      <fieldset class="composer-routing" :disabled="sending || locked">
+      <fieldset class="composer-routing" :disabled="sending">
         <legend class="sr-only">{{ t("composer.routing") }}</legend>
         <div class="routing-row">
           <span class="routing-label">{{ t("sidebar.topics") }}</span>
@@ -32,7 +30,7 @@
             v-model="topicIds"
             class="routing-options"
             :aria-label="t('composer.topics')"
-            :disabled="sending || locked"
+            :disabled="sending"
             :invalid="showRecipientError"
             :described-by="showRecipientError ? 'routing-error' : undefined"
           >
@@ -56,7 +54,7 @@
             v-model="mentionedMemberIds"
             class="routing-options"
             :aria-label="t('composer.mentions')"
-            :disabled="sending || locked"
+            :disabled="sending"
             :invalid="showRecipientError"
             :described-by="showRecipientError ? 'routing-error' : undefined"
           >
@@ -80,8 +78,8 @@
         <RoomModelPicker
           :room-id="roomId"
           :channel-id="channelId"
-          :member="ready && !locked ? modelTarget(members, mentionedMemberIds) : undefined"
-          :disabled="Boolean(sending || locked)"
+          :member="ready ? modelTarget(members, mentionedMemberIds) : undefined"
+          :disabled="sending"
         />
         <p
           v-if="showRecipientError"
@@ -97,7 +95,7 @@
         :capabilities="headerCapabilities"
         :skill-descriptions="skillDescriptions"
         removable
-        :disabled="sending || locked"
+        :disabled="sending"
         @remove="removeCapability"
       />
       <label for="message-content" class="sr-only">{{ t("composer.content") }}</label>
@@ -119,7 +117,7 @@
             :placeholder="t('composer.placeholder')"
             :clear-label="t('composer.clearContent')"
             :remove-label="t('composer.removeSkill')"
-            :disabled="!ready || sending || locked"
+            :disabled="!ready || sending"
             :invalid="showContentError"
             :described-by="showContentError ? 'content-error' : undefined"
             :picker-open="pickerOpen"
@@ -215,7 +213,7 @@
               aria-keyshortcuts="Enter"
               :aria-label="t(sending ? 'composer.sending' : 'composer.sendMessage')"
               :loading="sending"
-              :disabled="!ready || locked || Boolean(sendDisabledReason)"
+              :disabled="!ready || sending || Boolean(sendDisabledReason)"
               :loading-label="t('composer.sending')"
             >
               <template #icon><AppIcon name="enter" /></template>
@@ -227,7 +225,6 @@
       <p v-if="showContentError" id="content-error" class="field-error" role="alert">
         {{ contentError }}
       </p>
-      <p v-if="error" class="field-error send-error" role="alert">{{ translateMessage(error) }}</p>
     </div>
   </form>
 </template>
@@ -236,7 +233,6 @@
   import { computed, nextTick, ref, watch } from "vue";
   import { useI18n } from "vue-i18n";
   import { translateMessage } from "@/i18n";
-  import type { MessageDescriptor } from "@/i18n";
 
   import AppButton from "@/components/AppButton.vue";
   import AppCheckbox from "@/components/AppCheckbox.vue";
@@ -256,6 +252,7 @@
   import { modelTarget } from "@/domains/room/useSessionModels";
   import type { ComposerCatalog } from "@/domains/room/useRoomCapabilities";
   import { memberSessionName } from "@/domains/room/memberSessionName";
+  import { memberDisplayName } from "@/domains/room/memberDisplayName";
   import {
     inlineSkills,
     messageText,
@@ -282,8 +279,6 @@
       replyTo?: RoomMessage;
       sending: boolean;
       ready?: boolean;
-      locked?: boolean;
-      error: MessageDescriptor | null;
       catalog?: ComposerCatalog;
       skillDescriptions?: ReadonlyMap<string, string>;
     }>(),
@@ -347,9 +342,7 @@
   const uploading = ref(false);
   const query = ref<ComposerQuery>();
   const activeIndex = ref(0);
-  const pickerOpen = computed(() =>
-    Boolean(query.value && props.ready && !props.sending && !props.locked),
-  );
+  const pickerOpen = computed(() => Boolean(query.value && props.ready && !props.sending));
   const memberPicker = computed(() => query.value?.kind === "member");
   const options = computed(() => {
     const search = query.value?.text.toLocaleLowerCase() ?? "";
@@ -381,7 +374,7 @@
     activeIndex.value = 0;
   });
   watch(
-    () => [props.roomId, props.sending, props.locked],
+    () => [props.roomId, props.sending],
     () => {
       query.value = undefined;
       insertionTooLong.value = false;
@@ -414,7 +407,7 @@
     memberMentions: MemberMentionRange[],
     addedMemberIds?: string[],
   ): void {
-    if (!props.ready || props.sending || props.locked) {
+    if (!props.ready || props.sending) {
       return;
     }
     insertionTooLong.value = false;
@@ -443,7 +436,7 @@
   }
 
   function removeCapability(reference: CapabilityReference): void {
-    if (props.sending || props.locked) {
+    if (props.sending) {
       return;
     }
     insertionTooLong.value = false;
@@ -509,15 +502,9 @@
   });
 
   watch(
-    [
-      () => props.topics,
-      () => props.members,
-      () => props.ready,
-      () => props.locked,
-      () => props.sending,
-    ],
+    [() => props.topics, () => props.members, () => props.ready, () => props.sending],
     () => {
-      if (!props.ready || props.locked || props.sending) {
+      if (!props.ready || props.sending) {
         return;
       }
       const validTopicIds = topicIds.value.filter((id) =>
@@ -542,7 +529,7 @@
   );
 
   function addTopic(topicId: string): void {
-    if (props.sending || props.locked || topicIds.value.includes(topicId)) {
+    if (props.sending || topicIds.value.includes(topicId)) {
       return;
     }
     if (!props.topics.some((topic) => topic.id === topicId && !topic.deletedAt)) {
@@ -552,7 +539,7 @@
   }
 
   function selectOnlyMember(memberId: string): void {
-    if (!props.ready || props.sending || props.locked) {
+    if (!props.ready || props.sending) {
       return;
     }
     if (!agentMembers.value.some((member) => member.id === memberId)) {
@@ -562,7 +549,7 @@
   }
 
   function selectTopic(topicId?: string): void {
-    if (props.sending || props.locked) {
+    if (props.sending) {
       return;
     }
     topicIds.value =
@@ -572,7 +559,7 @@
   }
 
   function selectMember(memberId?: string): void {
-    if (props.sending || props.locked) {
+    if (props.sending) {
       return;
     }
     mentionedMemberIds.value =
@@ -593,7 +580,7 @@
   }
 
   function submit(): void {
-    if (!props.ready || props.sending || props.locked || uploading.value) {
+    if (!props.ready || props.sending || uploading.value) {
       return;
     }
     attempted.value = true;
@@ -649,14 +636,6 @@
   }
 
   function reset(): void {
-    editor.value?.clear();
-    draft.value = {
-      ...draft.value,
-      content: "",
-      capabilities: [],
-      memberMentions: undefined,
-      replyToMessageId: undefined,
-    };
     query.value = undefined;
     attempted.value = false;
     insertionTooLong.value = false;

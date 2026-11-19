@@ -282,7 +282,7 @@ export default {
     messageLoad: "Could not load messages. Try again.",
     detailLoad: "Could not update message details.",
     historyLoad: "Could not load earlier messages.",
-    publish: "Publication is unconfirmed. The draft is retained; check the result.",
+    publish: "Message sending failed. The draft is retained.",
     sessionLoad: "Could not load sessions. Refresh and try again.",
     sessionRefresh: "Could not refresh session status.",
     memberInterrupt: "Interruption is unconfirmed. Check the session status before trying again.",
@@ -422,8 +422,6 @@ export default {
     loadingShort: "Loading...",
     clear: "Clear",
     clearing: "Clearing...",
-    pending: "Publication result is unconfirmed.",
-    checkPublication: "Check publication",
     clearTitle: "Clear room",
     clearConfirm: "Clear room “{name}”?",
     clearWarning:

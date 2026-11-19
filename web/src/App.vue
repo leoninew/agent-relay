@@ -19,7 +19,7 @@
         <KeepAlive :max="1">
           <component
             :is="Component"
-            :key="route.name === 'channel' ? roomCacheKey(String(route.params.roomId)) : route.path"
+            :key="route.params.roomId ? roomCacheKey(String(route.params.roomId)) : route.path"
           />
         </KeepAlive>
       </RouterView>

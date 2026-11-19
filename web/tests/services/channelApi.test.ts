@@ -2,13 +2,41 @@ import type { AxiosAdapter, InternalAxiosRequestConfig } from "axios";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { apiClient } from "@/services/api";
-import { archiveChannel, deleteChannel, updateChannel } from "@/services/channelApi";
+import {
+  archiveChannel,
+  deleteChannel,
+  issueChannelId,
+  updateChannel,
+} from "@/services/channelApi";
 
 describe("channel API", () => {
   const originalAdapter = apiClient.defaults.adapter;
 
   afterEach(() => {
     apiClient.defaults.adapter = originalAdapter;
+  });
+
+  it("issues a channel ID with a bodyless POST at the room's issue-id endpoint", async () => {
+    const channelId = "0000000000124";
+    const adapter = vi.fn(async (config: InternalAxiosRequestConfig) => ({
+      config,
+      data: { channelId },
+      headers: { "content-type": "application/json" },
+      status: 200,
+      statusText: "OK",
+    }));
+    apiClient.defaults.adapter = adapter as AxiosAdapter;
+
+    await expect(issueChannelId("0000000000122")).resolves.toBe(channelId);
+
+    expect(adapter).toHaveBeenCalledOnce();
+    expect(adapter).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "post",
+        url: "/api/room/0000000000122/channel/issue-id",
+        data: undefined,
+      }),
+    );
   });
 
   it("updates only metadata at an escaped channel URL", async () => {

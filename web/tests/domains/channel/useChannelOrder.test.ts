@@ -2,12 +2,12 @@ import { effectScope, ref } from "vue";
 import type { EffectScope } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { DEFAULT_CHANNEL_ID } from "@/domains/channel/channelRoutes";
 import { useChannelOrder } from "@/domains/channel/useChannelOrder";
 import type { Channel } from "@/services/channelApi";
 import type * as storage from "@/services/storage";
 import { roomCacheKey } from "@/services/cacheKeys";
 
+const DEFAULT_CHANNEL_ID = "0000000000123";
 const saved = vi.hoisted(() => new Map<string, string>());
 vi.mock("@/services/storage", async (importOriginal) => ({
   ...(await importOriginal<typeof storage>()),

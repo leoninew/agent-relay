@@ -15,6 +15,12 @@ const routes: RouteRecordRaw[] = [
     component: RoomPage,
   },
   {
+    path: "/room/:roomId",
+    name: "room-entry",
+    component: RoomPage,
+    props: true,
+  },
+  {
     path: "/room/:roomId/channel/:channelId",
     name: "channel",
     component: RoomPage,

@@ -25,6 +25,7 @@ from conflua.application.members.sessions import (
 )
 from conflua.application.messages.service import MessageService
 from conflua.application.rooms.ports import RoomStore
+from conflua.domain.identifiers import new_tsid
 from conflua.domain.rooms.errors import RoomConflictError
 from conflua.domain.rooms.members import (
     observation_cutoff,
@@ -211,7 +212,7 @@ class MemberService:
             state.sessions = [saved for saved in state.sessions if saved.id != info.id]
             state.sessions.append(session)
             member = Member(
-                id=f"member-{uuid4().hex[:12]}",
+                id=new_tsid(),
                 session_id=info.id,
                 name=request.name,
                 initials=request.name[:2].upper(),
