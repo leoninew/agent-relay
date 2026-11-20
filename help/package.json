@@ -1,0 +1,20 @@
+{
+  "name": "conflua-help",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.34.9",
+  "engines": {
+    "node": ">=22.23.4"
+  },
+  "scripts": {
+    "dev": "vitepress dev",
+    "build": "vitepress build",
+    "preview": "vitepress preview --host 127.0.0.1",
+    "check:site": "node scripts/check-site.mjs",
+    "test:site-check": "node scripts/test-site-check.mjs"
+  },
+  "devDependencies": {
+    "vitepress": "1.6.4"
+  }
+}

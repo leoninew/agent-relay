@@ -68,6 +68,8 @@ make test
 
 ## 文档
 
+- [Conflua 使用帮助](https://leoninew.github.io/conflua/)：从聊天室派工、查看回报，到交接与审查。
+
 - [Windows 桌面使用指南](docs/guide/windows-desktop.md)
 - [macOS 桌面使用指南](docs/guide/macos-desktop.md)
 - [TSID 主键评估](docs/guide/tsid-primary-keys.md)

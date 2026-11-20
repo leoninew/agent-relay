@@ -460,6 +460,7 @@ export default {
     title: "应用菜单",
     githubRepository: "Conflua 的 GitHub 仓库（在新标签页打开）",
     about: "关于",
+    help: "使用帮助",
     version: "版本",
     versionUnavailable: "版本不可用",
     languageSaved: "语言已更新",

@@ -2,6 +2,8 @@
 
 ## 本地构建
 
+- [ ] 核对本版本是否改变安装、应用菜单或 Agent 首次回复流程；如有变化，同步更新使用指南、截图及适用版本，并核对 README 与菜单的帮助入口。
+
 在目标平台运行 `make binary`：Windows x64 使用 GNU Make/Git Bash，macOS 分别使用 x86_64 或 arm64 Python。构建生成完整桌面应用和版本化 ZIP，保留 Windows 原有制品名，并新增 `conflua-<version>-macos-amd64.zip` 与 `conflua-<version>-macos-arm64.zip`。包内容与运行要求见 [Windows 指南](windows-desktop.md)和 [macOS 指南](macos-desktop.md)。
 
 macOS 制品为包含 GUI 与 CLI 的 `Conflua.app`，不是 universal2 通用包；在各架构原生 runner 上分别构建。当前只使用 ad-hoc 签名，不包含 Developer ID 签名、公证或 DMG 安装器。

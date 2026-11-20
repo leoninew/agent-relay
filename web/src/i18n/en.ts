@@ -468,6 +468,7 @@ export default {
     title: "Application menu",
     githubRepository: "Conflua on GitHub (opens in a new tab)",
     about: "About",
+    help: "Help",
     version: "Version",
     versionUnavailable: "Version unavailable",
     languageSaved: "Language updated",
