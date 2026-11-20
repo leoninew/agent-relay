@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 290" font-family="system-ui, 'Microsoft YaHei', 'PingFang SC', sans-serif" fill="#192927">
+  <title>聊天室、频道与工作目录</title>
+  <desc>默认频道使用原目录，示例试验频道使用独立 worktree；频道各自管理话题、成员、消息和队列。</desc>
+  <rect width="700" height="290" rx="12" fill="#f5f8f6"/>
+  <text x="350" y="43" text-anchor="middle" font-size="24" font-weight="700">手册演练 · 同一聊天室</text>
+  <path d="M350 53v20H180v20m170-20h170v20" fill="none" stroke="#50736a" stroke-width="2"/>
+  <rect x="24" y="93" width="312" height="165" rx="8" fill="#fff" stroke="#91b6a4"/>
+  <rect x="364" y="93" width="312" height="165" rx="8" fill="#fff" stroke="#91b6a4"/>
+  <g font-size="20" font-weight="700">
+    <text x="46" y="129">默认频道</text>
+    <text x="386" y="129">示例试验频道</text>
+  </g>
+  <g font-size="18">
+    <text x="46" y="168">范围：本频道的话题 / 成员 / 消息</text>
+    <text x="386" y="168">范围：本频道的话题 / 成员 / 消息</text>
+    <text x="46" y="209" fill="#245a49">文件写到原目录 guide-demo</text>
+    <text x="386" y="209" fill="#245a49">文件写到独立 Git worktree</text>
+  </g>
+</svg>

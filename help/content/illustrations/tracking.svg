@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 234" font-family="system-ui, 'Microsoft YaHei', 'PingFang SC', sans-serif" fill="#192927">
+  <title>分发状态与工作回报</title>
+  <desc>审查者已接收只证明会话匹配到输入；审查者本人发出的回复列出实际检查，才是审查工作回报。</desc>
+  <rect width="700" height="234" rx="12" fill="#f5f8f6"/>
+  <g fill="#fff" stroke="#91b6a4">
+    <rect x="24" y="22" width="312" height="188" rx="8"/>
+    <rect x="364" y="22" width="312" height="188" rx="8"/>
+  </g>
+  <g font-size="22" font-weight="700">
+    <text x="46" y="60">原请求 · 消息详情</text>
+    <text x="386" y="60">后续回复 · 时间线</text>
+  </g>
+  <g font-size="18">
+    <text x="46" y="100">分发目标：审查者</text>
+    <text x="46" y="129">状态：已接收</text>
+    <text x="46" y="169" fill="#8a4227">只能证明会话收到输入</text>
+    <text x="386" y="100">发送者：审查者</text>
+    <text x="386" y="129">通过：已核对命令和变更范围</text>
+    <text x="386" y="169" fill="#245a49">有结论和证据才是任务回报</text>
+  </g>
+</svg>

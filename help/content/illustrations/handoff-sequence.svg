@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 320" font-family="system-ui,sans-serif" text-anchor="middle" fill="#183535" font-size="15">
+  <title>一次定向派工与回报，按时间从上往下读</title>
+  <defs><marker id="arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#246958"/></marker></defs>
+  <rect width="600" height="320" fill="#f7faf8"/>
+  <g font-weight="bold"><text x="60" y="30">你</text><text x="300" y="30">Conflua</text><text x="540" y="30">实现者会话</text></g>
+  <path d="M60 42V299 M300 42V299 M540 42V299" fill="none" stroke="#8da49d" stroke-dasharray="4 4"/>
+  <g stroke="#246958" stroke-width="2" marker-end="url(#arrow)"><path d="M60 78H298"/><path d="M300 124H538"/><path d="M300 173H62"/><path d="M540 226H302"/><path d="M300 279H62"/></g>
+  <text x="180" y="68">① 点名实现者，发送请求</text><text x="420" y="114">② 投递到绑定会话</text><text x="180" y="163">③ 输入核实后显示「已接收」</text><text x="420" y="216">④ 完成修改，显式发布给「你」</text><text x="180" y="269">⑤ 时间线显示实现者的回报</text>
+</svg>

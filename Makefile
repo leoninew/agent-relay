@@ -10,7 +10,7 @@ RUFF_FORMAT_ARGS := $(if $(filter 1,$(fix)),.,--check .)
 WEB_LINT_SCRIPT := $(if $(filter 1,$(fix)),lint:fix,lint)
 WEB_FORMAT_SCRIPT := $(if $(filter 1,$(fix)),format:write,format)
 
-.PHONY: help deps install check test web desktop binary migrate webapi
+.PHONY: help deps install check test web doc desktop binary migrate webapi
 
 help:
 	@printf "Available targets:\n"
@@ -19,6 +19,7 @@ help:
 	@printf "  make check [fix=1]    Check backend and frontend types, lint, and format; fix=1 applies fixes\n"
 	@printf "  make test             Run backend and frontend unit tests\n"
 	@printf "  make web              Start the Vite development server on port 9080\n"
+	@printf "  make doc              Serve the help site at http://127.0.0.1:9083/conflua/\n"
 	@printf "  make desktop          Build the frontend and start the WebView application\n"
 	@printf "  make binary           Build a native Windows x64 or macOS amd64/arm64 desktop ZIP\n"
 	@printf "  make migrate          Upgrade the configured database schema\n"
@@ -49,6 +50,10 @@ test:
 
 web:
 	cd web && $(PNPM) exec vite --mode "$(profile)"
+
+doc:
+	cd help && $(PNPM) install --frozen-lockfile
+	cd help && $(PNPM) run dev --host 127.0.0.1 --port 9083 --strictPort
 
 desktop:
 	cd web && $(PNPM) build

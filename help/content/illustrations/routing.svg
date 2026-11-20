@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 255" font-family="system-ui, 'Microsoft YaHei', 'PingFang SC', sans-serif" fill="#192927">
+  <title>两种方式发送同一条审查请求</title>
+  <desc>指定审查者的直接消息，和只选审查话题的消息，在只有审查者订阅时，都只交给审查者。</desc>
+  <rect width="700" height="255" rx="12" fill="#f5f8f6"/>
+  <text x="28" y="43" font-size="24" font-weight="700">同一条 README 审查请求</text>
+  <g fill="#fff" stroke="#91b6a4">
+    <rect x="28" y="68" width="644" height="69" rx="8"/>
+    <rect x="28" y="151" width="644" height="79" rx="8"/>
+  </g>
+  <g font-size="20">
+    <text x="49" y="109">定向：@审查者，不选话题</text>
+    <text x="49" y="185">话题：只选「审查」</text>
+    <text x="49" y="211" font-size="16" fill="#496860">当前订阅者：审查者</text>
+    <text x="475" y="109" fill="#245a49">接收者：审查者</text>
+    <text x="475" y="196" fill="#245a49">接收者：审查者</text>
+  </g>
+  <path d="M395 103h53m-7-6 7 6-7 6M395 190h53m-7-6 7 6-7 6" fill="none" stroke="#50736a" stroke-width="2"/>
+</svg>

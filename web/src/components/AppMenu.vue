@@ -110,6 +110,16 @@
           <DropdownMenuItem class="room-menu-action" @select="openMemberRoles">
             <AppIcon name="skill" />{{ t("memberRoles.title") }}
           </DropdownMenuItem>
+          <DropdownMenuItem as-child>
+            <a
+              class="room-menu-action"
+              href="https://leoninew.github.io/conflua/"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <AppIcon name="skill" />{{ t("appMenu.help") }}
+            </a>
+          </DropdownMenuItem>
           <DropdownMenuItem class="room-menu-action" @select="openAbout">
             <AppIcon name="info" />{{ t("appMenu.about") }}
           </DropdownMenuItem>
