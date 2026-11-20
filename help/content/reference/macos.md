@@ -2,7 +2,7 @@
 
 ## 下载与启动
 
-从 [GitHub Releases](https://github.com/leoninew/conflua/releases/latest) 的 Assets 下载匹配的 ZIP：
+在 [GitHub Releases](https://github.com/leoninew/conflua/releases/latest) 的 Assets 里选对应的 ZIP。两种包启动后用的是同一套聊天室界面。
 
 | 制品后缀 | 目标机器 |
 | --- | --- |
@@ -13,7 +13,9 @@
 
 ## 配置与数据
 
-桌面固定使用 `app` profile，配置优先级从低到高为内置 `config/conflua.yaml`、`~/.conflua/.env`、进程环境变量。数据库、日志、WebView 存储与偏好分别在 `~/.conflua/data/`、`~/.conflua/logs/`、`~/.conflua/webview/` 与 `~/.conflua/preferences.json`，不写入 `.app`。默认地址为 `http://127.0.0.1:9081`；遇到端口冲突时，在 `~/.conflua/.env` 设置 `CONFLUA_SERVER__PORT` 为可用端口并重启。
+桌面服务默认监听 `http://127.0.0.1:9081`。端口被占用时，在 `~/.conflua/.env` 里把 `CONFLUA_SERVER__PORT` 改为空闲端口，再重启应用。桌面使用 `app` profile：用户的 `.env` 覆盖内置 `config/conflua.yaml`，进程环境变量优先于两者。
+
+换新版 `.app` 时，聊天记录留在 `~/.conflua/data/`，不在应用包里。查启动日志去 `~/.conflua/logs/`；WebView 存储和偏好分别在 `~/.conflua/webview/` 和 `~/.conflua/preferences.json`。
 
 终端能找到 `codex` 不代表从 Finder 启动的应用也能找到。必要时将下例替换成本机 Codex 原生可执行文件的实际绝对路径：
 

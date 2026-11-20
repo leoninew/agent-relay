@@ -2,7 +2,7 @@
 
 ## 下载与启动
 
-运行环境需要 Windows x64、Microsoft Edge WebView2 Runtime，以及可用的 Codex。认证和 daemon 检查见[运行与排障](./troubleshooting.md)。
+Windows 包里有两个入口：`conflua-gui.exe` 打开聊天室，`conflua.exe` 供终端和 MCP 调用。两者在 Windows x64 上运行；桌面窗口需要 Microsoft Edge WebView2 Runtime。要让成员接到消息，还需要可用的 Codex，见[运行与排障](./troubleshooting.md)。
 
 在 [GitHub Releases](https://github.com/leoninew/conflua/releases/latest) 的 Assets 中选择 `conflua-<version>-windows-x64.zip`。双击解压目录中的 `conflua-gui.exe`；保留同一目录下的 `conflua.exe` 和 `_internal/`。运行 Conflua 不需要另装 Python 或 Node.js。
 
@@ -10,13 +10,13 @@
 
 ## 配置与数据
 
-桌面固定使用 `app` profile，配置优先级从低到高为内置 `config/conflua.yaml`、`~/.conflua/.env`、进程环境变量。例如，默认端口被占用时可改为可用端口，然后重启：
+端口被占用时，在 `~/.conflua/.env` 里给桌面服务换一个空闲端口，然后重启。例如：
 
 ```dotenv
 CONFLUA_SERVER__PORT=9082
 ```
 
-数据目录、日志、WebView 存储与偏好分别在 `~/.conflua/data/`、`~/.conflua/logs/`、`~/.conflua/webview/` 与 `~/.conflua/preferences.json`。移动或替换程序目录不会删除这些数据。桌面不读取开发环境的 `.env.dev`。
+修改没有生效？桌面用的是 `app` profile，不读开发用的 `.env.dev`。用户的 `.env` 覆盖内置 `config/conflua.yaml`，而进程环境变量又会覆盖 `.env`。换程序目录不用搬聊天记录：数据在 `~/.conflua/data/`，日志在 `~/.conflua/logs/`，WebView 和偏好分别保存在 `~/.conflua/webview/` 和 `~/.conflua/preferences.json`。
 
 默认跟随系统语言；右上角齿轮菜单可手动切换「跟随系统 / 简体中文 / English」。
 

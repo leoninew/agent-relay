@@ -48,7 +48,7 @@ export const expectedPageFiles = [
 const expectedContentDirectories = ['guide', 'illustrations', 'reference']
 const expectedFrameworkFiles = ['hashmap.json', 'vp-icons.css']
 const acceptedSnapshotHash =
-  '1425cb8868b00a996c2bdb290e2f64511317387c4fe20732c4c9ff86fb9afae3'
+  '62b41c236927b1aa76a7af2a79cbf42c173b78902c8ccd6c0478149365f73c26'
 const allowedAssetExtensions = new Set(['.css', '.js', '.png', '.svg', '.woff2'])
 const acceptedSnapshotFiles = [
   'docs/guide/windows-desktop.md',
