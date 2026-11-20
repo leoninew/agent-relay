@@ -27,6 +27,8 @@ export const expectedContentFiles = [
   'illustrations/workspaces.svg',
   'illustrations/routing.svg',
   'illustrations/tracking.svg',
+  'illustrations/architecture.svg',
+  'illustrations/handoff-sequence.svg',
 ]
 
 export const expectedPageFiles = [
@@ -46,7 +48,7 @@ export const expectedPageFiles = [
 const expectedContentDirectories = ['guide', 'illustrations', 'reference']
 const expectedFrameworkFiles = ['hashmap.json', 'vp-icons.css']
 const acceptedSnapshotHash =
-  'b57b6e2f8b1972bc2bde2e6348d3c035db41832bd9238e484b8aaf15383320f3'
+  '1425cb8868b00a996c2bdb290e2f64511317387c4fe20732c4c9ff86fb9afae3'
 const allowedAssetExtensions = new Set(['.css', '.js', '.png', '.svg', '.woff2'])
 const acceptedSnapshotFiles = [
   'docs/guide/windows-desktop.md',

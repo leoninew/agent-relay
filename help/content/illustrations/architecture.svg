@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 240" font-family="system-ui,sans-serif" text-anchor="middle" font-size="16" fill="#183535">
+  <title>Conflua 本地协作架构</title>
+  <rect width="600" height="240" fill="#f7faf8"/>
+  <g stroke="#41736c" stroke-width="2" fill="none"><path d="M150 51V70H300V87 M450 51V70H300 M300 131V155H150V180 M300 155H450V180"/></g>
+  <g fill="#e3f0ea" stroke="#548278"><rect x="39" y="14" width="222" height="38" rx="5"/><rect x="339" y="14" width="222" height="38" rx="5"/><rect x="178" y="87" width="244" height="44" rx="5"/></g>
+  <text x="150" y="39">人 · Web / 桌面界面</text><text x="450" y="39">成员 · CLI / MCP</text><text x="300" y="115" font-weight="bold">本地 Conflua 服务</text>
+  <text x="150" y="198">SQLite · 保存协作记录</text><text x="450" y="198">共享 Codex daemon</text><text x="450" y="224" font-size="14">向已有会话投递输入</text>
+</svg>
