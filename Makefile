@@ -44,7 +44,7 @@ check:
 	cd web && $(PNPM) run $(WEB_FORMAT_SCRIPT)
 
 test:
-	uv run --locked pytest tests/unit
+	uv run --locked pytest
 	cd web && $(PNPM) run test
 
 web:

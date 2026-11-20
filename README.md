@@ -70,6 +70,7 @@ make test
 
 - [Windows 桌面使用指南](docs/guide/windows-desktop.md)
 - [macOS 桌面使用指南](docs/guide/macos-desktop.md)
+- [TSID 主键评估](docs/guide/tsid-primary-keys.md)
 - [数据库迁移指南](migrations/README.md)
 - [发布指南](docs/guide/releases.md)
 - [后端架构](docs/design/backend-architecture.md)

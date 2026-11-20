@@ -108,9 +108,9 @@ ORM 映射当前 `channel_description_20261114` 的 15 张表，消息能力引�
 
 ## 测试与运行入口
 
-- `uv run --locked pytest`：默认单元测试，按领域、应用、基础设施、配置与接口分类，不建 SQLite、不启动 FastAPI 或协议子进程。
+- `uv run pytest`：默认只收集 `tests/unit`，按领域、应用、基础设施、配置与接口分类，不建 SQLite、不启动 HTTP 服务或协议子进程。
 - `uv run --locked mypy src tests`、`uv run --locked mypy migrations`：检查源码、单测和迁移脚本类型。
-- 迁移链及 SQL 使用 `alembic history`、`alembic heads`、`alembic upgrade queue_deleted_20261110:head --sql` 离线核对，不执行真实 SQLite 测试。
+- `uv run --locked pytest -m integration tests/integration`：显式运行后端集成测试，使用 ORM 元数据创建 SQLite，默认用内存库；跨连接事务隔离用例用临时文件库。不运行 Alembic 或数据迁移。
 - `make test`：后端与前端单元测试；`make check`：既有类型、lint 和格式入口，可用 `fix=1` 自动修复。
 - `python -m conflua.server`、`python -m conflua.cli`、`python -m conflua.migrate` 及 `conflua` script 保持原调用方式。旧内部 Python 模块路径随职责迁移，仓库内消费者已更新。
 

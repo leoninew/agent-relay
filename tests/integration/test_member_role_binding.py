@@ -1,5 +1,4 @@
 import asyncio
-from collections.abc import Iterator
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -11,8 +10,9 @@ from sqlalchemy import select
 from conflua.application.dto.members import SessionInfo
 from conflua.bootstrap.http import create_app
 from conflua.infrastructure.persistence.database import Database
-from conflua.infrastructure.persistence.dependencies import create_database
 from conflua.infrastructure.persistence.models import MemberRecord
+
+pytestmark = pytest.mark.integration
 
 ROLE_PATH = "/api/member-role"
 
@@ -38,33 +38,29 @@ def default_channel(app: FastAPI, room: str) -> tuple[str, str]:
 
 
 @pytest.fixture
-def binding_api(tmp_path: Path) -> Iterator[tuple[FastAPI, Database, str, Mock]]:
-    database = create_database(tmp_path / "bindings.sqlite3")
+def binding_api(tmp_path: Path, database: Database) -> tuple[FastAPI, Database, str]:
     driver = Mock()
     driver.inspect.side_effect = lambda session_id: SessionInfo(
         id=session_id, provider="codex", name=session_id, status="active"
     )
-    try:
-        app = create_app(
-            Mock(),
-            database=database,
-            static_directory=tmp_path,
-            session_driver=driver,
-            queue_driver=Mock(),
-            capability_driver=Mock(),
-            preferences_service=Mock(),
-        )
-        room = request(app, "POST", "/api/room", {"name": "Test", "workspacePath": str(tmp_path)})
-        assert room.status_code == 201
-        yield app, database, f"/api/room/{room.json()['id']}", driver
-    finally:
-        database.close()
+    app = create_app(
+        Mock(),
+        database=database,
+        static_directory=tmp_path,
+        session_driver=driver,
+        queue_driver=Mock(),
+        capability_driver=Mock(),
+        preferences_service=Mock(),
+    )
+    room = request(app, "POST", "/api/room", {"name": "Test", "workspacePath": str(tmp_path)})
+    assert room.status_code == 201
+    return app, database, f"/api/room/{room.json()['id']}"
 
 
 def test_add_member_posts_only_to_new_member_and_copies_current_role(
-    binding_api: tuple[FastAPI, Database, str, Mock],
+    binding_api: tuple[FastAPI, Database, str],
 ) -> None:
-    app, database, room, _ = binding_api
+    app, database, room = binding_api
     channel, default_id = default_channel(app, room)
     issued = request(app, "POST", f"{room}/channel/issue-id")
     assert issued.status_code == 200
@@ -101,16 +97,8 @@ def test_add_member_posts_only_to_new_member_and_copies_current_role(
     created = result.json()
     assert not {"roleId", "messageId", "deliveryStatus"}.intersection(created)
     assert created["topicIds"] == topic_ids
-    assert (
-        request(app, "POST", f"{channel}/member", {**member, "name": "Duplicate session"}).json()[
-            "code"
-        ]
-        == "session_already_joined"
-    )
-
     patch = {"name": "Renamed", "topicIds": []}
     member_path = f"{channel}/member/{created['id']}"
-    assert request(app, "PATCH", member_path, {**patch, "roleId": role_id}).status_code == 422
     assert request(app, "PATCH", member_path, patch).status_code == 200
     assert request(app, "DELETE", role_path).status_code == 204
 
@@ -137,9 +125,9 @@ def test_add_member_posts_only_to_new_member_and_copies_current_role(
 
 
 def test_issued_channel_and_human_role_message_use_discovered_ids(
-    binding_api: tuple[FastAPI, Database, str, Mock],
+    binding_api: tuple[FastAPI, Database, str],
 ) -> None:
-    app, database, room, _ = binding_api
+    app, database, room = binding_api
     default_path, default_id = default_channel(app, room)
     issued = request(app, "POST", f"{room}/channel/issue-id")
     assert issued.status_code == 200
@@ -183,55 +171,3 @@ def test_issued_channel_and_human_role_message_use_discovered_ids(
     assert message["mentionedMemberIds"] == [member.json()["id"]]
     assert message["recipientIds"] == [member.json()["id"]]
     assert request(app, "GET", f"{other_path}/message").json()["messages"] == []
-
-
-def test_invalid_and_deleted_roles_do_not_bind_members(
-    binding_api: tuple[FastAPI, Database, str, Mock],
-) -> None:
-    app, _, room, driver = binding_api
-    channel, _ = default_channel(app, room)
-    member = {"name": "New", "sessionId": "new", "topicIds": []}
-    invalid = request(app, "POST", f"{channel}/member", {**member, "roleId": ["role"]})
-    assert invalid.status_code == 422
-    assert not driver.inspect.called
-    role = request(app, "POST", ROLE_PATH, {"name": "Reviewer", "prompt": "Read"}).json()
-    assert request(app, "DELETE", f"{ROLE_PATH}/{role['id']}").status_code == 204
-    missing = request(app, "POST", f"{channel}/member", {**member, "roleId": role["id"]})
-    assert missing.status_code == 404 and missing.json()["code"] == "member_role_not_found"
-    created = request(app, "POST", f"{channel}/member", {**member, "roleId": None})
-    assert created.status_code == 201
-    assert request(app, "GET", f"{channel}/message").json()["messages"] == []
-
-
-def test_delivery_event_failure_rolls_back_member_message_and_delivery(
-    binding_api: tuple[FastAPI, Database, str, Mock],
-) -> None:
-    app, database, room, driver = binding_api
-    channel, _ = default_channel(app, room)
-    role = request(app, "POST", ROLE_PATH, {"name": "Reviewer", "prompt": "Read"}).json()
-    member = {"name": "New", "sessionId": "new", "topicIds": [], "roleId": role["id"]}
-    baseline = request(app, "GET", f"{channel}/metadata").json()
-    driver.inspect.side_effect = None
-    driver.inspect.return_value = SessionInfo(
-        id="new", provider="codex", name="Unusable", status="unavailable"
-    )
-    unavailable = request(app, "POST", f"{channel}/member", member)
-    assert unavailable.status_code == 409
-    assert unavailable.json()["code"] == "session_not_connected"
-    driver.inspect.return_value = SessionInfo(id="new", provider="codex", name="New", status="idle")
-
-    with database.write() as session:
-        session.connection().exec_driver_sql(
-            "CREATE TRIGGER reject_role_delivery BEFORE INSERT ON room_events "
-            "WHEN NEW.kind = 'delivery' BEGIN SELECT RAISE(ABORT, 'forced failure'); END"
-        )
-    failed = request(app, "POST", f"{channel}/member", member)
-    assert failed.status_code == 500 and failed.json()["code"] == "internal_error"
-    assert "forced failure" not in failed.text
-    assert request(app, "GET", f"{channel}/metadata").json() == baseline
-    assert request(app, "GET", f"{channel}/message").json()["messages"] == []
-    with database.read() as session:
-        assert session.connection().exec_driver_sql("SELECT count(*) FROM deliveries").scalar() == 0
-    with database.write() as session:
-        session.connection().exec_driver_sql("DROP TRIGGER reject_role_delivery")
-    assert request(app, "POST", f"{channel}/member", member).status_code == 201

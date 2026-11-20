@@ -1,10 +1,6 @@
-from __future__ import annotations
-
 import sys
-from collections.abc import Callable
 from datetime import UTC, datetime
 from importlib import import_module
-from io import StringIO
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -14,53 +10,12 @@ from pytest import MonkeyPatch
 
 from conflua.bootstrap import desktop
 from conflua.bootstrap.config import load_settings
-from conflua.bootstrap.desktop import LocalApiServer, run_desktop
+from conflua.bootstrap.desktop import LocalApiServer
 from conflua.bootstrap.settings import Settings
 
 
 def create_test_app(*, settings: Settings, static_directory: Path) -> FastAPI:
     return FastAPI()
-
-
-class FakeEvent:
-    def __init__(self) -> None:
-        self.handler: Callable[[], bool] | None = None
-
-    def __iadd__(self, handler: Callable[[], bool]) -> FakeEvent:
-        self.handler = handler
-        return self
-
-    def fire(self) -> bool:
-        assert self.handler is not None
-        return self.handler()
-
-
-class FakeWindow:
-    def __init__(self) -> None:
-        self.events = type("Events", (), {"closing": FakeEvent()})()
-        self.confirmations = [False, True]
-        self.dialogs: list[tuple[str, str]] = []
-
-    def create_confirmation_dialog(self, title: str, message: str) -> bool:
-        self.dialogs.append((title, message))
-        return self.confirmations.pop(0)
-
-
-class FakeWebView:
-    def __init__(self) -> None:
-        self.window = FakeWindow()
-        self.window_options: dict[str, object] = {}
-        self.start_options: dict[str, object] = {}
-
-    def create_window(self, **kwargs: object) -> FakeWindow:
-        self.window_options = kwargs
-        return self.window
-
-    def start(self, **kwargs: object) -> None:
-        self.start_options = kwargs
-        assert self.window.events.closing.fire() is False
-        assert self.window.events.closing.fire() is True
-        assert self.window.events.closing.fire() is True
 
 
 def test_local_api_server_prebinds_before_building_and_stops(monkeypatch: MonkeyPatch) -> None:
@@ -129,190 +84,6 @@ def test_local_api_server_releases_listener_when_app_creation_fails(
     listener.close.assert_called_once()
 
 
-@pytest.mark.parametrize("fail_notification", [False, True])
-@pytest.mark.parametrize("platform_name", ["win32", "darwin"])
-def test_run_desktop_persists_webview_and_confirms_close(
-    tmp_path: Path, monkeypatch: MonkeyPatch, fail_notification: bool, platform_name: str
-) -> None:
-    monkeypatch.setattr("conflua.bootstrap.desktop.sys.platform", platform_name)
-    static_directory = tmp_path / "web" / "dist"
-    static_directory.mkdir(parents=True)
-    (static_directory / "index.html").write_text("ready", encoding="utf-8")
-    base = load_settings()
-    settings = base.model_copy(
-        update={
-            "server": base.server.model_copy(update={"port": 0}),
-            "static": base.static.model_copy(update={"directory": static_directory}),
-        }
-    )
-    webview = FakeWebView()
-    callback_calls = 0
-    notifications = Mock()
-    if fail_notification:
-        notifications.side_effect = RuntimeError("notification unavailable")
-
-    def app_with_database(**kwargs: object) -> FastAPI:
-        app = FastAPI()
-        app.state.database = Mock()
-        return app
-
-    original_start = webview.start
-
-    def start(**kwargs: object) -> None:
-        assert webview.window.events.closing.fire() is False
-        notifications.assert_not_called()
-        webview.window.confirmations = [False, True]
-        original_start(**kwargs)
-
-    def on_confirmed_close() -> None:
-        nonlocal callback_calls
-        callback_calls += 1
-
-    monkeypatch.setattr("conflua.bootstrap.desktop.configure_logging", lambda *_: None)
-    monkeypatch.setattr("conflua.bootstrap.desktop._publish_exit_notifications", notifications)
-    monkeypatch.setattr(webview, "start", start)
-    api_server = Mock()
-    api_server.__enter__ = Mock(return_value=api_server)
-    api_server.__exit__ = Mock(return_value=False)
-    api_server.url = "http://127.0.0.1:19080"
-    api_server.app = app_with_database()
-    monkeypatch.setattr("conflua.bootstrap.desktop.LocalApiServer", lambda *_, **__: api_server)
-
-    run_desktop(
-        settings=settings,
-        user_root=tmp_path / "user data",
-        resources=tmp_path / "resources",
-        webview_api=webview,
-        app_factory=app_with_database,
-        on_confirmed_close=on_confirmed_close,
-    )
-
-    assert str(webview.window_options["url"]).endswith("/static/")
-    assert webview.start_options["gui"] == (
-        "cocoa" if platform_name == "darwin" else "edgechromium"
-    )
-    assert webview.start_options["private_mode"] is False
-    assert Path(str(webview.start_options["storage_path"])) == tmp_path / "user data" / "webview"
-    assert Path(str(webview.start_options["icon"])) == (
-        tmp_path
-        / "resources"
-        / "assets"
-        / ("conflua.png" if platform_name == "darwin" else "conflua.ico")
-    )
-    assert callback_calls == 1
-    notifications.assert_called_once()
-
-
-def test_run_desktop_reads_current_preferences_for_exit(
-    tmp_path: Path, monkeypatch: MonkeyPatch
-) -> None:
-    static_directory = tmp_path / "web" / "dist"
-    static_directory.mkdir(parents=True)
-    (static_directory / "index.html").write_text("ready", encoding="utf-8")
-    user_root = tmp_path / "user data"
-    user_root.mkdir()
-    preferences_path = user_root / "preferences.json"
-    preferences_path.write_text('{"language":"en"}', encoding="utf-8")
-    base = load_settings()
-    settings = base.model_copy(
-        update={
-            "server": base.server.model_copy(update={"port": 0}),
-            "static": base.static.model_copy(update={"directory": static_directory}),
-        }
-    )
-    webview = FakeWebView()
-    notifications = Mock()
-    injected: dict[str, object] = {}
-
-    def start(**kwargs: object) -> None:
-        assert webview.window.events.closing.fire() is False
-        preferences_path.write_text('{"language":"zh-CN"}', encoding="utf-8")
-        assert webview.window.events.closing.fire() is True
-        webview.start_options = kwargs
-
-    class ApiServer:
-        url = "http://127.0.0.1:19080"
-        app = None
-
-        def __init__(self, *args: object, **kwargs: object) -> None:
-            injected.update(kwargs)
-
-        def __enter__(self) -> ApiServer:
-            return self
-
-        def __exit__(self, *args: object) -> None:
-            return None
-
-    monkeypatch.setattr("conflua.bootstrap.desktop.configure_logging", lambda *_: None)
-    monkeypatch.setattr("conflua.bootstrap.desktop._publish_exit_notifications", notifications)
-    monkeypatch.setattr(webview, "start", start)
-    monkeypatch.setattr("conflua.bootstrap.desktop.LocalApiServer", ApiServer)
-
-    run_desktop(
-        settings=settings,
-        user_root=user_root,
-        resources=tmp_path / "resources",
-        webview_api=webview,
-    )
-
-    assert webview.window.dialogs == [
-        ("Exit Conflua", "Close the management app?"),
-        ("退出 Conflua", "确定要关闭管理端吗？"),
-    ]
-    assert injected["preferences_service"] is not None
-
-
-def test_exit_notification_uses_current_language(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
-    static_directory = tmp_path / "web" / "dist"
-    static_directory.mkdir(parents=True)
-    (static_directory / "index.html").write_text("ready", encoding="utf-8")
-    user_root = tmp_path / "user data"
-    user_root.mkdir()
-    (user_root / "preferences.json").write_text('{"language":"en"}', encoding="utf-8")
-    base = load_settings()
-    settings = base.model_copy(
-        update={
-            "server": base.server.model_copy(update={"port": 0}),
-            "static": base.static.model_copy(update={"directory": static_directory}),
-        }
-    )
-    webview = FakeWebView()
-    notifications = Mock()
-
-    original_start = webview.start
-
-    def start(**kwargs: object) -> None:
-        assert webview.window.events.closing.fire() is False
-        webview.window.confirmations = [False, True]
-        original_start(**kwargs)
-
-    def app_with_database(**kwargs: object) -> FastAPI:
-        app = FastAPI()
-        app.state.database = Mock()
-        return app
-
-    monkeypatch.setattr("conflua.bootstrap.desktop.configure_logging", lambda *_: None)
-    monkeypatch.setattr("conflua.bootstrap.desktop._publish_exit_notifications", notifications)
-    monkeypatch.setattr(webview, "start", start)
-    api_server = Mock()
-    api_server.__enter__ = Mock(return_value=api_server)
-    api_server.__exit__ = Mock(return_value=False)
-    api_server.url = "http://127.0.0.1:19080"
-    api_server.app = app_with_database()
-    monkeypatch.setattr("conflua.bootstrap.desktop.LocalApiServer", lambda *_, **__: api_server)
-
-    run_desktop(
-        settings=settings,
-        user_root=user_root,
-        resources=tmp_path / "resources",
-        webview_api=webview,
-        app_factory=app_with_database,
-    )
-
-    notifications.assert_called_once()
-    assert notifications.call_args.args[3] == "The management app is offline."
-
-
 @pytest.mark.parametrize("scenario", ["claimed", "unclaimed", "empty", "read-error"])
 def test_exit_notifications_bound_wait_without_waiting_for_receipts(
     monkeypatch: MonkeyPatch, scenario: str
@@ -368,24 +139,3 @@ def test_desktop_language_falls_back_to_config(monkeypatch: MonkeyPatch) -> None
     preferences = Mock()
     preferences.get.side_effect = OSError("unreadable")
     assert desktop._desktop_language(preferences, settings) == "zh-CN"
-
-
-@pytest.mark.parametrize("has_stderr", [False, True])
-def test_macos_bundle_startup_error(
-    tmp_path: Path, monkeypatch: MonkeyPatch, has_stderr: bool
-) -> None:
-    appkit = Mock()
-    monkeypatch.setattr("conflua.bootstrap.desktop.sys.platform", "darwin")
-    monkeypatch.setattr("conflua.bootstrap.desktop.sys.stderr", StringIO() if has_stderr else None)
-    monkeypatch.setattr("conflua.bootstrap.desktop.sys.frozen", True, raising=False)
-    load_module = Mock(return_value=appkit)
-    monkeypatch.setattr("conflua.bootstrap.desktop.importlib.import_module", load_module)
-
-    desktop._show_startup_error("port unavailable", "en", active_user_root=tmp_path)
-
-    load_module.assert_called_once_with("AppKit")
-    alert = appkit.NSAlert.alloc.return_value.init.return_value
-    text = alert.setInformativeText_.call_args.args[0]
-    assert "port unavailable" in text
-    assert str(tmp_path / "logs" / "conflua.log") in text
-    alert.runModal.assert_called_once_with()

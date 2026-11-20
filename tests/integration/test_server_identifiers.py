@@ -1,4 +1,3 @@
-from collections.abc import Iterator
 from io import BytesIO
 from pathlib import Path
 from unittest.mock import Mock
@@ -20,34 +19,23 @@ from conflua.domain.rooms.resources import DEFAULT_TOPIC_NAMES
 from conflua.infrastructure.images.files import FileImageStore
 from conflua.infrastructure.persistence.channel_store import SQLAlchemyChannelStore
 from conflua.infrastructure.persistence.database import Database
-from conflua.infrastructure.persistence.migrations import run_migrations
 from conflua.infrastructure.persistence.models import ChannelRecord, MemberRecord, RoomRecord
 from conflua.infrastructure.persistence.room_store import SQLAlchemyRoomStore
 
-
-@pytest.fixture
-def new_schema(tmp_path: Path) -> Iterator[Database]:
-    path = tmp_path / "new-schema.sqlite"
-    run_migrations(path)
-    database = Database(path)
-    try:
-        yield database
-    finally:
-        database.close()
+pytestmark = pytest.mark.integration
 
 
-def test_room_and_independent_channel_have_distinct_scoped_humans_on_new_schema(
-    new_schema: Database, tmp_path: Path
+def test_room_and_independent_channel_have_distinct_scoped_humans(
+    file_database: Database, tmp_path: Path
 ) -> None:
+    database = file_database
     room_input = CreateRoom(name="Room", workspace_path=tmp_path.as_posix())
     git = Mock(spec=WorktreeDriver)
-    channels = ChannelService(SQLAlchemyChannelStore(new_schema), git, tmp_path / "worktrees")
-    room_transaction = new_schema.request_transaction()
+    channels = ChannelService(SQLAlchemyChannelStore(database), git, tmp_path / "worktrees")
+    room_transaction = database.request_transaction()
     try:
-        room = RoomService(SQLAlchemyRoomStore(new_schema, room_transaction)).create_room(
-            room_input
-        )
-        with new_schema.read() as session:
+        room = RoomService(SQLAlchemyRoomStore(database, room_transaction)).create_room(room_input)
+        with database.read() as session:
             assert session.get(RoomRecord, room.id) is None
         room_transaction.finish(commit=True)
     finally:
@@ -56,14 +44,14 @@ def test_room_and_independent_channel_have_distinct_scoped_humans_on_new_schema(
     (default,) = channels.channels(room.id)
     assert default.is_default and default.room_id == room.id
     issued = channels.issue_id(room.id)
-    with new_schema.read() as session:
+    with database.read() as session:
         assert session.get(ChannelRecord, (room.id, issued.channel_id)) is None
     assert channels.channels(room.id) == [default] and git.mock_calls == []
 
-    channel_transaction = new_schema.request_transaction()
+    channel_transaction = database.request_transaction()
     try:
         service = ChannelService(
-            SQLAlchemyChannelStore(new_schema, channel_transaction), git, tmp_path / "worktrees"
+            SQLAlchemyChannelStore(database, channel_transaction), git, tmp_path / "worktrees"
         )
         created = service.create(
             room.id, CreateChannel(name="Another", channel_id=issued.channel_id)
@@ -76,7 +64,7 @@ def test_room_and_independent_channel_have_distinct_scoped_humans_on_new_schema(
     assert created.id == issued.channel_id and not created.is_default
     assert channels.channel(room.id, issued.channel_id) == created
     assert channels.channels(room.id) == [default, created] and git.mock_calls == []
-    rooms = SQLAlchemyRoomStore(new_schema)
+    rooms = SQLAlchemyRoomStore(database)
     other_room = RoomService(rooms).create_room(
         CreateRoom(name="Other room", workspace_path=(tmp_path / "other").as_posix())
     )
@@ -98,7 +86,7 @@ def test_room_and_independent_channel_have_distinct_scoped_humans_on_new_schema(
             assert {topic.id for topic in state.topics} <= event_entities
             assert (room.id if channel.is_default else channel.id) in event_entities
         ids.extend([human.id, *(topic.id for topic in state.topics)])
-        with new_schema.read() as session:
+        with database.read() as session:
             assert (
                 session.scalars(
                     select(MemberRecord.id).where(

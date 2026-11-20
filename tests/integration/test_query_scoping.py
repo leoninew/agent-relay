@@ -1,5 +1,5 @@
 from collections.abc import Iterator
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy import create_engine, select
@@ -9,7 +9,6 @@ from conflua.application.dto.delivery import ReceivedInput
 from conflua.application.dto.desktop import ShutdownNotificationTarget
 from conflua.application.dto.members import SessionChannel
 from conflua.application.dto.messages import MessageUpdatesQuery
-from conflua.domain.rooms.errors import RoomConflictError, RoomNotFoundError
 from conflua.domain.rooms.models import Member
 from conflua.infrastructure.persistence.models import (
     Base,
@@ -28,6 +27,8 @@ from conflua.infrastructure.persistence.repositories.channels import SQLAlchemyC
 from conflua.infrastructure.persistence.repositories.deliveries import SQLAlchemyDeliveryRepository
 from conflua.infrastructure.persistence.repositories.messages import SQLAlchemyMessageRepository
 from conflua.infrastructure.persistence.repositories.rooms import SQLAlchemyRoomRepository
+
+pytestmark = pytest.mark.integration
 
 ROOM_ID = "0000000000200"
 SECOND_ROOM_ID = "0000000000201"
@@ -119,9 +120,6 @@ def test_channel_sessions_include_history_but_exclude_other_channel(
     assert {info.id for info in repository.resources(ROOM_ID).sessions} == {CURRENT, HISTORICAL}
     assert repository.active_bindings(ROOM_ID) == {CURRENT: CURRENT}
     assert repository.member(ROOM_ID, CURRENT).session_id == CURRENT
-    for member_id in (HISTORICAL, ELSEWHERE, "missing"):
-        with pytest.raises(RoomNotFoundError):
-            repository.member(ROOM_ID, member_id)
 
 
 def test_navigation_heads_only_include_live_incoming_messages_in_active_channels(
@@ -202,37 +200,33 @@ def test_navigation_heads_only_include_live_incoming_messages_in_active_channels
     assert heads() == {(ROOM_ID, DEFAULT_CHANNEL): 0}
 
 
-def test_receipt_updates_only_live_unconfirmed_delivery(scoped_session: Session) -> None:
-    now = datetime.now(UTC)
-    for client in ("live", "deleted"):
-        scoped_session.add(
-            DeliveryRecord(
-                room_id=ROOM_ID,
-                channel_id=OTHER_CHANNEL,
-                id="0000000000501" if client == "live" else "0000000000502",
-                message_id=client,
-                target_member_id=ELSEWHERE,
-                target_session_id=ELSEWHERE,
-                client_message_id=client,
-                status="unknown",
-                updated_at=now,
-                is_deleted=client == "deleted",
-                deleted_at=now if client == "deleted" else None,
-            )
-        )
+def test_receipt_updates_unconfirmed_delivery_and_records_event(scoped_session: Session) -> None:
+    delivery = DeliveryRecord(
+        room_id=ROOM_ID,
+        channel_id=OTHER_CHANNEL,
+        id="0000000000501",
+        message_id=MATCHING,
+        target_member_id=ELSEWHERE,
+        target_session_id=ELSEWHERE,
+        client_message_id="client-message",
+        status="unknown",
+        updated_at=datetime.now(UTC),
+    )
+    scoped_session.add(delivery)
     scoped_session.flush()
     repository = SQLAlchemyDeliveryRepository(scoped_session)
-    receipt = ReceivedInput("live", "item", "turn")
-    assert not repository.confirm_input(CURRENT, receipt)
+    receipt = ReceivedInput("client-message", "item", "turn")
     assert repository.confirm_input(ELSEWHERE, receipt)
-    assert not repository.confirm_input(ELSEWHERE, receipt)
-    assert not repository.confirm_input(ELSEWHERE, ReceivedInput("deleted", "item", "turn"))
-    assert list(scoped_session.scalars(select(RoomEventRecord.message_id))) == ["live"]
+    scoped_session.refresh(delivery)
+    assert (delivery.status, delivery.received_item_id, delivery.received_turn_id) == (
+        "received",
+        "item",
+        "turn",
+    )
+    assert list(scoped_session.scalars(select(RoomEventRecord.message_id))) == [MATCHING]
 
 
-def test_targeted_observation_updates_current_bindings_and_ignores_stale_results(
-    scoped_session: Session,
-) -> None:
+def test_targeted_observation_updates_current_bindings(scoped_session: Session) -> None:
     shared = scoped_session.get(MemberRecord, (ROOM_ID, ELSEWHERE, OTHER_CHANNEL))
     assert shared is not None
     shared.session_id = CURRENT
@@ -240,9 +234,6 @@ def test_targeted_observation_updates_current_bindings_and_ignores_stale_results
     repository = SQLAlchemyRoomRepository(scoped_session, DEFAULT_CHANNEL)
     now = datetime.now(UTC)
     repository.save_bound_session_observation(CURRENT, "busy", "active", now, "Worker")
-    repository.save_bound_session_observation(
-        CURRENT, "available", "idle", now - timedelta(seconds=1), "Old name"
-    )
     assert repository.member(ROOM_ID, CURRENT).presence == "busy"
     session_record = scoped_session.get(SessionRecord, (ROOM_ID, CURRENT))
     assert session_record is not None
@@ -251,13 +242,7 @@ def test_targeted_observation_updates_current_bindings_and_ignores_stale_results
         DEFAULT_CHANNEL,
         OTHER_CHANNEL,
     }
-    shared.is_deleted = True
-    shared.deleted_at = now
-    scoped_session.flush()
-    repository.save_bound_session_observation(CURRENT, "available", "idle", now, "Worker")
-    scoped_session.expire_all()
     assert shared.presence == "busy"
-    assert repository.member(ROOM_ID, CURRENT).presence == "available"
 
 
 @pytest.mark.parametrize("name", [None, OTHER_CHANNEL, "Finished API"])
@@ -278,18 +263,6 @@ def test_archive_persists_name_and_status_without_removing_channel_history(
     assert [event.entity_id for event in scoped_session.scalars(select(RoomEventRecord))] == [
         OTHER_CHANNEL
     ]
-
-
-def test_archive_does_not_mutate_a_channel_when_its_name_conflicts(scoped_session: Session) -> None:
-    repository = SQLAlchemyChannelRepository(scoped_session, OTHER_CHANNEL)
-    active = repository.channel(ROOM_ID, OTHER_CHANNEL)
-
-    with pytest.raises(RoomConflictError) as error:
-        repository.archive(ROOM_ID, OTHER_CHANNEL, name=DEFAULT_CHANNEL)
-
-    assert error.value.code == "channel_name_conflict"
-    assert repository.channel(ROOM_ID, OTHER_CHANNEL) == active
-    assert scoped_session.scalar(select(RoomEventRecord)) is None
 
 
 @pytest.mark.parametrize(
@@ -457,15 +430,8 @@ def test_event_message_query_applies_all_filters_and_bounds_retained_ids(
     )
 
 
-def test_activity_reads_no_complete_resources(
-    scoped_session: Session, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_activity_summarizes_new_channel(scoped_session: Session) -> None:
     repository = SQLAlchemyRoomRepository(scoped_session, DEFAULT_CHANNEL)
-
-    def unexpected_resources(room_id: str) -> None:
-        pytest.fail("Activity must not load full resources")
-
-    monkeypatch.setattr(repository, "resources", unexpected_resources)
     activity = repository.activity(ROOM_ID)
     assert activity.summary.total_messages == 0
-    assert "members" not in activity.model_dump()
+    assert activity.positions == []

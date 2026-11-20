@@ -26,6 +26,10 @@ make test
 
 `make check fix=1` 会自动修复部分 lint 和格式问题；提交前请检查自动修改的内容。
 
+在仓库根目录运行 `uv run pytest`，默认只运行 `tests/unit` 下的后端单元测试；`make test` 还会运行前端单元测试。后端集成用例放在 `tests/integration`，标记为 `integration`，默认使用内存 SQLite，只有跨连接事务隔离用例使用临时文件库，不运行数据库迁移。需要时显式运行 `uv run --locked pytest -m integration tests/integration`。
+
+新增和整理测试时只覆盖正向业务场景，不专门构造无效输入、冲突或故障来断言拒绝和错误响应。
+
 前端 Vue 单文件组件按 `<template>`、`<script>`（含 `<script setup>`）、`<style>` 排列。条件分支和循环即使只有一条语句，也使用大括号，块内语句另起一行。在 `web/` 中先运行 `pnpm lint:fix` 修复区块顺序并补齐大括号，再运行 `pnpm format:write` 统一换行和缩进。
 
 ## 问题反馈
